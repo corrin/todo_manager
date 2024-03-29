@@ -1,0 +1,5 @@
+{% for email, (provider, auth_url) in instructions.items() %}
+<h3>{{ provider }} ({{ email }})</h3>
+<p>Please visit this URL to authorize the application:</p>
+<a href="{{ auth_url }}" target="_blank">{{ auth_url }}</a>
+{% endfor %}
