@@ -1,8 +1,9 @@
 import platform
 import pkg_resources  # part of setuptools
 from flask import Flask, request, jsonify
-
 from dotenv import load_dotenv
+from utils.user_manager import UserManager
+
 load_dotenv()  # take environment variables from .env.
 
 from database.todoist_module import TodoistModule
@@ -11,7 +12,6 @@ from meetings.calendar_manager import CalendarManager
 from meetings.meetings_routes import meetings_bp
 
 app = Flask(__name__)
-
 
 def create_database_module():
     # Factory function to create the appropriate database module based on configuration
@@ -25,17 +25,17 @@ def create_calendar_module():
     # Factory function to create the appropriate calendar module based on configuration
     return CalendarManager()
 
-
 ai_module = create_ai_module()
-calendar_manager = CalendarManager()
+calendar_manager = create_calendar_module()
 
 app.register_blueprint(ai_module.blueprint, url_prefix='/openai')
 app.register_blueprint(meetings_bp, url_prefix='/meetings')
 
-
 @app.route('/')
-def hello_world():
-    return 'Hello from Flask!'
+def main_app():
+    for email in calendar_manager.email_providers:
+        calendar_manager.authenticate(email)
+    return 'Authentication process initiated. Check the console for further instructions.'
 
 @app.route('/versions')
 def show_versions():
@@ -49,30 +49,9 @@ def show_versions():
 
     return versions_info
 
-@app.route('/authenticate', methods=['POST'])
-def authenticate():
-    email = request.json['email']
-    calendar_manager.authenticate(email)
-    return jsonify({'message': 'Authentication successful'})
+# Authenticate the email addresses stored in the CalendarManager
 
-@app.route('/meetings', methods=['GET'])
-def get_meetings():
-    email = request.args.get('email')
-    if email:
-        meetings = calendar_manager.get_meetings(email)
-        return jsonify({'meetings': meetings})
-    else:
-        return jsonify({'error': 'Missing email address'}), 400
+UserManager.set_current_user('lakeland@gmail.com')
 
-@app.route('/create_meeting', methods=['POST'])
-def create_meeting():
-    data = request.get_json()
-    email = data.get('email')
-    meeting_data = data.get('meeting_data')
-    if email and meeting_data:
-        calendar_manager.create_meeting(email, meeting_data)
-        return jsonify({'message': 'Meeting created successfully'})
-    else:
-        return jsonify({'error': 'Missing email or meeting data'}), 400
-
-
+if __name__ == '__main__':
+    app.run()

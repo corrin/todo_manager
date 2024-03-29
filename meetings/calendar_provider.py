@@ -6,9 +6,9 @@ class CalendarProvider(ABC):
         pass
 
     @abstractmethod
-    def get_events(self, email):
+    def get_meetings(self, email):
         pass
 
     @abstractmethod
-    def create_event(self, email, event_data):
+    def create_meeting(self, email, event_data):
         pass
