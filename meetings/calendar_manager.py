@@ -16,6 +16,9 @@ class CalendarManager:
             'corrin.lakeland@countdown.co.nz': 'google',
 #            'corrin.lakeland@cmeconnect.com': 'o365'
         }
+        logger.debug("Calendar Manager initialized")
+        logger.debug(f"Calendar Manager providers: {self.providers}")
+        logger.debug(f"Calendar Manager email providers: {self.email_providers}")
 
     def authenticate(self, email):
         provider_name = self.email_providers.get(email)

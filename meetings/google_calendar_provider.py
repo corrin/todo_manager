@@ -8,16 +8,19 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from utils.logger import logger
-import utils.settings # import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_SCOPES
+from utils.settings import Settings
 
 class GoogleCalendarProvider(CalendarProvider):
     def __init__(self):
-        self.client_id = utils.settings.GOOGLE_CLIENT_ID
-        self.client_secret = utils.settings.GOOGLE_CLIENT_SECRET
-        self.redirect_uri = utils.settings.GOOGLE_REDIRECT_URI
-        self.scopes = utils.settings.GOOGLE_SCOPES
+        self.client_id = Settings.GOOGLE_CLIENT_ID
+        self.client_secret = Settings.GOOGLE_CLIENT_SECRET
+        self.redirect_uri = Settings.GOOGLE_REDIRECT_URI
+        self.scopes = Settings.GOOGLE_SCOPES
+        logger.debug("Google Calendar Provider initialized")
         logger.debug(f"Google Calendar Provider: Client ID = {self.client_id}")
         logger.debug(f"Google Calendar Provider: Client Secret = {self.client_secret}")
+        logger.debug(f"Google Calendar Provider: Redirect URI = {self.redirect_uri}")
+        logger.debug(f"Google Calendar Provider: Scopes = {self.scopes}")
 
     def authenticate(self, email):
         credentials = self.get_credentials(email)
@@ -69,11 +72,8 @@ class GoogleCalendarProvider(CalendarProvider):
 
     def get_credentials(self, email):
         # Retrieve the stored credentials for the email address from a file
-        current_user = UserManager.get_current_user()
-        if not current_user:
-            raise ValueError("Current user not set. Please log in first.")
-        user_dir = os.path.join("users", current_user)
-        credentials_file = os.path.join(user_dir, f"{email}_credentials.json")
+        user_folder = UserManager.get_user_folder()
+        credentials_file = os.path.join(user_folder, f"{email}_credentials.json")
         if os.path.exists(credentials_file):
             with open(credentials_file, "r") as file:
                 credentials_data = json.load(file)
@@ -83,12 +83,8 @@ class GoogleCalendarProvider(CalendarProvider):
 
     def store_credentials(self, email, credentials):
         # Store the credentials for the email address in a file
-        current_user = UserManager.get_current_user()
-        if not current_user:
-            raise ValueError("Current user not set. Please log in first.")
-        user_dir = os.path.join("users", current_user)
-        os.makedirs(user_dir, exist_ok=True)
-        credentials_file = os.path.join(user_dir, f"{email}_credentials.json")
+        user_folder = UserManager.get_user_folder()
+        credentials_file = os.path.join(user_folder, f"{email}_credentials.json")
         credentials_data = {
             "token": credentials.token,
             "refresh_token": credentials.refresh_token,

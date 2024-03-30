@@ -1,19 +1,13 @@
 import os
-import platform # Used in the hello world style 'version' call
-import pkg_resources  # part of setuptools
 from flask import Flask, render_template
-#from flask import request, jsonify
 from virtual_assistant.utils.user_manager import UserManager
 import jinja2
-
+from utils.logger import logger
 
 from database.todoist_module import TodoistModule
 from ai.openai_module import OpenAIModule
 from meetings.calendar_manager import CalendarManager
-from meetings.meetings_routes import meetings_bp
-
-
-app = Flask(__name__)
+from meetings.meetings_routes import init_app
 
 def create_database_module():
     # Factory function to create the appropriate database module based on configuration
@@ -25,22 +19,32 @@ def create_ai_module():
 
 def create_calendar_module():
     # Factory function to create the appropriate calendar module based on configuration
-    return CalendarManager()
+    calendar_manager = CalendarManager()
+    logger.debug(f"Calendar Manager created: {calendar_manager}")
+    logger.debug(f"Calendar Manager providers: {calendar_manager.providers}")
+    return calendar_manager
 
-ai_module = create_ai_module()
-calendar_manager = create_calendar_module()
-template_dir = os.path.join(app.root_path, 'assets')
-app.jinja_loader = jinja2.FileSystemLoader(template_dir)
+def create_app():
+    app = Flask(__name__)
 
-app.register_blueprint(ai_module.blueprint, url_prefix='/openai')
-app.register_blueprint(meetings_bp, url_prefix='/meetings')
+    ai_module = create_ai_module()
+    calendar_manager = create_calendar_module()
 
-# In flask_app.py
-from utils.logger import logger
+    app.register_blueprint(ai_module.blueprint, url_prefix='/openai')
+    app.register_blueprint(init_app(calendar_manager), url_prefix='/meetings')
+
+    template_dir = os.path.join(app.root_path, 'assets')
+    app.jinja_loader = jinja2.FileSystemLoader(template_dir)
+
+    return app
+
+app = create_app()
 
 @app.route('/')
 def main_app():
     auth_instructions = {}
+    calendar_manager = create_calendar_module()
+
     for email in calendar_manager.email_providers:
         logger.debug(f"Authenticating email: {email}")
         instructions = calendar_manager.authenticate(email)
@@ -58,21 +62,5 @@ def main_app():
         logger.debug("No authentication instructions received")
         return 'Authentication process initiated. Check the console for further instructions.'
 
-@app.route('/versions')
-def show_versions():
-    python_version = platform.python_version()
-    installed_packages = ['Flask', 'requests']  # Add any packages you've installed in the venv
-    versions_info = f"Python Version: {python_version}\n"
-
-    for package in installed_packages:
-        version = pkg_resources.get_distribution(package).version
-        versions_info += f"{package} Version: {version}\n"
-
-    return versions_info
-
 # Authenticate the email addresses stored in the CalendarManager
-
 UserManager.set_current_user('lakeland@gmail.com')
-
-if __name__ == '__main__':
-    app.run()
