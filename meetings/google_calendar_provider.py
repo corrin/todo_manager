@@ -1,20 +1,23 @@
 # google_calendar_provider.py
 from .calendar_provider import CalendarProvider
-from ..utils.user_manager import UserManager
+from virtual_assistant.utils.user_manager import UserManager
 import os
 import json
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
-
+from utils.logger import logger
+import utils.settings # import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_SCOPES
 
 class GoogleCalendarProvider(CalendarProvider):
     def __init__(self):
-        self.client_id = os.environ['GOOGLE_CLIENT_ID']
-        self.client_secret = os.environ['GOOGLE_CLIENT_SECRET']
-        self.redirect_uri = 'https://calendar-lakeland.pythonanywhere.com/meetings/google_authenticate'
-        self.scopes = ['https://www.googleapis.com/auth/calendar']
+        self.client_id = utils.settings.GOOGLE_CLIENT_ID
+        self.client_secret = utils.settings.GOOGLE_CLIENT_SECRET
+        self.redirect_uri = utils.settings.GOOGLE_REDIRECT_URI
+        self.scopes = utils.settings.GOOGLE_SCOPES
+        logger.debug(f"Google Calendar Provider: Client ID = {self.client_id}")
+        logger.debug(f"Google Calendar Provider: Client Secret = {self.client_secret}")
 
     def authenticate(self, email):
         credentials = self.get_credentials(email)
@@ -40,19 +43,11 @@ class GoogleCalendarProvider(CalendarProvider):
                 redirect_uri=self.redirect_uri
             )
             authorization_url, _ = flow.authorization_url(prompt='consent')
-
-            print(f"Please visit this URL to authorize the application: {authorization_url}")
-            authorization_code = input("Enter the authorization code: ")
-
-            flow.fetch_token(code=authorization_code)
-            credentials = flow.credentials
-
-            self.store_credentials(email, credentials)
+            return ("Google Calendar", authorization_url)
 
         return credentials
 
     def get_meetings(self, email):
-
         credentials = self.get_credentials(email)
         if credentials:
             service = build('calendar', 'v3', credentials=credentials)
