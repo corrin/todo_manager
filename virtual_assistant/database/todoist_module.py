@@ -1,5 +1,6 @@
 from .database_module import DatabaseInterface
 
+
 class TodoistModule(DatabaseInterface):
     def create_task(self, task_data):
         # Todoist-specific implementation for creating a task

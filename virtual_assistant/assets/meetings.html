@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Meetings for {{ email }}</title>
+</head>
+<body>
+    <h1>Meetings for {{ email }}</h1>
+    <ul>
+        {% for meeting in meetings %}
+        <li>
+            <strong>{{ meeting.get('summary') }}</strong><br>
+            Start: {{ meeting.get('start').get('dateTime') }}<br>
+            End: {{ meeting.get('end').get('dateTime') }}
+        </li>
+        {% else %}
+        <li>No meetings found.</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

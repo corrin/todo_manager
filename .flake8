@@ -1,0 +1,9 @@
+[flake8]
+# Example configuration:
+max-line-length = 120
+exclude =
+    .git,
+    __pycache__,
+    old,
+    build,
+    dist

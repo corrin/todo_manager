@@ -1,14 +1,18 @@
 # o365_calendar_provider.py
 from .calendar_provider import CalendarProvider
 import os
-from O365 import Account
+
+# from O365 import Account # Not implemented yet
+
 
 class O365CalendarProvider(CalendarProvider):
     def __init__(self):
-        self.client_id = os.environ['MICROSOFT_CLIENT_ID']
-        self.client_secret = os.environ['MICROSOFT_CLIENT_SECRET']
-        self.redirect_uri = 'https://calendar-lakeland.pythonanywhere.com/meetings/o365_authenticate'
-        self.redirect_uri = 'redirect_uri'
+        self.client_id = os.environ["MICROSOFT_CLIENT_ID"]
+        self.client_secret = os.environ["MICROSOFT_CLIENT_SECRET"]
+        self.redirect_uri = (
+            "https://calendar-lakeland.pythonanywhere.com/meetings/o365_authenticate"
+        )
+        self.redirect_uri = "redirect_uri"
 
     def authenticate(self, email):
         # Implement the authentication logic for O365 accounts
