@@ -3,6 +3,7 @@ from flask import Flask, render_template
 from virtual_assistant.utils.user_manager import UserManager
 from virtual_assistant.utils.settings import Settings
 from virtual_assistant.utils.logger import logger
+from virtual_assistant.initial_setup import initial_setup
 
 import jinja2
 
@@ -70,6 +71,12 @@ def main_app():
     else:
         logger.debug("No authentication instructions received")
         return "Authentication process initiated. Check the console for further instructions."
+
+
+@app.route("/initial_setup")
+def initial_setup_route():
+    result = initial_setup()
+    return result
 
 
 # Authenticate the email addresses stored in the CalendarManager

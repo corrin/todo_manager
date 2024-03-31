@@ -1,12 +1,14 @@
 # google_calendar_provider.py
 from .calendar_provider import CalendarProvider
 from virtual_assistant.utils.user_manager import UserManager
-from flask import redirect, session, Response
+from flask import redirect, session
 import os
 import json
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
 from google.auth.transport.requests import Request
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
@@ -62,37 +64,38 @@ class GoogleCalendarProvider(CalendarProvider):
 
         return credentials
 
-def get_meetings(self, email):
-    credentials = self.get_credentials(email)
+    def get_meetings(self, email):
+        credentials = self.get_credentials(email)
 
-    if not credentials:
-        # Redirect to the OAuth route to start the authentication process
-        return None
-
-    # If we have credentials, proceed with API calls
-    logger.info(f"Fetching meetings for {email}")
-    try:
-        service = build("calendar", "v3", credentials=credentials)
-        events_result = (
-            service.events()
-            .list(calendarId="primary", singleEvents=True, orderBy="startTime")
-            .execute()
-        )
-        events = events_result.get("items", [])
-        logger.debug(f"Meetings fetched for {email}: {len(events)} meetings found")
-        return events
-    except HttpError as error:
-        if error.resp.status in [401, 403]:
-            # Credentials are expired or invalid, trigger re-authentication
-            logger.warning(f"Credentials expired or invalid for {email}. Triggering re-authentication.")
+        if not credentials:
+            # Redirect to the OAuth route to start the authentication process
             return None
-        else:
-            logger.error(f"Error fetching meetings for {email}: {error}")
-            return []
-    except Exception as e:
-        logger.error(f"Error fetching meetings for {email}: {e}")
-        return []
 
+        # If we have credentials, proceed with API calls
+        logger.info(f"Fetching meetings for {email}")
+        try:
+            service = build("calendar", "v3", credentials=credentials)
+            events_result = (
+                service.events()
+                .list(calendarId="primary", singleEvents=True, orderBy="startTime")
+                .execute()
+            )
+            events = events_result.get("items", [])
+            logger.debug(f"Meetings fetched for {email}: {len(events)} meetings found")
+            return events
+        except HttpError as error:
+            if error.resp.status in [401, 403]:
+                # Credentials are expired or invalid, trigger re-authentication
+                logger.warning(
+                    f"Credentials expired or invalid for {email}. Triggering re-authentication."
+                )
+                return None
+            else:
+                logger.error(f"Error fetching meetings for {email}: {error}")
+                return []
+        except Exception as e:
+            logger.error(f"Error fetching meetings for {email}: {e}")
+            return []
 
     def create_meeting(self, email, meeting_data):
         credentials = self.get_credentials(email)
