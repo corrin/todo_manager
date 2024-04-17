@@ -1,3 +1,7 @@
+"""
+Meetings Blueprint routes and functionality.
+"""
+
 from flask import (
     Blueprint,
     request,
@@ -8,69 +12,169 @@ from flask import (
     jsonify,
 )
 from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
-
-# Import O365CalendarProvider similarly when ready
+from virtual_assistant.meetings.o365_calendar_provider import O365CalendarProvider
 from virtual_assistant.utils.logger import logger
+from virtual_assistant.utils.user_manager import UserManager
 
 meetings_bp = Blueprint("meetings", __name__, url_prefix="/meetings")
+
+providers = {
+    "google": GoogleCalendarProvider,
+    "o365": O365CalendarProvider,
+}
 
 
 @meetings_bp.route("/start_oauth/<provider>")
 def start_oauth(provider):
-    logger.info(f"Starting OAuth flow for provider: {provider}")
+    """
+    Start the OAuth flow for the specified provider.
+
+    Args:
+        provider (str): The provider for which to start the OAuth flow.
+
+    Returns:
+        Response: Redirect to the provider's authorization URL or an error message.
+    """
+    logger.info("Starting OAuth flow for provider: %s", provider)
     if provider == "google":
-        # Instantiate the provider class
         google_provider = GoogleCalendarProvider()
-        # Call the authenticate method which should handle initiating OAuth flow if needed
         result = google_provider.authenticate(request.args.get("email"))
         if isinstance(result, tuple):
-            # Assuming the authenticate method returns a tuple with provider name and authorization URL
             _, authorization_url = result
             return redirect(authorization_url)
         return redirect(
             url_for("meetings.debug_meetings", email=request.args.get("email"))
         )
-    else:
-        logger.error(f"OAuth flow for provider {provider} is not supported")
-        return "Provider not supported", 400
+    logger.error("OAuth flow for provider %s is not supported", provider)
+    return "Provider not supported", 400
 
 
-@meetings_bp.route("/oauth_callback")
+@meetings_bp.route("/google_authenticate")
+@meetings_bp.route("/o365_authenticate")
 def oauth_callback():
-    # This example assumes 'google' provider for simplicity
-    provider = session.get("oauth_provider", "google")
-    if provider == "google":
-        google_provider = GoogleCalendarProvider()
+    """
+    Handle the OAuth callback from the provider.
 
-        # Assuming the authorization response is handled within the provider
-        credentials = google_provider.handle_oauth_callback(request.url)
-        if credentials:
-            user_email = session.get("user_email")  # Make sure this is set correctly
-            google_provider.store_credentials(user_email, credentials)
-            logger.info(f"New credentials stored for {user_email}")
-            return redirect(url_for("meetings.debug_meetings", email=user_email))
-        else:
-            logger.error("Failed to obtain credentials from OAuth callback")
-            return "Authentication failed", 500
-    else:
-        logger.error("Invalid provider in OAuth callback")
-        return "Invalid provider", 400
+    Returns:
+        Response: Redirect to the debug meetings page or an error message.
+    """
+    current_email = session.get("current_email")
+    provider_key = UserManager.get_provider_for_email(current_email)
+    logger.debug(f"Available providers: {providers}")
+    logger.debug(f"Provider key: {provider_key}")
+    provider_class = providers.get(provider_key)
+
+    if not provider_class:
+        logger.error("Invalid provider for the current email address")
+        return f"Invalid provider for {current_email}", 400
+
+    provider_instance = provider_class()
+    credentials = provider_instance.retrieve_tokens(request.url)
+
+    if not credentials:
+        logger.error("Failed to obtain credentials from OAuth callback")
+        return "Failed to obtain credentials", 500
+
+    UserManager.save_credentials(current_email, credentials)
+    logger.info("New credentials stored for %s", current_email)
+
+    return "Authentication successful. Credentials stored.", 200
 
 
 @meetings_bp.route("/debug/<email>")
 def debug_meetings(email):
-    # Use the appropriate provider based on the email or another identifier
+    """
+    Debug endpoint to retrieve meetings for a given email.  Tests that we are
+    logged in to the calendar.
+
+    Args:
+        email (str): The email address for which to retrieve meetings.
+
+    Returns:
+        Response: Rendered template with the meetings or an error message.
+    """
     google_provider = GoogleCalendarProvider()
     try:
         meetings = google_provider.get_meetings(email)
+        logger.info("Meetings for %s: %s", email, meetings)
         return render_template("meetings.html", meetings=meetings, email=email)
-    except Exception as e:
-        logger.error(f"Error in debug_meetings for {email}: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception as error:
+        logger.error("Error in debug_meetings for %s: %s", email, error)
+        return jsonify({"error": str(error)}), 500
+
+
+@meetings_bp.route("/sync")
+def sync_meetings():
+    # Retrieve meetings for all accounts
+    # Commented out because this is closer to pseudocode
+    # Also this is gogole specfic and it should be getting hte provider
+    # meetings_by_account = {}
+    # for email in UserManager.get_email_addresses():
+    #     meetings = google_provider.get_meetings(email)
+    #     meetings_by_account[email] = meetings
+
+    # # Split meetings into master and clone meetings for each account
+    # master_meetings_by_account = {}
+    # clone_meetings_by_account = {}
+    # for email, meetings in meetings_by_account.items():
+    #     master_meetings = []
+    #     clone_meetings = []
+    #     for meeting in meetings:
+    #         if "(Clone)" in meeting["title"]:
+    #             clone_meetings.append(meeting)
+    #         else:
+    #             master_meetings.append(meeting)
+    #     master_meetings_by_account[email] = master_meetings
+    #     clone_meetings_by_account[email] = clone_meetings
+
+    # # Sync meetings across accounts
+    # for email, master_meetings in master_meetings_by_account.items():
+    #     for master_meeting in master_meetings:
+    #         for other_email in UserManager.get_email_addresses():
+    #             if other_email != email:
+    #                 clone_meeting = find_clone_meeting(
+    #                     master_meeting, clone_meetings_by_account[other_email]
+    #                 )
+    #                 if clone_meeting:
+    #                     # Update clone meeting if details differ
+    #                     if not is_same_meeting(master_meeting, clone_meeting):
+    #                         update_meeting(other_email, clone_meeting, master_meeting)
+    #                 else:
+    #                     # Create new clone meeting
+    #                     create_clone_meeting(other_email, master_meeting)
+
+    # # Delete orphaned clone meetings
+    # for email, clone_meetings in clone_meetings_by_account.items():
+    #     for clone_meeting in clone_meetings:
+    #         master_meeting = find_master_meeting(
+    #             clone_meeting, master_meetings_by_account
+    #         )
+    #         if not master_meeting:
+    #             delete_meeting(email, clone_meeting)
+
+    # return "Meetings synced successfully"
+    # # Delete orphaned clone meetings
+    # for email, clone_meetings in clone_meetings_by_account.items():
+    #     for clone_meeting in clone_meetings:
+    #         master_meeting = find_master_meeting(
+    #             clone_meeting, master_meetings_by_account
+    #         )
+    #         if not master_meeting:
+    #             delete_meeting(email, clone_meeting)
+
+    return "Meetings synced successfully"
 
 
 def init_app(calendar_manager):
-    # Assuming calendar_manager is an object that may be used for additional setup or functionality
+    """
+    Initialize the Meetings Blueprint with the given calendar manager.
+
+    Args:
+        calendar_manager: The calendar manager object.
+
+    Returns:
+        Blueprint: The initialized Meetings Blueprint.
+    """
     meetings_bp.calendar_manager = calendar_manager
     logger.info("Meetings Blueprint initialized with calendar manager")
     return meetings_bp

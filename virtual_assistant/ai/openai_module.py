@@ -1,10 +1,11 @@
-from flask import Blueprint, request, jsonify, render_template_string
+from flask import Blueprint, request, jsonify, render_template
 import openai
 import os
 from dotenv import load_dotenv
 
 # openai_module.py
-from .ai_module import AIInterface
+from virtual_assistant.ai.ai_module import AIInterface
+from virtual_assistant.utils.logger import logger
 
 
 class OpenAIModule(AIInterface):
@@ -19,7 +20,7 @@ class OpenAIModule(AIInterface):
     def generate_text(self):
         try:
             user_input = request.form["user_input"]
-            print(f"User Input: {user_input}")  # Debugging print statement
+            logger.debug(f"User Input: {user_input}")
 
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -33,31 +34,17 @@ class OpenAIModule(AIInterface):
             )
 
             generated_text = response.choices[0].message.content.strip()
-            print(f"Generated Text: {generated_text}")  # Debugging print statement
+            logger.info(
+                f"Generated Text: {generated_text}"
+            )  # Debugging print statement
 
             return jsonify({"generated_text": generated_text})
 
         except Exception as e:
-            print(f"Error: {e}")  # Print any exception for debugging
+            logger.error(f"Error: {e}")  # Print any exception for debugging
             return jsonify({"error": str(e)}), 500
 
     # Other OpenAI-specific methods
 
     def show_form(self):
-        form_html = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Generate Text</title>
-        </head>
-        <body>
-            <h1>Generate Text with OpenAI</h1>
-            <form action="/openai/generate" method="post">
-                <label for="user_input">Enter your prompt:</label><br>
-                <textarea id="user_input" name="user_input" rows="4" cols="50"></textarea><br>
-                <input type="submit" value="Generate">
-            </form>
-        </body>
-        </html>
-        """
-        return render_template_string(form_html)
+        return render_template("openai_submit.html")

@@ -1,20 +1,28 @@
-# google_calendar_provider.py
-from .calendar_provider import CalendarProvider
-from virtual_assistant.utils.user_manager import UserManager
-from flask import redirect, session
+"""
+Module for Google Calendar integration.
+"""
+
 import os
 import json
+import datetime
+
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-
 from google.auth.transport.requests import Request
+from flask import session, render_template
+from virtual_assistant.meetings.calendar_provider import CalendarProvider
+from virtual_assistant.utils.user_manager import UserManager
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
 
 
 class GoogleCalendarProvider(CalendarProvider):
+    """
+    Google Calendar Provider class for handling Google Calendar integration.
+    """
+
     def __init__(self):
         self.client_id = Settings.GOOGLE_CLIENT_ID
         self.client_secret = Settings.GOOGLE_CLIENT_SECRET
@@ -28,6 +36,18 @@ class GoogleCalendarProvider(CalendarProvider):
         logger.debug(f"Scopes = {self.scopes}")
 
     def authenticate(self, email):
+        """
+        Authenticate the user with the given email so we can access their calendar.
+
+        This method checks for existing credentials, refreshes them if expired,
+        and initiates a new authentication flow if necessary.
+
+        Parameters:
+            email (str): The email address of the user to authenticate.
+
+        Returns:
+            Credentials object if authentication is successful; None otherwise.
+        """
         credentials = self.get_credentials(email)
 
         if credentials and credentials.expired and credentials.refresh_token:
@@ -39,8 +59,8 @@ class GoogleCalendarProvider(CalendarProvider):
                 )  # Store refreshed credentials
                 logger.info(f"Credentials refreshed and stored for {email}")
                 return credentials
-            except Exception as e:
-                logger.error(f"Error refreshing credentials for {email}: {e}")
+            except Exception as error:
+                logger.error(f"Error refreshing credentials for {email}: {error}")
                 # Handle the error, e.g., by initiating a new OAuth flow
 
         if not credentials or not credentials.valid:  # Check for valid credentials
@@ -60,42 +80,131 @@ class GoogleCalendarProvider(CalendarProvider):
             )
             authorization_url, state = flow.authorization_url(prompt="consent")
             session["oauth_state"] = state  # Store state for CSRF protection
-            return self.provider_name, redirect(authorization_url)
+            session["current_email"] = email  # Set current_email in the session
+            return None, render_template(
+                "authenticate_email.html",
+                email=email,
+                authorization_url=authorization_url,
+            )
 
-        return credentials
+        return credentials, None
+
+    def retrieve_tokens(self, callback_url):
+        state = session.get("oauth_state")
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "redirect_uris": [self.redirect_uri],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+            },
+            scopes=self.scopes,
+            redirect_uri=self.redirect_uri,
+            state=state,
+        )
+        flow.fetch_token(authorization_response=callback_url)
+        credentials = flow.credentials
+        return {
+            "token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": credentials.scopes,
+        }
 
     def get_meetings(self, email):
-        credentials = self.get_credentials(email)
-
-        if not credentials:
-            # Redirect to the OAuth route to start the authentication process
-            return None
-
-        # If we have credentials, proceed with API calls
-        logger.info(f"Fetching meetings for {email}")
         try:
+            credentials = UserManager.get_credentials(email)
+            logger.debug(f"Credentials for {email}: {credentials}")
+
+            if not credentials:
+                logger.error(f"No credentials found for {email}")
+                return []
+
             service = build("calendar", "v3", credentials=credentials)
+            logger.debug(f"Calendar service built successfully for {email}")
+
+            now = datetime.datetime.utcnow().isoformat() + "Z"  # "Z" indicates UTC time
             events_result = (
                 service.events()
-                .list(calendarId="primary", singleEvents=True, orderBy="startTime")
+                .list(
+                    calendarId="primary",
+                    timeMin=now,
+                    singleEvents=True,
+                    orderBy="startTime",
+                )
                 .execute()
             )
+            logger.debug(
+                f"Events retrieved for {email}: {len(events_result.get('items', []))} events"
+            )
+
             events = events_result.get("items", [])
-            logger.debug(f"Meetings fetched for {email}: {len(events)} meetings found")
-            return events
+            logger.debug(f"Events extracted for {email}: {len(events)} events")
+
+            meetings = []
+            for event in events:
+                try:
+                    meeting = {
+                        "title": event.get("summary", ""),
+                        "start": self.get_meeting_time(event.get("start", {})),
+                        "end": self.get_meeting_time(event.get("end", {})),
+                    }
+                    meetings.append(meeting)
+                except Exception as e:
+                    logger.error(f"Error processing event: {event}")
+                    logger.exception(e)
+
+            logger.debug(f"Meetings processed for {email}: {len(meetings)} meetings")
+            return meetings
+
         except HttpError as error:
-            if error.resp.status in [401, 403]:
-                # Credentials are expired or invalid, trigger re-authentication
-                logger.warning(
-                    f"Credentials expired or invalid for {email}. Triggering re-authentication."
-                )
-                return None
-            else:
-                logger.error(f"Error fetching meetings for {email}: {error}")
-                return []
-        except Exception as e:
-            logger.error(f"Error fetching meetings for {email}: {e}")
+            logger.error(
+                f"An error occurred while retrieving meetings for {email}: {error}"
+            )
             return []
+
+        except Exception as e:
+            logger.error(
+                f"An unexpected error occurred while retrieving meetings for {email}"
+            )
+            logger.exception(e)
+            return []
+
+    def get_meeting_time(self, meeting_time):
+        try:
+            logger.debug(f"Meeting time: {meeting_time}")
+            logger.debug(f"Type of meeting_time: {type(meeting_time)}")
+
+            if isinstance(meeting_time, dict):
+                logger.debug("Meeting time is a dictionary")
+                date_time = meeting_time.get("dateTime")
+                logger.debug(f"dateTime: {date_time}")
+
+                date = meeting_time.get("date")
+                logger.debug(f"date: {date}")
+
+                if date_time:
+                    logger.debug("Returning dateTime")
+                    return date_time
+                elif date:
+                    logger.debug("Returning date")
+                    return date
+                else:
+                    logger.debug("Returning empty string")
+                    return ""
+            else:
+                logger.warning(f"Unexpected meeting time format: {meeting_time}")
+                logger.debug("Converting meeting time to string")
+                return str(meeting_time)
+        except Exception as e:
+            logger.error(f"Error getting meeting time: {meeting_time}")
+            logger.exception(e)
+            return ""
 
     def create_meeting(self, email, meeting_data):
         credentials = self.get_credentials(email)
@@ -118,31 +227,12 @@ class GoogleCalendarProvider(CalendarProvider):
         credentials_file = os.path.join(provider_folder, f"{email}_credentials.json")
 
         if os.path.exists(credentials_file):
-            with open(credentials_file, "r") as file:
+            with open(credentials_file, "r", encoding="utf-8") as file:
                 credentials_data = json.load(file)
                 credentials = Credentials.from_authorized_user_info(credentials_data)
                 logger.debug(f"Credentials loaded for {email}")
                 return credentials
+
+        # Note we don't need to say else because there has already been a return
         logger.warning(f"Credentials file not found for {email}")
         return None
-
-    def store_credentials(self, email, credentials):
-        logger.debug(f"Storing credentials for {email}")
-        user_folder = UserManager.get_user_folder()
-        provider_folder = os.path.join(user_folder, self.provider_name)
-
-        if not os.path.exists(provider_folder):
-            os.makedirs(provider_folder)
-
-        credentials_file = os.path.join(provider_folder, f"{email}_credentials.json")
-        credentials_data = {
-            "token": credentials.token,
-            "refresh_token": credentials.refresh_token,
-            "token_uri": credentials.token_uri,
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret,
-            "scopes": credentials.scopes,
-        }
-        with open(credentials_file, "w") as file:
-            json.dump(credentials_data, file)
-        logger.debug(f"Credentials stored for {email}")
