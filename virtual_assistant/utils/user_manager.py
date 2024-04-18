@@ -6,7 +6,8 @@ from flask_login import login_user, logout_user, current_user
 
 from virtual_assistant.utils.settings import Settings
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.users.user import User
+from virtual_assistant.database import db
+from virtual_assistant.auth.user import User
 
 
 class UserManager:
@@ -99,3 +100,20 @@ class UserManager:
                 return credentials
 
         return None
+
+    @staticmethod
+    def create_user(user_info):
+        """
+        Create a new user based on the OAuth user info.
+
+        Parameters:
+            user_info (dict): The dictionary containing user information
+
+        Returns:
+            User: The newly created user object
+        """
+        user = User(email=user_info["email"])
+        # Set other necessary fields from user_info
+        db.session.add(user)
+        db.session.commit()
+        return user
