@@ -4,13 +4,14 @@ Meetings Blueprint routes and functionality.
 
 from flask import (
     Blueprint,
-    request,
-    redirect,
-    url_for,
-    session,
-    render_template,
     jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
 )
+
 from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
 from virtual_assistant.meetings.o365_calendar_provider import O365CalendarProvider
 from virtual_assistant.utils.logger import logger

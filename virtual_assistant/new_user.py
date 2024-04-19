@@ -1,13 +1,15 @@
-from flask import session, url_for, redirect, current_user
-from virtual_assistant.utils.user_manager import UserManager
+from flask import redirect, session, url_for
+from flask_login import current_user
+
 from virtual_assistant.meetings.meetings_routes import providers
 from virtual_assistant.utils.logger import logger
+from virtual_assistant.utils.user_manager import UserManager
 
 
 def new_user():
     """
-    Perform initial setup for the logged-in user's email providers.
-    This function sets up email providers based on predefined settings.
+    Perform initial setup for the logged-in user's calendar providers.
+    This function sets up calendar providers based on predefined settings.
 
     Returns:
         str: A redirect or a message indicating the completion of the setup.
@@ -17,7 +19,7 @@ def new_user():
         logger.error("No user is logged in.")
         return redirect(url_for("login"))  # Ensure there is a login route
 
-    UserManager.set_current_user(current_user.email)
+    UserManager.login(current_user.email)
 
     # Hardcoded list for now
     user_calendar_accounts = {
@@ -27,10 +29,10 @@ def new_user():
         "corrin.lakeland@cmeconnect.com": "o365",
     }
 
-    # Save or update the email addresses associated with the user
-    UserManager.save_email_addresses(email_addresses)
+    # Save or update the calendar addresses associated with the user
+    UserManager.save_calendar_accounts(user_calendar_accounts)
 
-    for email, provider_key in email_addresses.items():
+    for email, provider_key in user_calendar_accounts.items():
         session["current_email"] = email
         provider_class = providers.get(provider_key)
 
@@ -49,7 +51,7 @@ def new_user():
             if redirect_template is not None:
                 logger.info(f"Redirecting to {provider_key} setup URL for {email}")
                 session["current_email"] = email
-                return redirect_template
+                return redirect(redirect_template)
         else:
             logger.info(f"Credentials already exist for {email}. Skipping setup.")
 

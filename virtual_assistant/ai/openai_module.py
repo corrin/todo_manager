@@ -1,7 +1,8 @@
-from flask import Blueprint, request, jsonify, render_template
-import openai
 import os
+
+import openai
 from dotenv import load_dotenv
+from flask import Blueprint, jsonify, render_template, request
 
 # openai_module.py
 from virtual_assistant.ai.ai_module import AIInterface

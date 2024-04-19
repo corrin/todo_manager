@@ -1,5 +1,6 @@
 # utils/settings.py
 import os
+
 from dotenv import load_dotenv
 
 
@@ -10,6 +11,7 @@ class Settings:
     # Project settings
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     USERS_FOLDER = os.path.join(PROJECT_ROOT, "users")
+    DATABASE_URI = "sqlite:///users/database.db"
 
     # Google API credentials
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
@@ -31,3 +33,5 @@ class Settings:
     FLASK_SECRET_KEY = os.environ.get(
         "FLASK_SECRET_KEY", "default_secret_key_for_development"
     )
+
+    SERVER_NAME = "virtualassistant-lakeland.pythonanywhere.com"

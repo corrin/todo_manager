@@ -1,5 +1,6 @@
 from flask_login import LoginManager
-from virtual_assistant.users.user import User  # Adjust the import path as necessary
+
+from virtual_assistant.database.user import User
 
 # Instantiate the LoginManager
 login_manager = LoginManager()

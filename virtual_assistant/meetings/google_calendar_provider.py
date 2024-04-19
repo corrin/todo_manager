@@ -2,20 +2,21 @@
 Module for Google Calendar integration.
 """
 
-import os
-import json
 import datetime
+import json
+import os
 
+from flask import render_template, session
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from google.auth.transport.requests import Request
-from flask import session, render_template
+
 from virtual_assistant.meetings.calendar_provider import CalendarProvider
-from virtual_assistant.utils.user_manager import UserManager
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
+from virtual_assistant.utils.user_manager import UserManager
 
 
 class GoogleCalendarProvider(CalendarProvider):
@@ -117,6 +118,15 @@ class GoogleCalendarProvider(CalendarProvider):
         }
 
     def get_meetings(self, email):
+        """
+        Retrieve a list of upcoming meetings for the given email address.
+
+        Parameters:
+            email (str): The email address to retrieve meetings for.
+
+        Returns:
+            A list of meeting dictionaries containing 'title', 'start', and 'end' keys.
+        """
         try:
             credentials = UserManager.get_credentials(email)
             logger.debug(f"Credentials for {email}: {credentials}")
@@ -176,6 +186,15 @@ class GoogleCalendarProvider(CalendarProvider):
             return []
 
     def get_meeting_time(self, meeting_time):
+        """
+        Extract the meeting time from the given event data.
+
+        Parameters:
+            meeting_time (dict): The event data containing the meeting time.
+
+        Returns:
+            str: The meeting time in ISO format.
+        """
         try:
             logger.debug(f"Meeting time: {meeting_time}")
             logger.debug(f"Type of meeting_time: {type(meeting_time)}")
@@ -207,6 +226,16 @@ class GoogleCalendarProvider(CalendarProvider):
             return ""
 
     def create_meeting(self, email, meeting_data):
+        """
+        Create a new meeting with the given data.
+
+        Parameters:
+            email (str): The email address of the meeting organizer.
+            meeting_data (dict): The meeting data containing title, start, and end times.
+
+        Returns:
+            str: The meeting ID if created successfully; None otherwise.
+        """
         credentials = self.get_credentials(email)
         if credentials:
             logger.info(f"Creating meeting for {email}")
@@ -217,10 +246,20 @@ class GoogleCalendarProvider(CalendarProvider):
                 .execute()
             )
             logger.info(f"Meeting created for {email}: {event.get('htmlLink')}")
+            return event.get("id")
         else:
             logger.warning(f"No credentials found for {email}")
 
     def get_credentials(self, email):
+        """
+        Retrieve the credentials for the given email address.
+
+        Parameters:
+            email (str): The email address to retrieve credentials for.
+
+        Returns:
+            Credentials object if found; None otherwise.
+        """
         logger.debug(f"Retrieving credentials for {email}")
         user_folder = UserManager.get_user_folder()
         provider_folder = os.path.join(user_folder, self.provider_name)
@@ -233,6 +272,5 @@ class GoogleCalendarProvider(CalendarProvider):
                 logger.debug(f"Credentials loaded for {email}")
                 return credentials
 
-        # Note we don't need to say else because there has already been a return
         logger.warning(f"Credentials file not found for {email}")
         return None

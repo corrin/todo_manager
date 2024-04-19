@@ -1,17 +1,19 @@
 # o365_calendar_provider.py
-from .calendar_provider import CalendarProvider
 import os
+import urllib.parse
+from datetime import datetime, timedelta
+
 import msal
 import requests
-from datetime import datetime, timedelta
 
 # import secrets
 # import hashlib
 # import base64
-from flask import session, render_template
-import urllib.parse
+from flask import render_template, session
 
 from virtual_assistant.utils.logger import logger
+
+from .calendar_provider import CalendarProvider
 
 
 class O365CalendarProvider(CalendarProvider):
