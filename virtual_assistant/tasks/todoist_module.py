@@ -1,7 +1,7 @@
-from .database_module import DatabaseInterface
+from .task_module import TaskInterface
 
 
-class TodoistModule(DatabaseInterface):
+class TodoistModule(TaskInterface):
     def create_task(self, task_data):
         # Todoist-specific implementation for creating a task
         pass

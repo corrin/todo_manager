@@ -7,7 +7,7 @@ from flask_login import login_required
 from virtual_assistant.ai.openai_module import OpenAIModule
 from virtual_assistant.auth.google_auth import GoogleAuth
 from virtual_assistant.auth.user_auth import setup_login_manager
-from virtual_assistant.database import db
+from virtual_assistant.database.database import Database
 from virtual_assistant.database.todoist_module import TodoistModule
 from virtual_assistant.meetings.meetings_routes import meetings_bp, providers
 from virtual_assistant.new_user import new_user
@@ -37,6 +37,7 @@ def login():
 
 
 def authorize():
+    logger.info("Authorize called")
     with current_app.app_context():
         google_auth = GoogleAuth(current_app)
         logger.info("Authorizing")
@@ -47,9 +48,9 @@ def authorize():
 def main_app():
     """Display meetings; requires user to be logged in."""
     logger.info("Displaying meetings")
-    email_addresses = UserManager.get_email_addresses()
+    calendar_accounts = UserManager.get_calendar_accounts()
     meetings = []
-    for email, provider_key in email_addresses.items():
+    for email, provider_key in calendar_accounts.items():
         provider_class = providers.get(provider_key)
         if provider_class:
             provider_instance = provider_class()
@@ -87,9 +88,14 @@ def app(script_name=None, config=None):
     application.config["APPLICATION_ROOT"] = "/"
     application.config["PREFERRED_URL_SCHEME"] = "https"
 
-    db.init_app(application)
+    logger.info(f"Database URI: {Settings.DATABASE_URI}")
+
+    # If there's a config dictionary provided, update the configuration
+    if isinstance(config, dict):
+        application.config.update(config)
 
     setup_login_manager(application)
+    Database.init_app(app)
 
     application.add_url_rule("/login", "login", login)
     application.add_url_rule("/authorize", "authorize", authorize)
@@ -104,10 +110,30 @@ def app(script_name=None, config=None):
     application.add_url_rule("/privacy", "privacy_statement", privacy_statement)
 
     ai_module = create_ai_module()
-    application.register_blueprint(ai_module.blueprint, url_prefix="/openai")
-    application.register_blueprint(meetings_bp, url_prefix="/meetings")
+    # db_module = create_database_module()
+
+    if ai_module and hasattr(ai_module, "blueprint"):
+        application.register_blueprint(ai_module.blueprint, url_prefix="/openai")
+    else:
+        logger.error("AI module or its blueprint is not properly initialized.")
+
+    if meetings_bp:
+        application.register_blueprint(meetings_bp, url_prefix="/meetings")
+    else:
+        logger.error("Meetings blueprint is not initialized.")
+
+    if database_bp:
+        application.register_blueprint(database_bp, url_prefix="/database")
+    else:
+        logger.error("Database blueprint is not initialized.")
 
     template_dir = os.path.join(application.root_path, "assets")
-    application.jinja_loader = jinja2.FileSystemLoader(template_dir)
+    if os.path.exists(template_dir):
+        application.jinja_loader = jinja2.FileSystemLoader(template_dir)
+    else:
+        logger.error(f"Template directory {template_dir} does not exist.")
 
     logger.info("Application initialized")
+    logger.info(f"Returning application instance: {application}")
+
+    return application

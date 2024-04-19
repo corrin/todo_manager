@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class DatabaseInterface(ABC):
+class TaskInterface(ABC):
     @abstractmethod
     def create_task(self, task_data):
         """Create a task based on provided task data"""

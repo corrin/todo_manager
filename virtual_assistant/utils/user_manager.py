@@ -4,7 +4,7 @@ import os
 from flask_login import current_user, login_user, logout_user
 from google.oauth2.credentials import Credentials
 
-from virtual_assistant.database.base import db
+from virtual_assistant.database import Database
 from virtual_assistant.database.user import User
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
@@ -187,6 +187,6 @@ class UserManager:
         """
         user = User(email=user_info["email"])
         # Set other necessary fields from user_info
-        db.session.add(user)
-        db.session.commit()
+        Database.add(user)
+        Database.commit()
         return user
