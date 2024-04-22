@@ -4,7 +4,7 @@ import os
 from flask_login import current_user, login_user, logout_user
 from google.oauth2.credentials import Credentials
 
-from virtual_assistant.database import Database
+from virtual_assistant.database.database import Database
 from virtual_assistant.database.user import User
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings

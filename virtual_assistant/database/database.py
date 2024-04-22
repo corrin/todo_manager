@@ -7,7 +7,7 @@ from virtual_assistant.utils.logger import logger
 
 
 class Database:
-    
+
     _instance = None
 
     def __init__(self):
@@ -17,7 +17,6 @@ class Database:
             Database._instance = self
             self._db = SQLAlchemy()
             self.blueprint = Blueprint("database", __name__, url_prefix="/database")
-
 
     def test_sqlite(self):
         logger.info("Test SQLite called")
@@ -36,14 +35,13 @@ class Database:
     @classmethod
     def get_instance(cls):
         return cls._instance
-    
+
     @staticmethod
     def init_app(app):
         database = Database()
         database._db.init_app(app)
         database.blueprint.route("/test_sqlite", methods=["GET"])(database.test_sqlite)
         app.register_blueprint(database.blueprint)
-
 
     def add(self, model):
         self._db.session.add(model)
