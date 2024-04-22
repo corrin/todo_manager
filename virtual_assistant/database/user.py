@@ -11,7 +11,7 @@ db = SQLAlchemy(app)
 class User(UserMixin, db.Model):
     id = db.Column(db.String(120), primary_key=True)  # Use email as primary key
     username = db.Column(db.String(80), unique=True, nullable=False)
-    calendar_accounts = db.relationship('CalendarAccount', backref='user', lazy=True)
+    calendar_accounts = db.relationship("CalendarAccount", backref="user", lazy=True)
 
     def __repr__(self):
         return f"<User {self.username}>"

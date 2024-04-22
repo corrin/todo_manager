@@ -8,9 +8,10 @@ from virtual_assistant.ai.openai_module import OpenAIModule
 from virtual_assistant.auth.google_auth import GoogleAuth
 from virtual_assistant.auth.user_auth import setup_login_manager
 from virtual_assistant.database.database import Database
-from virtual_assistant.database.todoist_module import TodoistModule
+from virtual_assistant.database.database_routes import database_bp
 from virtual_assistant.meetings.meetings_routes import meetings_bp, providers
 from virtual_assistant.new_user import new_user
+from virtual_assistant.tasks.todoist_module import TodoistModule
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
 from virtual_assistant.utils.user_manager import UserManager
@@ -95,10 +96,12 @@ def app(script_name=None, config=None):
         application.config.update(config)
 
     setup_login_manager(application)
-    Database.init_app(app)
+
+    database = Database.get_instance()
+    database.init_app(application)
 
     application.add_url_rule("/login", "login", login)
-    application.add_url_rule("/authorize", "authorize", authorize)
+    application.add_url_rule("/auth/authorize", "authorize", authorize)  # New route
     application.add_url_rule("/", "main_app", main_app)
     application.add_url_rule("/new_user", "new_user_route", new_user)
     application.add_url_rule(

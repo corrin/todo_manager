@@ -1,5 +1,4 @@
 # db_setup.py
-from flask import Blueprint
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.sql import text
 
@@ -16,7 +15,6 @@ class Database:
         else:
             Database._instance = self
             self._db = SQLAlchemy()
-            self.blueprint = Blueprint("database", __name__, url_prefix="/database")
 
     def test_sqlite(self):
         logger.info("Test SQLite called")
@@ -34,14 +32,14 @@ class Database:
 
     @classmethod
     def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()  # Create an instance if one doesn't exist
         return cls._instance
 
     @staticmethod
     def init_app(app):
-        database = Database()
+        database = Database.get_instance()  # Use the existing instance
         database._db.init_app(app)
-        database.blueprint.route("/test_sqlite", methods=["GET"])(database.test_sqlite)
-        app.register_blueprint(database.blueprint)
 
     def add(self, model):
         self._db.session.add(model)

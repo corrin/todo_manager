@@ -1,9 +1,11 @@
+from sqlalchemy import Column, ForeignKey, Integer, String
+
 from virtual_assistant.database.database import Database
-from sqlalchemy import Column, Integer, String, ForeignKey
+
 
 class CalendarAccount(Database.Model):
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('user.id'))
+    user_id = Column(Integer, ForeignKey("user.id"))
     email_address = Column(String(120), nullable=False)
     provider = Column(String(50), nullable=False)
     authentication_credentials = Column(String, nullable=False, json=True)
@@ -15,4 +17,4 @@ class CalendarAccount(Database.Model):
         self.authentication_credentials = credentials
 
     def __repr__(self):
-        return f'<CalendarAccount {self.email_address}>'
+        return f"<CalendarAccount {self.email_address}>"

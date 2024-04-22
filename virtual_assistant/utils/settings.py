@@ -16,6 +16,9 @@ class Settings:
     # Google API credentials
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+    LOGIN_REDIRECT_URI = (
+        "https://virtualassistant-lakeland.pythonanywhere.com/auth/authorize"
+    )
     GOOGLE_REDIRECT_URI = os.environ.get(
         "GOOGLE_REDIRECT_URI",
         "https://virtualassistant-lakeland.pythonanywhere.com/meetings/google_authenticate",
