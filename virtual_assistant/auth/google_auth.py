@@ -2,6 +2,9 @@
 Google Auth module for handling Google OAuth authentication
 """
 
+from google.oauth2 import id_token
+from google.auth.transport import requests
+
 from authlib.integrations.flask_client import OAuth
 from flask import redirect, request, url_for
 from flask_login import login_user
@@ -50,71 +53,98 @@ class GoogleAuth(AuthProvider):
         redirect_uri = Settings.LOGIN_REDIRECT_URI
         return self.google.authorize_redirect(redirect_uri)
 
-    def authorize(self):
-        """
-        Handle the Google authorization callback
+    def authorize():
+        # Get the authorization header from the request
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return "Missing Authorization header", 401
 
-        Returns:
-            redirect: The redirect response to the main application page
-        """
-        logger.info("Authorize method called")
-        # Get the authorization code from the request
-        code = request.args.get("code")
-
-        # Exchange the authorization code for an access token
-        token_url, headers, body = self.google.authorize_token_url(
-            code, redirect_uri=request.url
-        )
-        token_response = requests.post(
-            token_url,
-            headers=headers,
-            data=body,
-            auth=(self.client_id, self.client_secret),
-        )
-
-        # Get the user's email address from the People API
-        people_api_url = "(link unavailable)"
-        people_response = requests.get(
-            people_api_url,
-            headers={
-                "Authorization": f'Bearer {token_response.json()["access_token"]}'
-            },
-        )
-        email = people_response.json()["emailAddresses"][0]["value"]
-
-        # Do something with the email address, such as storing it in a session or database
-        session["email"] = email
-
-        # Redirect to the main application page
-        return redirect(url_for("main"))
-
+        # Extract the token from the header (assuming "Bearer" scheme)
         try:
-            token = self.google.authorize_access_token()
-            logger.info(f"Authorize token: {token}")
-            if not token:
-                logger.error("Token acquisition failed")
-                return redirect(url_for("login"))
+            token = auth_header.split(' ')[1]
+        except IndexError:
+            return "Invalid Authorization header format", 401
 
-            user_info = self.google.get_user_info(token)
-            user = UserManager.get_current_user()
+        # Verify the token and get the user's email address
+        try:
+            idinfo = id_token.verify_oauth2_token(token, requests.Request(), CLIENT_ID)
+            email = idinfo['email']  # Extract the email address
+        except ValueError:
+            return "Invalid token", 401
 
-            logger.info(f"User Info: {user_info}")
-            logger.info(f"User: {user}")
+        # Now you have the email address in the 'email' variable
+        # You can use this email to identify the user and proceed accordingly
+        # For example:
+        user_manager = UserManager()  # Assuming you have an instance of UserManager
+        user_manager.set_user(email)  # Assuming you have a set_user method in UserManager
+        return "User authorized", 200  # Replace with appropriate response
 
-            if not user:
-                user = UserManager.create_user(user_info)
-                logger.info("New user created")
-            else:
-                logger.info("Existing user logged in")
 
-            login_user(user, remember=True)
-            return redirect(url_for("main_app"))
-        except RequestException as error:
-            logger.error(f"Error during authorization: {str(error)}")
-            return redirect(url_for("login"))
-        except ValueError as error:
-            logger.error(f"Error during authorization: {str(error)}")
-            return redirect(url_for("login"))
+    # def authorize(self):
+    #     """
+    #     Handle the Google authorization callback
+
+    #     Returns:
+    #         redirect: The redirect response to the main application page
+    #     """
+    #     logger.info("Authorize method called")
+    #     # Get the authorization code from the request
+    #     code = request.args.get("code")
+
+    #     # Exchange the authorization code for an access token
+    #     token_url, headers, body = self.google.authorize_token_url(
+    #         code, redirect_uri=request.url
+    #     )
+    #     token_response = requests.post(
+    #         token_url,
+    #         headers=headers,
+    #         data=body,
+    #         auth=(self.client_id, self.client_secret),
+    #     )
+
+    #     # Get the user's email address from the People API
+    #     people_api_url = "(link unavailable)"
+    #     people_response = requests.get(
+    #         people_api_url,
+    #         headers={
+    #             "Authorization": f'Bearer {token_response.json()["access_token"]}'
+    #         },
+    #     )
+    #     email = people_response.json()["emailAddresses"][0]["value"]
+
+    #     # Do something with the email address, such as storing it in a session or database
+    #     session["email"] = email
+
+    #     # Redirect to the main application page
+    #     return redirect(url_for("main"))
+
+    #     try:
+    #         token = self.google.authorize_access_token()
+    #         logger.info(f"Authorize token: {token}")
+    #         if not token:
+    #             logger.error("Token acquisition failed")
+    #             return redirect(url_for("login"))
+
+    #         user_info = self.google.get_user_info(token)
+    #         user = UserManager.get_current_user()
+
+    #         logger.info(f"User Info: {user_info}")
+    #         logger.info(f"User: {user}")
+
+    #         if not user:
+    #             user = UserManager.create_user(user_info)
+    #             logger.info("New user created")
+    #         else:
+    #             logger.info("Existing user logged in")
+
+    #         login_user(user, remember=True)
+    #         return redirect(url_for("main_app"))
+    #     except RequestException as error:
+    #         logger.error(f"Error during authorization: {str(error)}")
+    #         return redirect(url_for("login"))
+    #     except ValueError as error:
+    #         logger.error(f"Error during authorization: {str(error)}")
+    #         return redirect(url_for("login"))
 
     def get_credentials(self, email):
         """
