@@ -13,10 +13,10 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.meetings.calendar_provider import CalendarProvider
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
-from virtual_assistant.utils.user_manager import UserManager
 
 
 class GoogleCalendarProvider(CalendarProvider):
@@ -128,7 +128,7 @@ class GoogleCalendarProvider(CalendarProvider):
             A list of meeting dictionaries containing 'title', 'start', and 'end' keys.
         """
         try:
-            credentials = UserManager.get_credentials(email)
+            credentials = UserDataManager.get_credentials(email)
             logger.debug(f"Credentials for {email}: {credentials}")
 
             if not credentials:

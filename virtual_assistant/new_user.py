@@ -1,9 +1,9 @@
 from flask import redirect, session, url_for
 from flask_login import current_user
 
+from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.meetings.meetings_routes import providers
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.utils.user_manager import UserManager
 
 
 def new_user():
@@ -19,7 +19,7 @@ def new_user():
         logger.error("No user is logged in.")
         return redirect(url_for("login"))  # Ensure there is a login route
 
-    UserManager.login(current_user.email)
+    UserDataManager.login(current_user.email)
 
     # Hardcoded list for now
     user_calendar_accounts = {
@@ -30,7 +30,7 @@ def new_user():
     }
 
     # Save or update the calendar addresses associated with the user
-    UserManager.save_calendar_accounts(user_calendar_accounts)
+    UserDataManager.save_calendar_accounts(user_calendar_accounts)
 
     for email, provider_key in user_calendar_accounts.items():
         session["current_email"] = email
@@ -43,7 +43,7 @@ def new_user():
         logger.info(f"Attempting setup for provider: {provider_key}, email: {email}")
 
         provider_instance = provider_class()
-        credentials = UserManager.get_credentials(email)
+        credentials = UserDataManager.get_credentials(email)
 
         if credentials is None:
             logger.info(f"No credentials found for {email}. Initiating setup.")

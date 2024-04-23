@@ -2,18 +2,14 @@
 Google Auth module for handling Google OAuth authentication
 """
 
-from google.oauth2 import id_token
-from google.auth.transport import requests
-
 from authlib.integrations.flask_client import OAuth
-from flask import redirect, request, url_for
-from flask_login import login_user
-from requests.exceptions import RequestException
+from google.auth.transport import requests
+from google.oauth2 import id_token
 
 from virtual_assistant.auth.auth_provider import AuthProvider
+from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
-from virtual_assistant.utils.user_manager import UserManager
 
 
 class GoogleAuth(AuthProvider):
@@ -55,30 +51,31 @@ class GoogleAuth(AuthProvider):
 
     def authorize():
         # Get the authorization header from the request
-        auth_header = request.headers.get('Authorization')
+        auth_header = request.headers.get("Authorization")
         if not auth_header:
             return "Missing Authorization header", 401
 
         # Extract the token from the header (assuming "Bearer" scheme)
         try:
-            token = auth_header.split(' ')[1]
+            token = auth_header.split(" ")[1]
         except IndexError:
             return "Invalid Authorization header format", 401
 
         # Verify the token and get the user's email address
         try:
-            idinfo = id_token.verify_oauth2_token(token, requests.Request(), CLIENT_ID)
-            email = idinfo['email']  # Extract the email address
+            idinfo = id_token.verify_oauth2_token(token, requests.Request(), Settings.GOOGLE_CLIENT_ID)
+            email = idinfo["email"]  # Extract the email address
         except ValueError:
             return "Invalid token", 401
 
         # Now you have the email address in the 'email' variable
         # You can use this email to identify the user and proceed accordingly
         # For example:
-        user_manager = UserManager()  # Assuming you have an instance of UserManager
-        user_manager.set_user(email)  # Assuming you have a set_user method in UserManager
+        user_manager = UserDataManager()  # Assuming you have an instance of UserManager
+        user_manager.set_user(
+            email
+        )  # Assuming you have a set_user method in UserManager
         return "User authorized", 200  # Replace with appropriate response
-
 
     # def authorize(self):
     #     """
@@ -156,7 +153,7 @@ class GoogleAuth(AuthProvider):
         Returns:
             dict: The stored credentials
         """
-        return UserManager.get_credentials(email)
+        return UserDataManager.get_credentials(email)
 
     def store_credentials(self, email, credentials):
         """
@@ -166,4 +163,4 @@ class GoogleAuth(AuthProvider):
             email (str): The user's email address
             credentials (dict): The credentials to store
         """
-        UserManager.save_credentials(email, credentials)
+        UserDataManager.save_credentials(email, credentials)

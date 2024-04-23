@@ -9,12 +9,12 @@ from virtual_assistant.auth.google_auth import GoogleAuth
 from virtual_assistant.auth.user_auth import setup_login_manager
 from virtual_assistant.database.database import Database
 from virtual_assistant.database.database_routes import database_bp
+from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.meetings.meetings_routes import meetings_bp, providers
 from virtual_assistant.new_user import new_user
 from virtual_assistant.tasks.todoist_module import TodoistModule
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
-from virtual_assistant.utils.user_manager import UserManager
 
 
 def create_database_module():
@@ -49,7 +49,7 @@ def authorize():
 def main_app():
     """Display meetings; requires user to be logged in."""
     logger.info("Displaying meetings")
-    calendar_accounts = UserManager.get_calendar_accounts()
+    calendar_accounts = UserDataManager.get_calendar_accounts()
     meetings = []
     for email, provider_key in calendar_accounts.items():
         provider_class = providers.get(provider_key)
