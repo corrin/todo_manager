@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect, url_for
 from virtual_assistant.utils.user_manager import UserManager
 from virtual_assistant.utils.settings import Settings
 from virtual_assistant.utils.logger import logger
@@ -7,38 +7,44 @@ from virtual_assistant.initial_setup import initial_setup
 
 import jinja2
 
-from database.todoist_module import TodoistModule
-from ai.openai_module import OpenAIModule
-from meetings.calendar_manager import CalendarManager
+from tasks.task_manager import TaskManager
+from ai.ai_manager import AIManager
+from ai.auth_routes import init_ai_routes
+from tasks.todoist_routes import init_todoist_routes
+from meetings.google_calendar_provider import GoogleCalendarProvider
 from meetings.meetings_routes import init_app
 
 
-def create_database_module():
-    # Factory function to create the appropriate database module based on configuration
-    return TodoistModule()
+def create_task_manager():
+    # Factory function to create the task manager
+    return TaskManager()
 
 
-def create_ai_module():
-    # Factory function to create the appropriate AI module based on configuration
-    return OpenAIModule()
+def create_ai_manager():
+    # Factory function to create the AI manager
+    return AIManager()
 
 
-def create_calendar_module():
-    # Factory function to create the appropriate calendar module based on configuration
-    calendar_manager = CalendarManager()
-    logger.debug(f"Calendar Manager created: {calendar_manager}")
-    logger.debug(f"Calendar Manager providers: {calendar_manager.providers}")
-    return calendar_manager
+def create_calendar_provider():
+    # Factory function to create the calendar provider
+    calendar_provider = GoogleCalendarProvider()
+    logger.debug(f"Calendar Provider created")
+    return calendar_provider
 
 
 def create_app():
     app = Flask(__name__)
 
-    ai_module = create_ai_module()
-    calendar_manager = create_calendar_module()
+    # Initialize managers
+    task_manager = create_task_manager()
+    ai_manager = create_ai_manager()
+    calendar_provider = create_calendar_provider()
 
-    app.register_blueprint(ai_module.blueprint, url_prefix="/openai")
-    app.register_blueprint(init_app(calendar_manager), url_prefix="/meetings")
+    # Register blueprints
+    app.register_blueprint(init_ai_routes(), url_prefix="/ai_auth")
+    app.register_blueprint(init_todoist_routes(), url_prefix="/todoist_auth")
+    app.register_blueprint(init_app(calendar_provider), url_prefix="/meetings")
+    
     app.secret_key = Settings.FLASK_SECRET_KEY
 
     template_dir = os.path.join(app.root_path, "assets")
@@ -53,17 +59,35 @@ app = create_app()
 @app.route("/")
 def main_app():
     auth_instructions = {}
-    calendar_manager = create_calendar_module()
+    current_user = UserManager.get_current_user()
+    
+    # Check task provider authentication
+    task_manager = create_task_manager()
+    task_auth_results = task_manager.authenticate(current_user)
+    for provider, result in task_auth_results.items():
+        if result:
+            provider_name, auth_url = result
+            auth_instructions[f"{provider}_task"] = (provider_name, auth_url)
 
-    for email in calendar_manager.email_providers:
-        logger.debug(f"Authenticating email: {email}")
-        instructions = calendar_manager.authenticate(email)
-        if instructions:
-            logger.debug(f"Received instructions: {instructions}")
-            provider, auth_url = instructions
-            auth_instructions[email] = (provider, auth_url)
-        else:
-            logger.debug(f"No instructions received for email: {email}")
+    # Check AI provider authentication
+    ai_manager = create_ai_manager()
+    ai_auth_results = ai_manager.authenticate(current_user)
+    for provider, result in ai_auth_results.items():
+        if result:
+            provider_name, auth_url = result
+            auth_instructions[f"{provider}_ai"] = (provider_name, auth_url)
+
+    # Check calendar authentication
+    calendar_provider = create_calendar_provider()
+    email = UserManager.get_current_user()
+    logger.debug(f"Authenticating email: {email}")
+    instructions = calendar_provider.authenticate(email)
+    if instructions:
+        logger.debug(f"Received instructions: {instructions}")
+        provider, auth_url = instructions
+        auth_instructions[email] = (provider, auth_url)
+    else:
+        logger.debug(f"No instructions received for email: {email}")
 
     if auth_instructions:
         logger.debug(f"Rendering auth_instructions: {auth_instructions}")
@@ -79,5 +103,15 @@ def initial_setup_route():
     return result
 
 
-# Authenticate the email addresses stored in the CalendarManager
+# Set up the default user
 UserManager.set_current_user("lakeland@gmail.com")
+
+
+# This allows the file to work both in development and production
+if __name__ == '__main__':
+    # Development server
+    port = int(os.environ.get('PORT', 3000))
+    app.run(host='0.0.0.0', port=port)
+else:
+    # Production server (pythonanywhere) will import app
+    pass

@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Flask",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/virtual_assistant/flask_app.py",
+            "env": {
+                "FLASK_APP": "virtual_assistant/flask_app.py",
+                "FLASK_ENV": "development",
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "run",
+                "--no-debugger",
+                "--no-reload",
+                "--host", "0.0.0.0",
+                "--port", "3000"
+            ],
+            "jinja": true
+        }
+    ]
+}

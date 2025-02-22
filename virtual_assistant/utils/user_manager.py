@@ -46,3 +46,21 @@ class UserManager:
         email_addresses_file = cls.get_email_addresses_file()
         with open(email_addresses_file, "w") as file:
             json.dump(email_addresses, file)
+
+    @classmethod
+    def get_todoist_token(cls):
+        """Get the Todoist API token for the current user."""
+        user_folder = cls.get_user_folder()
+        token_file = os.path.join(user_folder, "todoist_token")
+        if os.path.exists(token_file):
+            with open(token_file, "r") as file:
+                return file.read().strip()
+        return None
+
+    @classmethod
+    def save_todoist_token(cls, token):
+        """Save the Todoist API token for the current user."""
+        user_folder = cls.get_user_folder()
+        token_file = os.path.join(user_folder, "todoist_token")
+        with open(token_file, "w") as file:
+            file.write(token)

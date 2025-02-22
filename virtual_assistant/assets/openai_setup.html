@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OpenAI Setup</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+        .instructions {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .flash-messages {
+            margin-bottom: 20px;
+        }
+        .flash-message {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .flash-error {
+            background-color: #fee;
+            color: #c00;
+        }
+        .flash-success {
+            background-color: #efe;
+            color: #0c0;
+        }
+    </style>
+</head>
+<body>
+    <h1>OpenAI API Setup</h1>
+
+    <div class="instructions">
+        <h3>How to get your API key:</h3>
+        <ol>
+            <li>Log into your OpenAI account at <a href="https://platform.openai.com" target="_blank">platform.openai.com</a></li>
+            <li>Go to API Keys section</li>
+            <li>Create a new API key</li>
+            <li>Copy the key and paste it below</li>
+        </ol>
+        <p><strong>Note:</strong> Your API key will be stored securely and used only for your account's interactions with OpenAI.</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+                <div class="flash-message flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+        <div class="form-group">
+            <label for="api_key">OpenAI API Key:</label>
+            <input type="password" id="api_key" name="api_key" required>
+        </div>
+        <button type="submit">Save API Key</button>
+    </form>
+</body>
+</html>

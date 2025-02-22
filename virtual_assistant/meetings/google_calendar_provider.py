@@ -60,9 +60,34 @@ class GoogleCalendarProvider(CalendarProvider):
             )
             authorization_url, state = flow.authorization_url(prompt="consent")
             session["oauth_state"] = state  # Store state for CSRF protection
+            session["oauth_flow"] = flow  # Store flow for callback
             return self.provider_name, redirect(authorization_url)
 
         return credentials
+
+    def handle_oauth_callback(self, callback_url):
+        """Handle the OAuth callback from Google."""
+        try:
+            # Get the flow from session
+            flow = session.get("oauth_flow")
+            if not flow:
+                logger.error("No OAuth flow found in session")
+                return None
+
+            # Fetch the token
+            flow.fetch_token(authorization_response=callback_url)
+            
+            # Get credentials from flow
+            credentials = flow.credentials
+            
+            # Clean up session
+            session.pop("oauth_flow", None)
+            session.pop("oauth_state", None)
+            
+            return credentials
+        except Exception as e:
+            logger.error(f"Error handling OAuth callback: {e}")
+            return None
 
     def get_meetings(self, email):
         credentials = self.get_credentials(email)

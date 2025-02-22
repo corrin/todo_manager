@@ -1,5 +1,80 @@
-{% for email, (provider, auth_url) in instructions.items() %}
-<h3>{{ provider }} ({{ email }})</h3>
-<p>Please visit this URL to authorize the application:</p>
-<a href="{{ auth_url }}" target="_blank">{{ auth_url }}</a>
-{% endfor %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Authentication Required</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        .auth-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .auth-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .auth-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .auth-link:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Authentication Required</h1>
+    
+    {% set calendar_auths = {} %}
+    {% set ai_auths = {} %}
+    
+    {% for key, (provider, auth_url) in instructions.items() %}
+        {% if '_ai' in key %}
+            {% set _ = ai_auths.update({key: (provider, auth_url)}) %}
+        {% else %}
+            {% set _ = calendar_auths.update({key: (provider, auth_url)}) %}
+        {% endif %}
+    {% endfor %}
+
+    {% if calendar_auths %}
+    <div class="auth-section">
+        <h2>Calendar Authentication</h2>
+        {% for email, (provider, auth_url) in calendar_auths.items() %}
+        <div class="auth-item">
+            <h3>{{ provider|title }} Calendar ({{ email }})</h3>
+            <p>Please authenticate to allow calendar access:</p>
+            <a class="auth-link" href="{{ auth_url }}" target="_blank">Authenticate {{ provider|title }}</a>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if ai_auths %}
+    <div class="auth-section">
+        <h2>AI Provider Authentication</h2>
+        {% for key, (provider, auth_url) in ai_auths.items() %}
+        <div class="auth-item">
+            <h3>{{ provider|title }} AI</h3>
+            <p>Please set up your {{ provider|title }} credentials:</p>
+            <a class="auth-link" href="{{ auth_url }}" target="_blank">Configure {{ provider|title }}</a>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <p><small>After completing authentication, you may need to refresh this page.</small></p>
+</body>
+</html>
