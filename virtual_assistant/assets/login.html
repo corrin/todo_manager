@@ -3,44 +3,58 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <h1>Virtual Assistant</h1>
 
-<form action="/login" method="POST" class="login-form">
-    <div class="form-group">
-        <label for="email">Email address:</label>
-        <input type="email" id="email" name="email" required class="form-control">
-    </div>
-    <button type="submit" class="btn btn-primary">Login</button>
-</form>
+<!-- Using client ID: {{ Settings.GOOGLE_CLIENT_ID }} -->
+<div id="g_id_onload"
+     data-client_id="{{ Settings.GOOGLE_CLIENT_ID }}"
+     data-callback="handleCredentialResponse"
+     data-context="signin"
+     data-ux_mode="popup"
+     data-auto_select="true"
+     data-itp_support="true">
+</div>
+
+<div class="g_id_signin"
+     data-type="standard"
+     data-size="large"
+     data-theme="outline"
+     data-text="sign_in_with"
+     data-shape="rectangular"
+     data-logo_alignment="left">
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
+<script>
+function handleCredentialResponse(response) {
+    // Decode the credential response to get user info
+    const responsePayload = jwt_decode(response.credential);
+    const email = responsePayload.email;
+    
+    fetch('/login', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email })
+    })
+    .then(response => {
+        if (response.ok) {
+            window.location.href = '/';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+</script>
 
 <style>
-.login-form {
-    max-width: 400px;
+.g_id_signin {
     margin: 2rem auto;
-    padding: 1rem;
-}
-
-.form-group {
-    margin-bottom: 1rem;
-}
-
-.form-control {
-    width: 100%;
-    padding: 0.5rem;
-    margin-top: 0.25rem;
-}
-
-.btn {
-    padding: 0.5rem 1rem;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.btn:hover {
-    background-color: #0056b3;
+    display: flex;
+    justify-content: center;
 }
 </style>
 {% endblock %}

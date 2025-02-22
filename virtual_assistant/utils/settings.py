@@ -2,11 +2,19 @@
 import os
 
 from dotenv import load_dotenv
+from virtual_assistant.utils.logger import logger
+# Load environment variables from the .env file
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
+logger.info(f"Loading .env from: {env_path}")
+load_dotenv(env_path)
 
+# Debug: Check all environment variables
+logger.info("Environment variables after load_dotenv:")
+for key in ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']:
+    logger.info(f"{key}: {os.environ.get(key)}")
+load_dotenv()
 
 class Settings:
-    # Load environment variables from the .env file
-    load_dotenv()
 
     # Project settings
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -18,6 +26,7 @@ class Settings:
 
     # Google API credentials
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+    logger.info(f"Loading GOOGLE_CLIENT_ID: {GOOGLE_CLIENT_ID}")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
     LOGIN_REDIRECT_URI = (
         "https://virtualassistant-lakeland.pythonanywhere.com/auth/authorize"

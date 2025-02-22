@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List
-from virtual_assistant.utils.user_manager import UserManager
+from virtual_assistant.auth.user_manager import UserManager
 from virtual_assistant.utils.logger import logger
 import os
 import json

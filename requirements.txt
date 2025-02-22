@@ -10,3 +10,4 @@ todoist-api-python
 jinja2
 flask_sqlalchemy
 Authlib
+msal

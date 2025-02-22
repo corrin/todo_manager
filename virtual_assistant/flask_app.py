@@ -1,7 +1,10 @@
 import os
-from flask import request, session, make_response
+from flask import request, session, make_response, jsonify
 from flask import Flask, render_template, redirect, url_for
-from virtual_assistant.utils.user_manager import UserManager
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 from virtual_assistant.utils.settings import Settings
 from virtual_assistant.utils.logger import logger
 
@@ -54,7 +57,7 @@ def create_app():
 
     @app.context_processor
     def inject_user():
-        user_email = UserManager.get_current_user()
+        user_email = session.get('user_email')
         if not user_email:
             user_email = request.cookies.get('user_email')
         return dict(user_email=user_email, Settings=Settings)
@@ -101,8 +104,13 @@ def logout():
 
 @app.route("/login", methods=['GET', 'POST'])
 def login():
+    if request.method == 'GET':
+        logger.info(f"Google Client ID being used: {Settings.GOOGLE_CLIENT_ID}")
+    
     if request.method == 'POST':
-        email = request.form.get('email')
+        data = request.get_json()
+        email = data.get('email')
+        
         if email:
             # Create user folder if it doesn't exist
             user_folder = os.path.join(Settings.USERS_FOLDER, email)
@@ -111,10 +119,13 @@ def login():
                 logger.info(f"Created user folder for {email}")
 
             # Set both cookie and session
-            response = make_response(redirect(url_for('index')))
+            response = make_response(jsonify({'success': True}))
             response.set_cookie('user_email', email)
             session['user_email'] = email
             return response
+        
+        return jsonify({'success': False, 'error': 'Email required'}), 400
+        
     return render_template('login.html')
 
 

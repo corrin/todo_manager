@@ -13,7 +13,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from virtual_assistant.database.user_manager import UserDataManager
+from virtual_assistant.utils.user_manager import UserManager
 from virtual_assistant.meetings.calendar_provider import CalendarProvider
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
@@ -152,7 +152,7 @@ class GoogleCalendarProvider(CalendarProvider):
             A list of meeting dictionaries containing 'title', 'start', and 'end' keys.
         """
         try:
-            credentials = UserDataManager.get_credentials(email)
+            credentials = self.get_credentials(email)
             logger.debug(f"Credentials for {email}: {credentials}")
 
             if not credentials:
@@ -274,6 +274,24 @@ class GoogleCalendarProvider(CalendarProvider):
         else:
             logger.warning(f"No credentials found for {email}")
 
+    def store_credentials(self, email, credentials):
+        """Store credentials for the given email."""
+        provider_folder = UserManager.get_provider_folder(self.provider_name, email)
+        credentials_file = os.path.join(provider_folder, f"{email}_credentials.json")
+        
+        credentials_data = {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        }
+        
+        with open(credentials_file, "w", encoding="utf-8") as file:
+            json.dump(credentials_data, file)
+        logger.debug(f"Credentials stored for {email}")
+
     def get_credentials(self, email):
         """
         Retrieve the credentials for the given email address.
@@ -285,8 +303,7 @@ class GoogleCalendarProvider(CalendarProvider):
             Credentials object if found; None otherwise.
         """
         logger.debug(f"Retrieving credentials for {email}")
-        user_folder = UserManager.get_user_folder()
-        provider_folder = os.path.join(user_folder, self.provider_name)
+        provider_folder = UserManager.get_provider_folder(self.provider_name, email)
         credentials_file = os.path.join(provider_folder, f"{email}_credentials.json")
 
         if os.path.exists(credentials_file):

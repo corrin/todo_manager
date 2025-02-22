@@ -12,7 +12,9 @@ from flask import (
     url_for,
 )
 from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
+from virtual_assistant.meetings.o365_calendar_provider import O365CalendarProvider
 from virtual_assistant.utils.logger import logger
+from virtual_assistant.utils.user_manager import UserManager
 
 meetings_bp = Blueprint("meetings", __name__, url_prefix="/meetings")
 
@@ -67,12 +69,11 @@ def debug_meetings(email):
 @meetings_bp.route("/sync")
 def sync_meetings():
     # Retrieve meetings for all accounts
-    # Commented out because this is closer to pseudocode
-    # Also this is gogole specfic and it should be getting hte provider
-    # meetings_by_account = {}
-    # for email in UserManager.get_email_addresses():
-    #     meetings = google_provider.get_meetings(email)
-    #     meetings_by_account[email] = meetings
+    meetings_by_account = {}
+    for account in UserManager.get_accounts():
+        provider = providers[account.provider]()
+        meetings = provider.get_meetings(account.email)
+        meetings_by_account[account.email] = meetings
 
     # # Split meetings into master and clone meetings for each account
     # master_meetings_by_account = {}

@@ -1,22 +1,23 @@
 # o365_calendar_provider.py
 import os
+import json
 import urllib.parse
 from datetime import datetime, timedelta
 
 import msal
 import requests
-
-# import secrets
-# import hashlib
-# import base64
 from flask import render_template, session
 
 from virtual_assistant.utils.logger import logger
-
+from virtual_assistant.utils.user_manager import UserManager
 from .calendar_provider import CalendarProvider
 
 
 class O365CalendarProvider(CalendarProvider):
+    """Office 365 Calendar Provider class for handling O365 calendar integration."""
+    
+    provider_name = 'o365'
+    
     def __init__(self):
         self.client_id = os.environ["MICROSOFT_CLIENT_ID"]
         self.client_secret = os.environ["MICROSOFT_CLIENT_SECRET"]
@@ -154,7 +155,25 @@ class O365CalendarProvider(CalendarProvider):
         else:
             return False
 
+    def store_credentials(self, email, credentials):
+        """Store credentials for the given email."""
+        provider_folder = UserManager.get_provider_folder(self.provider_name, email)
+        credentials_file = os.path.join(provider_folder, f"{email}_credentials.json")
+        
+        with open(credentials_file, "w", encoding="utf-8") as file:
+            json.dump(credentials, file)
+        logger.debug(f"O365 credentials stored for {email}")
+
     def get_credentials(self, email):
-        # Implement the logic to retrieve or generate credentials for the specified email
-        # This method should return the credentials object
-        pass
+        """Retrieve credentials for the given email."""
+        provider_folder = UserManager.get_provider_folder(self.provider_name, email)
+        credentials_file = os.path.join(provider_folder, f"{email}_credentials.json")
+        
+        if os.path.exists(credentials_file):
+            with open(credentials_file, "r", encoding="utf-8") as file:
+                credentials = json.load(file)
+                logger.debug(f"O365 credentials loaded for {email}")
+                return credentials
+        
+        logger.warning(f"No O365 credentials found for {email}")
+        return None

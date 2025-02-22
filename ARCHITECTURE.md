@@ -11,7 +11,7 @@ The system follows a provider-based architecture with three main components:
 - Provider pattern for potential future task sources
 
 ### 2. AI Processing (Rules Engine)
-- Multiple AI provider support (OpenAI, Grok, etc.)
+- Multiple AI provider support (OpenAI, Grok, Gemini, Claude, etc.)
 - Provider-based architecture for AI services
 - Each provider implements common interface
 - Automatic fallback between providers
@@ -109,7 +109,7 @@ class TaskProvider(ABC):
 
 ### AI Layer
 - AIProvider interface
-- Provider implementations (OpenAI, Grok)
+- Provider implementations (OpenAI, Grok, Gemini, Claude)
 - AIManager for coordination
 - Provider-specific auth flows
 
@@ -140,6 +140,28 @@ class Task:
     is_instruction: bool  # True only for AI instruction task
 ```
 
+## Module Organization
+
+The codebase is organized into separate modules for each layer:
+
+### Database Module
+- Handles interactions with task sources
+- Abstract base classes for common operations
+- Concrete implementations per provider
+- CRUD operations for tasks
+
+### AI Module
+- Handles integration with AI services
+- Abstract interface for AI operations
+- Concrete implementations per provider
+- Text generation and analysis
+
+### Calendar Module
+- Handles calendar integrations
+- Abstract interface for calendar operations
+- Concrete implementations per provider
+- Event management and scheduling
+
 ## Security Considerations
 
 ### 1. Credential Storage
@@ -166,3 +188,6 @@ The architecture emphasizes:
 - User-specific credential management
 - Extensibility for new providers
 - Simple, natural language configuration
+- Modular and maintainable design
+- Factory pattern for provider instantiation
+- Dependency injection for flexible configuration
