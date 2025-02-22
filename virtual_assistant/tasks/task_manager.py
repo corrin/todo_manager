@@ -1,6 +1,7 @@
 from virtual_assistant.utils.user_manager import UserManager
 from virtual_assistant.utils.logger import logger
 from .todoist_provider import TodoistProvider
+from .sqlite_provider import SQLiteTaskProvider
 
 
 class TaskManager:
@@ -10,6 +11,7 @@ class TaskManager:
         self.providers = {}
         self.provider_classes = {
             "todoist": TodoistProvider,
+            "sqlite": SQLiteTaskProvider,
             # Add other providers here as needed
         }
         self._initialize_providers()
@@ -65,8 +67,6 @@ class TaskManager:
         if provider_name and provider_name not in self.providers:
             raise ValueError(f"Unknown task provider: {provider_name}")
 
-        # For now, we just use the first provider (Todoist)
-        # In future, we might combine tasks from multiple providers
         provider = (
             self.providers[provider_name]
             if provider_name

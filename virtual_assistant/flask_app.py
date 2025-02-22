@@ -1,9 +1,9 @@
 import os
+from flask import request, session, make_response
 from flask import Flask, render_template, redirect, url_for
 from virtual_assistant.utils.user_manager import UserManager
 from virtual_assistant.utils.settings import Settings
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.initial_setup import initial_setup
 
 import jinja2
 
@@ -11,6 +11,7 @@ from tasks.task_manager import TaskManager
 from ai.ai_manager import AIManager
 from ai.auth_routes import init_ai_routes
 from tasks.todoist_routes import init_todoist_routes
+from tasks.sqlite_routes import init_sqlite_routes
 from meetings.google_calendar_provider import GoogleCalendarProvider
 from meetings.meetings_routes import init_app
 
@@ -43,6 +44,7 @@ def create_app():
     # Register blueprints
     app.register_blueprint(init_ai_routes(), url_prefix="/ai_auth")
     app.register_blueprint(init_todoist_routes(), url_prefix="/todoist_auth")
+    app.register_blueprint(init_sqlite_routes(), url_prefix="/sqlite_auth")
     app.register_blueprint(init_app(calendar_provider), url_prefix="/meetings")
     
     app.secret_key = Settings.FLASK_SECRET_KEY
@@ -50,61 +52,70 @@ def create_app():
     template_dir = os.path.join(app.root_path, "assets")
     app.jinja_loader = jinja2.FileSystemLoader(template_dir)
 
+    @app.context_processor
+    def inject_user():
+        user_email = UserManager.get_current_user()
+        if not user_email:
+            user_email = request.cookies.get('user_email')
+        return dict(user_email=user_email, Settings=Settings)
+
     return app
 
 
 app = create_app()
 
+@app.before_request
+def load_user_from_cookie():
+    user_email = request.cookies.get('user_email')
+    if user_email and 'user_email' not in session:
+        session['user_email'] = user_email
+
 
 @app.route("/")
-def main_app():
-    auth_instructions = {}
-    current_user = UserManager.get_current_user()
-    
-    # Check task provider authentication
-    task_manager = create_task_manager()
-    task_auth_results = task_manager.authenticate(current_user)
-    for provider, result in task_auth_results.items():
-        if result:
-            provider_name, auth_url = result
-            auth_instructions[f"{provider}_task"] = (provider_name, auth_url)
+def index():
+    # Check if the user is logged in
+    if 'user_email' not in session:
+        return redirect(url_for('login'))  # Redirect to login page
 
-    # Check AI provider authentication
-    ai_manager = create_ai_manager()
-    ai_auth_results = ai_manager.authenticate(current_user)
-    for provider, result in ai_auth_results.items():
-        if result:
-            provider_name, auth_url = result
-            auth_instructions[f"{provider}_ai"] = (provider_name, auth_url)
-
-    # Check calendar authentication
-    calendar_provider = create_calendar_provider()
-    email = UserManager.get_current_user()
-    logger.debug(f"Authenticating email: {email}")
-    instructions = calendar_provider.authenticate(email)
-    if instructions:
-        logger.debug(f"Received instructions: {instructions}")
-        provider, auth_url = instructions
-        auth_instructions[email] = (provider, auth_url)
-    else:
-        logger.debug(f"No instructions received for email: {email}")
-
-    if auth_instructions:
-        logger.debug(f"Rendering auth_instructions: {auth_instructions}")
-        return render_template("auth_instructions.html", instructions=auth_instructions)
-    else:
-        logger.debug("No authentication instructions received")
-        return "Authentication process initiated. Check the console for further instructions."
+    user_email = session.get('user_email')
+    return render_template('index.html', user_email=user_email)
 
 
-@app.route("/initial_setup")
-def initial_setup_route():
-    result = initial_setup()
-    return result
+@app.route("/config")
+def config():
+    # Check if the user is logged in
+    if 'user_email' not in session:
+        return redirect(url_for('login'))  # Redirect to login page
+
+    user_email = session.get('user_email')
+    return render_template('config.html', user_email=user_email)
 
 
-# Set up the default user
-UserManager.set_current_user("lakeland@gmail.com")
+@app.route("/logout")
+def logout():
+    session.pop('user_email', None)
+    response = make_response(redirect(url_for('login')))
+    response.delete_cookie('user_email')
+    return response
+
+
+@app.route("/login", methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        if email:
+            # Create user folder if it doesn't exist
+            user_folder = os.path.join(Settings.USERS_FOLDER, email)
+            if not os.path.exists(user_folder):
+                os.makedirs(user_folder)
+                logger.info(f"Created user folder for {email}")
+
+            # Set both cookie and session
+            response = make_response(redirect(url_for('index')))
+            response.set_cookie('user_email', email)
+            session['user_email'] = email
+            return response
+    return render_template('login.html')
 
 
 # This allows the file to work both in development and production
@@ -112,6 +123,3 @@ if __name__ == '__main__':
     # Development server
     port = int(os.environ.get('PORT', 3000))
     app.run(host='0.0.0.0', port=port)
-else:
-    # Production server (pythonanywhere) will import app
-    pass

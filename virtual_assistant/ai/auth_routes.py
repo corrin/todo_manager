@@ -17,14 +17,14 @@ def init_ai_routes():
             if not api_key:
                 flash('API key is required')
                 return redirect(url_for('ai_auth.setup_credentials', provider=provider))
-
+            
             try:
                 email = UserManager.get_current_user()
                 provider_instance = ai_manager.get_provider(provider)
                 if not provider_instance:
                     flash(f'Unknown provider: {provider}')
                     return redirect(url_for('main_app'))
-
+                
                 provider_instance.store_credentials(email, {"api_key": api_key})
                 flash(f'{provider} credentials saved successfully')
                 return redirect(url_for('main_app'))

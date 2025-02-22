@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration{% endblock %}
+
+{% block content %}
+<h1>Configuration</h1>
+<form>
+    <div class="form-group">
+        <label>Task Provider:</label>
+        <select class="form-control">
+            <option>Todoist</option>
+            <option>Local DB</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>AI Provider:</label>
+        <select class="form-control">
+            <option>OpenAI</option>
+            <option>Grok</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Google Calendar Authentication:</label>
+        <a href="#" class="btn btn-primary">Authenticate</a>
+    </div>
+    <div class="form-group">
+        <label>O365 Authentication:</label>
+        <a href="#" class="btn btn-primary">Authenticate</a>
+    </div>
+    <div class="form-group">
+        <label>Todoist Authentication:</label>
+        <a href="#" class="btn btn-primary">Authenticate</a>
+    </div>
+    <div class="form-group">
+        <label>OpenAI API Key:</label>
+        <input type="text" class="form-control" placeholder="Enter API Key">
+    </div>
+    <div class="form-group">
+        <label>Grok API Key:</label>
+        <input type="text" class="form-control" placeholder="Enter API Key">
+    </div>
+    <button type="submit" class="btn btn-primary">Save Changes</button>
+</form>
+{% endblock %}

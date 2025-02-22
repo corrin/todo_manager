@@ -11,6 +11,9 @@ class Settings:
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     USERS_FOLDER = os.path.join(PROJECT_ROOT, "users")
 
+    # Ensure users folder exists
+    os.makedirs(USERS_FOLDER, exist_ok=True)
+
     # Google API credentials
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")

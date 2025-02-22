@@ -60,7 +60,6 @@ class GoogleCalendarProvider(CalendarProvider):
             )
             authorization_url, state = flow.authorization_url(prompt="consent")
             session["oauth_state"] = state  # Store state for CSRF protection
-            session["oauth_flow"] = flow  # Store flow for callback
             return self.provider_name, redirect(authorization_url)
 
         return credentials

@@ -20,7 +20,10 @@ def google_authenticate():
     
     try:
         # Get the user's email from session
-        email = session.get("user_email", "lakeland@gmail.com")
+        email = session.get("user_email")
+        if not email:
+            logger.error("No user email in session")
+            return redirect(url_for("login"))
         
         # Handle the callback
         credentials = google_provider.handle_oauth_callback(request.url)

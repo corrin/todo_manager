@@ -3,18 +3,17 @@ import os
 import json
 
 from utils.settings import Settings
+from flask import session
 
 
 class UserManager:
-    __current_user = None
-
     @classmethod
     def get_current_user(cls):
-        return cls.__current_user
+        return session.get('user_email')
 
     @classmethod
     def set_current_user(cls, username):
-        cls.__current_user = username
+        session['user_email'] = username
 
     @classmethod
     def get_user_folder(cls):
@@ -22,9 +21,9 @@ class UserManager:
         if not current_user:
             raise ValueError("Current user not set. Please log in first.")
         user_folder = os.path.join(Settings.USERS_FOLDER, current_user)
-        os.makedirs(
-            user_folder, exist_ok=True
-        )  # Create the user folder if it doesn't exist
+        if not os.path.exists(user_folder):
+            os.makedirs(user_folder, exist_ok=True)  # Create the user folder if it doesn't exist
+            logger.info(f"Created user folder for {current_user}")
         return user_folder
 
     @classmethod

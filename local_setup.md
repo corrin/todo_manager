@@ -1,80 +1,61 @@
-# Local Setup Instructions
+# Local Development Setup
 
-## 1. Environment Setup
-Create `.env` in the project root:
-```
-GOOGLE_CLIENT_ID=your_client_id_from_google_console
-GOOGLE_CLIENT_SECRET=your_client_secret_from_google_console
-GOOGLE_REDIRECT_URI=https://virtual-assitant.ngrok.io/meetings/google_authenticate
-FLASK_SECRET_KEY=any_random_string_for_development
-PORT=3000
-```
+## Prerequisites
+1. Python environment (requirements.txt installed)
+2. ngrok account for OAuth callbacks
+3. Google Cloud OAuth credentials
+4. Todoist API access
+5. OpenAI API key
 
-## 2. Create Users Directory
+## Environment Setup
+
+1. Start ngrok:
 ```bash
-mkdir virtual_assistant/users
+ngrok http --subdomain=virtual-assistant 3000
 ```
 
-## 3. Start ngrok
-In a separate terminal:
-```bash
-ngrok http --subdomain=virtual-assitant 3000
-```
-Keep this running throughout development.
+2. Set up environment variables:
+   - Copy `.env.example` to `.env`
+   - Update values in `.env` with your credentials
+   - See `.env.example` for all required variables
 
-## 4. Run the Application
-In terminal:
+## Running the Application
+
+1. Start Flask:
 ```bash
 python virtual_assistant/flask_app.py
 ```
 
-The server will be available at:
-- Local: http://localhost:3000
-- Development: https://virtual-assitant.ngrok.io
-- Production: https://virtualassistant-lakeland.pythonanywhere.com
+2. Visit https://virtual-assistant.ngrok.io/initial_setup
 
-## 5. Initial Setup
-1. Open https://virtual-assitant.ngrok.io/initial_setup
-2. The system will:
-   - Set up user folder for lakeland@gmail.com
+3. The system will:
+   - Create user folder for lakeland@gmail.com
    - Check provider authentication
-   - Redirect to auth setup if needed
+   - Redirect to setup pages as needed
 
-## 6. Provider Setup
-Follow the prompts to set up each provider:
+## Provider Setup
 
 ### Google Calendar
-1. Log in with lakeland@gmail.com
-2. Grant calendar access
+1. OAuth flow starts automatically
+2. Log in with lakeland@gmail.com
+3. Grant calendar permissions
 
 ### OpenAI
-1. Go to https://platform.openai.com/api-keys
-2. Create new API key
-3. Copy the key
-4. Paste in the setup form
+1. Click OpenAI setup link
+2. Enter API key from platform.openai.com
+3. System creates credentials file
 
 ### Todoist
-1. Go to https://todoist.com/app/settings/integrations
-2. Copy your API token
-3. Paste in the setup form
+1. Click Todoist setup link
+2. Enter API token from todoist.com/app/settings/integrations
+3. System creates:
+   - Credentials file
+   - AI instruction task
 
-## If Something Goes Wrong
-1. Check both terminal windows for errors:
-   - Flask server terminal
-   - ngrok terminal
-2. Common issues:
-   - Wrong redirect URI in Google Console
-   - Missing environment variables
-   - Not using lakeland@gmail.com
-3. Solutions:
-   - Double-check Google Console settings
-   - Verify .env contents
-   - Clear browser cookies and try again
+## Troubleshooting
 
-## Production Deployment
-The same code works on pythonanywhere.com:
-1. The redirect URI automatically uses the production URL
-2. The app object is imported by the WSGI configuration
-3. Environment variables are set in the pythonanywhere dashboard
-
-Need help? Let me know which step you're stuck on.
+If you get "Internal Server Error":
+1. Check ngrok is running
+2. Verify .env exists with correct values
+3. Ensure virtual_assistant/users exists
+4. Check Flask logs for details

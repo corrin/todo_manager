@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 80%;
+            margin: 20px auto;
+        }
+        .banner {
+            background-color: #f0f0f0;
+            padding: 10px;
+            text-align: right;
+            margin-bottom: 20px;
+        }
+        .user-email {
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        .logout-button {
+            display: inline-block;
+            padding: 5px 10px;
+            background-color: #ddd;
+            text-decoration: none;
+            color: #333;
+            border-radius: 5px;
+        }
+        .content {
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="banner">
+        {% if user_email %}
+            <span class="user-email">{{ user_email }}</span>
+            <a href="/logout" class="logout-button">Logout</a>
+        {% endif %}
+    </div>
+    
+    <div class="container">
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</body>
+</html>
