@@ -7,6 +7,10 @@ class CalendarProvider(ABC):
         pass
 
     @abstractmethod
+    def retrieve_tokens(self, callback_url):
+        pass
+
+    @abstractmethod
     def get_meetings(self, email):
         pass
 
@@ -16,8 +20,4 @@ class CalendarProvider(ABC):
 
     @abstractmethod
     def get_credentials(self, email):
-        pass
-
-    @abstractmethod
-    def store_credentials(self, email):
         pass

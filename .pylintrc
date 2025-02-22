@@ -1,0 +1,8 @@
+[MASTER]
+init-hook=import sys; print(f"sys.path: {sys.path}"); sys.path.append('/home/lakeland/.virtualenvs/virtual_assistant/lib/python3.10/site-packages')
+#inithook=import sys; sys.path.append('//home/lakeland/.virtualenvs/virtual_assistant/lib/python3.10/site-packages')
+
+
+
+[MESSAGES CONTROL]
+disable=logging-fstring-interpolation

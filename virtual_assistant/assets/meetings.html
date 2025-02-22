@@ -9,9 +9,9 @@
     <ul>
         {% for meeting in meetings %}
         <li>
-            <strong>{{ meeting.get('summary') }}</strong><br>
-            Start: {{ meeting.get('start').get('dateTime') }}<br>
-            End: {{ meeting.get('end').get('dateTime') }}
+            <strong>{{ meeting['title'] }}</strong><br>
+            Start: {{ meeting['start'] }}<br>
+            End: {{ meeting['end'] }}
         </li>
         {% else %}
         <li>No meetings found.</li>
