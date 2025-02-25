@@ -95,15 +95,17 @@ class TaskProvider(ABC):
 
 ### 2. Provider Authentication
 - Each provider checks credentials
-- Missing credentials trigger setup
+- Missing credentials trigger OAuth flow
+- Direct redirect to provider's auth page
+- Secure callback handling
 - Credentials stored per user
-- Regular validation checks
 
 ### 3. Credential Management
 - Secure credential storage
 - Provider-specific formats
-- Automatic refresh where supported
-- Clear error handling
+- Automatic token refresh
+- OAuth state validation
+- Error handling with user feedback
 
 ## Implementation Structure
 

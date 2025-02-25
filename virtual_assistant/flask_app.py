@@ -1,5 +1,6 @@
 import os
-from flask import request, session, make_response, jsonify
+import json
+from flask import request, session, make_response, jsonify, flash
 from flask import Flask, render_template, redirect, url_for
 from dotenv import load_dotenv
 
@@ -84,7 +85,7 @@ def index():
     return render_template('index.html', user_email=user_email)
 
 
-@app.route("/config")
+@app.route("/config", methods=['GET'])
 def config():
     # Check if the user is logged in
     if 'user_email' not in session:
@@ -92,6 +93,55 @@ def config():
 
     user_email = session.get('user_email')
     return render_template('config.html', user_email=user_email)
+
+@app.route("/save_config", methods=['POST'])
+def save_config():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+
+    user_email = session.get('user_email')
+    try:
+        # Get form data
+        task_provider = request.form.get('task_provider')
+        ai_provider = request.form.get('ai_provider')
+        openai_key = request.form.get('openai_key')
+        grok_key = request.form.get('grok_key')
+
+        # Save provider selections
+        user_folder = os.path.join(Settings.USERS_FOLDER, user_email)
+        config_file = os.path.join(user_folder, 'config.json')
+        
+        config = {
+            'task_provider': task_provider,
+            'ai_provider': ai_provider
+        }
+        
+        # Save API keys if provided
+        if openai_key:
+            config['openai_key'] = openai_key
+        if grok_key:
+            config['grok_key'] = grok_key
+
+        # Ensure user directory exists
+        os.makedirs(user_folder, exist_ok=True)
+        
+        # Save configuration
+        with open(config_file, 'w') as f:
+            json.dump(config, f, indent=2)
+            
+        flash('Configuration saved successfully')
+        logger.info(f"Configuration updated for user {user_email}")
+        
+        # Check if user wants to return home after saving
+        action = request.form.get('action')
+        if action == 'save_and_return':
+            return redirect(url_for('index'))
+        
+    except Exception as e:
+        flash(f'Error saving configuration: {str(e)}')
+        logger.error(f"Error saving configuration for {user_email}: {e}")
+    
+    return redirect(url_for('config'))
 
 
 @app.route("/logout")

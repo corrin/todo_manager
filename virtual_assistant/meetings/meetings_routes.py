@@ -2,8 +2,10 @@
 Meetings Blueprint routes and functionality.
 """
 
+from datetime import datetime
 from flask import (
     Blueprint,
+    flash,
     jsonify,
     redirect,
     render_template,
@@ -15,6 +17,7 @@ from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarPr
 from virtual_assistant.meetings.o365_calendar_provider import O365CalendarProvider
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.user_manager import UserManager
+from virtual_assistant.database.calendar_account import CalendarAccount
 
 meetings_bp = Blueprint("meetings", __name__, url_prefix="/meetings")
 
@@ -23,6 +26,147 @@ providers = {
     "o365": O365CalendarProvider,
 }
 
+@meetings_bp.route("/manage_calendar_accounts")
+def manage_calendar_accounts():
+    """Display the calendar accounts management page."""
+    try:
+        email = session.get("user_email")
+        if not email:
+            logger.error("No user email in session")
+            return redirect(url_for("login"))
+
+        # Get all calendar accounts for the user
+        calendar_accounts = []
+        for provider_name, provider_class in providers.items():
+            provider = provider_class()
+            credentials = provider.get_credentials(email)
+            if credentials:
+                # Check if credentials are valid/active
+                is_active = True
+                if hasattr(credentials, 'expired'):
+                    is_active = not credentials.expired
+                
+                # Get last sync time from database
+                account = CalendarAccount.get_by_email_and_provider(email, provider_name)
+                last_sync = account.last_sync if account else None
+                
+                calendar_accounts.append({
+                    'provider': provider_name,
+                    'email': email,
+                    'last_sync': last_sync.strftime('%Y-%m-%d %H:%M:%S') if last_sync else None,
+                    'is_active': is_active
+                })
+        
+        return render_template('manage_calendar_accounts.html', calendar_accounts=calendar_accounts)
+    
+    except Exception as e:
+        logger.error(f"Error in manage_calendar_accounts: {e}")
+        flash("An error occurred while loading calendar accounts.", "error")
+        return redirect(url_for("main_app"))
+
+@meetings_bp.route("/remove_calendar_account", methods=["POST"])
+def remove_calendar_account():
+    """Remove a calendar account."""
+    try:
+        email = session.get("user_email")
+        if not email:
+            logger.error("No user email in session")
+            return redirect(url_for("login"))
+        
+        provider_name = request.form.get("provider")
+        if provider_name not in providers:
+            flash("Invalid calendar provider.", "error")
+            return redirect(url_for("meetings.manage_calendar_accounts"))
+        
+        # Remove credentials
+        provider = providers[provider_name]()
+        UserManager.remove_provider_folder(provider_name, email)
+        
+        # Remove from database
+        CalendarAccount.delete_by_email_and_provider(email, provider_name)
+        
+        flash(f"Successfully removed {provider_name} calendar account.", "success")
+        
+    except Exception as e:
+        logger.error(f"Error removing calendar account: {e}")
+        flash("An error occurred while removing the calendar account.", "error")
+    
+    return redirect(url_for("meetings.manage_calendar_accounts"))
+
+@meetings_bp.route("/reauth_calendar_account")
+def reauth_calendar_account():
+    """Reauthorize a calendar account."""
+    try:
+        email = session.get("user_email")
+        if not email:
+            logger.error("No user email in session")
+            return redirect(url_for("login"))
+        
+        provider_name = request.args.get("provider")
+        if provider_name not in providers:
+            flash("Invalid calendar provider.", "error")
+            return redirect(url_for("meetings.manage_calendar_accounts"))
+        
+        provider = providers[provider_name]()
+        _, auth_page = provider.authenticate(email)
+        
+        if auth_page:
+            return auth_page
+        
+        flash("Account already authorized.", "info")
+        return redirect(url_for("meetings.manage_calendar_accounts"))
+        
+    except Exception as e:
+        logger.error(f"Error reauthorizing calendar account: {e}")
+        flash("An error occurred while reauthorizing the calendar account.", "error")
+        return redirect(url_for("meetings.manage_calendar_accounts"))
+
+
+@meetings_bp.route("/authenticate_google_calendar")
+def authenticate_google_calendar():
+    """Initiate Google Calendar authentication."""
+    try:
+        email = session.get("user_email")
+        if not email:
+            logger.error("No user email in session")
+            return redirect(url_for("login"))
+        
+        provider = GoogleCalendarProvider()
+        _, auth_url = provider.authenticate(email)
+        
+        if auth_url:
+            return redirect(auth_url)
+        
+        flash("Account already authorized.", "info")
+        return redirect(url_for("meetings.manage_calendar_accounts"))
+        
+    except Exception as e:
+        logger.error(f"Error initiating Google Calendar auth: {e}")
+        flash("An error occurred while setting up Google Calendar.", "error")
+        return redirect(url_for("meetings.manage_calendar_accounts"))
+
+@meetings_bp.route("/authenticate_o365_calendar")
+def authenticate_o365_calendar():
+    """Initiate O365 Calendar authentication."""
+    try:
+        email = session.get("user_email")
+        if not email:
+            logger.error("No user email in session")
+            return redirect(url_for("login"))
+        
+        provider = O365CalendarProvider()
+        _, auth_url = provider.authenticate(email)
+        
+        if auth_url:
+            return redirect(auth_url)
+        
+        flash("Account already authorized.", "info")
+        return redirect(url_for("meetings.manage_calendar_accounts"))
+        
+    except Exception as e:
+        logger.error(f"Error initiating O365 Calendar auth: {e}")
+        flash("An error occurred while setting up Office 365 Calendar.", "error")
+        return redirect(url_for("meetings.manage_calendar_accounts"))
 
 @meetings_bp.route("/google_authenticate")
 def google_authenticate():
@@ -43,15 +187,49 @@ def google_authenticate():
             # Store the credentials
             google_provider.store_credentials(email, credentials)
             logger.info(f"Google Calendar credentials stored for {email}")
-            return redirect(url_for("main_app"))
+            flash("Google Calendar connected successfully.", "success")
+            return redirect(url_for("meetings.manage_calendar_accounts"))
         else:
             logger.error("Failed to get credentials from OAuth callback")
-            return "Authentication failed", 500
+            flash("Failed to connect Google Calendar.", "error")
+            return redirect(url_for("meetings.manage_calendar_accounts"))
             
     except Exception as e:
         logger.error(f"Error in Google OAuth callback: {e}")
-        return f"Error: {str(e)}", 500
+        flash(f"Error connecting Google Calendar: {str(e)}", "error")
+        return redirect(url_for("meetings.manage_calendar_accounts"))
 
+
+@meetings_bp.route("/o365_authenticate")
+def o365_authenticate():
+    """Handle O365 OAuth callback."""
+    o365_provider = O365CalendarProvider()
+    
+    try:
+        # Get the user's email from session
+        email = session.get("user_email")
+        if not email:
+            logger.error("No user email in session")
+            return redirect(url_for("login"))
+        
+        # Handle the callback
+        credentials = o365_provider.retrieve_tokens(request.url)
+        
+        if credentials:
+            # Store the credentials
+            o365_provider.store_credentials(email, credentials)
+            logger.info(f"O365 Calendar credentials stored for {email}")
+            flash("Office 365 Calendar connected successfully.", "success")
+            return redirect(url_for("meetings.manage_calendar_accounts"))
+        else:
+            logger.error("Failed to get O365 credentials from OAuth callback")
+            flash("Failed to connect Office 365 Calendar.", "error")
+            return redirect(url_for("meetings.manage_calendar_accounts"))
+            
+    except Exception as e:
+        logger.error(f"Error in O365 OAuth callback: {e}")
+        flash(f"Error connecting Office 365 Calendar: {str(e)}", "error")
+        return redirect(url_for("meetings.manage_calendar_accounts"))
 
 @meetings_bp.route("/debug/<email>")
 def debug_meetings(email):

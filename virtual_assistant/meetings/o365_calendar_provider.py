@@ -19,9 +19,9 @@ class O365CalendarProvider(CalendarProvider):
     provider_name = 'o365'
     
     def __init__(self):
-        self.client_id = os.environ["MICROSOFT_CLIENT_ID"]
-        self.client_secret = os.environ["MICROSOFT_CLIENT_SECRET"]
-        self.redirect_uri = "https://virtualassistant-lakeland.pythonanywhere.com/meetings/o365_authenticate"
+        self.client_id = Settings.O365_CLIENT_ID
+        self.client_secret = Settings.O365_CLIENT_SECRET
+        self.redirect_uri = Settings.O365_REDIRECT_URI
         self.scopes = ["Calendars.ReadWrite"]
         self.authority = "https://login.microsoftonline.com/common"
         self.app = msal.ConfidentialClientApplication(
@@ -52,11 +52,7 @@ class O365CalendarProvider(CalendarProvider):
         session["flow"] = flow
         session["current_email"] = email
 
-        return None, render_template(
-            "authenticate_email.html",
-            email=email,
-            authorization_url=flow["auth_uri"],
-        )
+        return None, flow["auth_uri"]
 
     def retrieve_tokens(self, callback_url):
         # Parse the authorization code from the callback URL
@@ -113,46 +109,90 @@ class O365CalendarProvider(CalendarProvider):
             logger.error(f"Failed to obtain tokens: {result.get('error_description')}")
             return None
 
-    def get_meetings(self, email, access_token):
-        endpoint = "https://graph.microsoft.com/v1.0/me/events"
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Prefer": 'outlook.timezone="UTC"',
-        }
+    def get_meetings(self, email):
+        """Get meetings for the given email."""
+        try:
+            credentials = self.get_credentials(email)
+            if not credentials:
+                logger.error(f"No credentials found for {email}")
+                return []
 
-        now = datetime.utcnow()
-        start_date = now.strftime("%Y-%m-%dT00:00:00Z")
-        end_date = (now + timedelta(days=7)).strftime("%Y-%m-%dT00:00:00Z")
+            access_token = credentials.get("access_token")
+            if not access_token:
+                logger.error(f"No access token found in credentials for {email}")
+                return []
 
-        params = {
-            "$select": "subject,start,end",
-            "$filter": f"start/dateTime ge '{start_date}' and end/dateTime le '{end_date}'",
-        }
-
-        events_result = requests.get(endpoint, headers=headers, params=params).json()
-
-        meetings = []
-        for event in events_result["value"]:
-            meeting = {
-                "title": event["subject"],
-                "start": event["start"]["dateTime"],
-                "end": event["end"]["dateTime"],
+            endpoint = "https://graph.microsoft.com/v1.0/me/events"
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Prefer": 'outlook.timezone="UTC"',
             }
-            meetings.append(meeting)
 
-        return meetings
+            now = datetime.utcnow()
+            start_date = now.strftime("%Y-%m-%dT00:00:00Z")
+            end_date = (now + timedelta(days=7)).strftime("%Y-%m-%dT00:00:00Z")
 
-    def create_meeting(self, email, access_token, event_data):
-        endpoint = "https://graph.microsoft.com/v1.0/me/events"
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        }
+            params = {
+                "$select": "subject,start,end",
+                "$filter": f"start/dateTime ge '{start_date}' and end/dateTime le '{end_date}'",
+            }
 
-        response = requests.post(endpoint, headers=headers, json=event_data)
-        if response.status_code == 201:
-            return True
-        else:
+            response = requests.get(endpoint, headers=headers, params=params)
+            if response.status_code != 200:
+                logger.error(f"Failed to get meetings: {response.text}")
+                return []
+
+            events_result = response.json()
+            meetings = []
+            for event in events_result.get("value", []):
+                try:
+                    meeting = {
+                        "title": event.get("subject", ""),
+                        "start": event.get("start", {}).get("dateTime", ""),
+                        "end": event.get("end", {}).get("dateTime", ""),
+                    }
+                    meetings.append(meeting)
+                except Exception as e:
+                    logger.error(f"Error processing event: {event}")
+                    logger.exception(e)
+
+            return meetings
+
+        except Exception as e:
+            logger.error(f"Error getting meetings for {email}")
+            logger.exception(e)
+            return []
+
+    def create_meeting(self, email, event_data):
+        """Create a meeting for the given email."""
+        try:
+            credentials = self.get_credentials(email)
+            if not credentials:
+                logger.error(f"No credentials found for {email}")
+                return False
+
+            access_token = credentials.get("access_token")
+            if not access_token:
+                logger.error(f"No access token found in credentials for {email}")
+                return False
+
+            endpoint = "https://graph.microsoft.com/v1.0/me/events"
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            }
+
+            response = requests.post(endpoint, headers=headers, json=event_data)
+            if response.status_code == 201:
+                logger.info(f"Meeting created for {email}")
+                return True
+            else:
+                logger.error(f"Failed to create meeting: {response.text}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error creating meeting for {email}")
+            logger.exception(e)
             return False
 
     def store_credentials(self, email, credentials):

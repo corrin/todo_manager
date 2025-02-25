@@ -80,13 +80,10 @@ class GoogleCalendarProvider(CalendarProvider):
                 redirect_uri=self.redirect_uri,
             )
             authorization_url, state = flow.authorization_url(prompt="consent")
+            session["oauth_flow"] = flow  # Store the entire flow object
             session["oauth_state"] = state  # Store state for CSRF protection
             session["current_email"] = email  # Set current_email in the session
-            return None, render_template(
-                "authenticate_email.html",
-                email=email,
-                authorization_url=authorization_url,
-            )
+            return None, authorization_url
 
         return credentials, None
 
