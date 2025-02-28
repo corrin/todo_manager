@@ -36,46 +36,29 @@ The application uses Flask with these key architectural elements:
 Each service type follows a shared implementation pattern:
 
 ### Provider Interfaces
-Each service type has an abstract base class with common methods:
+Each service type has an abstract base class, but with different methods depending on the provider type:
+
+**AIProvider Interface:**
 - `_get_provider_name()`: Returns provider identifier
 - `authenticate(email)`: Checks/refreshes credentials
 - `get_credentials(email)`: Retrieves stored credentials
 - `store_credentials(email, credentials)`: Securely stores credentials
+- `generate_text(email, prompt)`: Generates text using the AI provider
+
+**CalendarProvider Interface:**
+- `authenticate(email)`: Checks/refreshes credentials
+- `retrieve_tokens(callback_url)`: Processes OAuth callback
+- `get_meetings(email)`: Retrieves calendar meetings
+- `create_meeting(email, event_data)`: Creates a new calendar event
+- `get_credentials(email)`: Retrieves stored credentials
 
 ### Manager Classes
-Manager classes (`AIManager`, `TaskManager`) coordinate providers:
-```python
-def generate_text(self, email, prompt, provider_name=None):
-    """Generate text using specified or default provider with fallback."""
-    providers_to_try = (
-        [self.providers[provider_name]] if provider_name
-        else self.providers.values()
-    )
-    
-    for provider in providers_to_try:
-        try:
-            return provider.generate_text(email, prompt)
-        except Exception as e:
-            logger.error(f"Error with {provider._get_provider_name()}: {e}")
-            continue
-```
+Manager classes (`AIManager`, `TaskManager`) coordinate providers and implement fallback logic between different providers. See `ai_manager.py` for implementation details.
 
 ## Task and Credential Management
 
 ### Todoist Provider Example
-The TodoistProvider implements specific Todoist API interactions:
-```python
-def get_ai_instructions(self, email):
-    """Get the AI instruction task content."""
-    self._initialize_api(email)
-    # Search for instruction task with specific title
-    tasks = self.api.get_tasks(filter=f"search:{self.INSTRUCTION_TASK_TITLE}")
-    instruction_task = next((t for t in tasks
-                             if t.content == self.INSTRUCTION_TASK_TITLE), None)
-    if instruction_task:
-        return instruction_task.description
-    return None
-```
+The TodoistProvider implements specific Todoist API interactions to retrieve tasks and AI instructions. See `todoist_provider.py` for implementation details.
 
 ## Authentication Implementation
 
@@ -83,86 +66,20 @@ def get_ai_instructions(self, email):
 - Client-side authentication using Google Identity Services API
 - JWT token verification and email extraction
 - Session and cookie-based persistence
-- Backend credential verification:
-```javascript
-function handleCredentialResponse(response) {
-    const responsePayload = jwt_decode(response.credential);
-    const email = responsePayload.email;
-    
-    fetch('/login', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ email: email })
-    })
-}
-```
+- Backend credential verification through login endpoint
 
 ## Calendar Integration
 
 ### OAuth Implementation
-The application implements complete OAuth flows for calendar providers:
-
-```python
-def authenticate(self, email):
-    """Authenticate with Google Calendar."""
-    credentials = self.get_credentials(email)
-    
-    # Refresh expired tokens automatically
-    if credentials and credentials.expired and credentials.refresh_token:
-        credentials.refresh(Request())
-        self.store_credentials(email, credentials)
-        return credentials
-    
-    # Start new OAuth flow when needed
-    if not credentials or not credentials.valid:
-        flow = Flow.from_client_config(
-            client_config, scopes=self.scopes, redirect_uri=self.redirect_uri
-        )
-        authorization_url, state = flow.authorization_url(prompt="consent")
-        session["oauth_state"] = state  # CSRF protection
-        return None, authorization_url
-        
-    return credentials, None
-```
+The application implements complete OAuth flows for connecting to users' calendar accounts (Google Calendar, O365). This allows users to grant the application access to their calendar data without sharing their credentials. The implementation includes automatic token refresh and state management for the authorization flow. See `google_calendar_provider.py` and `o365_calendar_provider.py` for implementation details.
 
 ## Data Models and Database
 
 ### Task Model
-```python
-@dataclass
-class Task:
-    id: str
-    title: str
-    project_id: str
-    priority: int
-    due_date: Optional[datetime]
-    status: str
-    is_instruction: bool  # True only for AI instruction task
-```
+The system uses a standardized Task model across providers with fields for ID, title, project, priority, due date, status, and instruction flag. See `task_module.py` for the complete implementation.
 
 ### Database Singleton Pattern
-The system uses a Database singleton to manage the SQLAlchemy instance:
-
-```python
-class Database:
-    """Database singleton class that wraps SQLAlchemy functionality."""
-    _instance = None
-    Model = db.Model
-    session = db.session
-    
-    @classmethod
-    def get_instance(cls):
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
-    
-    @staticmethod
-    def init_app(app):
-        """Initialize the database with the Flask app"""
-        db.init_app(app)
-        # Get the singleton instance
-        database = Database.get_instance()
-```
+The system uses a Database singleton to manage the SQLAlchemy instance, providing centralized access to database models and sessions. See `database.py` for implementation details.
 
 ## Database Architecture
 
@@ -171,7 +88,7 @@ The application uses a consolidated database approach:
 ### Central Database
 - Single SQLAlchemy instance used throughout the application
 - Shared database connection for all models
-- User data is separated by user_id fields
+- User data is separated by app_user_email fields
 - Models use consistent relationship patterns
 
 ### Database Models
@@ -196,6 +113,44 @@ The application uses a consolidated database approach:
 - Abstract interface for calendar operations
 - Concrete implementations per provider
 - Event management and scheduling
+
+## Coding Standards
+
+### 1. Import Organization
+- All imports must be at the top of the file
+- Standard library imports first, followed by third-party imports, then local imports
+- No imports inside functions or methods
+- Group imports logically (e.g., all Flask imports together)
+
+### 2. Error Handling Principles
+- Fail early: Detect and report errors as soon as possible
+- Don't use if statements to hide errors - raise exceptions when appropriate
+- Trust other functions to have done their job - avoid redundant checks
+- TRUST THE DATA MODEL.  If a field is required, then you do not need to check it is present.  
+- DO NOT USE FALLBACKS. If something is wrong then STOP.
+- Use specific exception types rather than generic exceptions
+- Log errors with appropriate context information
+
+### 3. Function Design
+- Functions should do one thing and do it well
+- Keep functions small and focused
+- Use descriptive function and variable names
+- Document function parameters and return values
+- Use type hints where appropriate
+
+### 4. Code Organization
+- Follow consistent patterns across similar components
+- Use classes to encapsulate related functionality
+- Maintain separation of concerns between modules
+- Use dependency injection for flexible configuration
+- Follow the provider pattern for service implementations
+
+### 5. Database Operations
+- Use SQLAlchemy models consistently
+- Ensure proper transaction management
+- Handle database errors appropriately
+- Use migrations for schema changes
+- Validate data before storing in the database
 
 ## Security Considerations
 
