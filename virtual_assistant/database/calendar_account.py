@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import and_
+from sqlalchemy import and_, update
 
 from virtual_assistant.database.database import db
 from virtual_assistant.utils.logger import logger
@@ -18,6 +18,7 @@ class CalendarAccount(db.Model):
     client_id = db.Column(db.String(200))
     client_secret = db.Column(db.String(200))
     scopes = db.Column(db.Text)
+    is_primary = db.Column(db.Boolean, default=False)  # Whether this is the user's primary calendar account
     last_sync = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
@@ -70,3 +71,66 @@ class CalendarAccount(db.Model):
         """Update the last sync timestamp."""
         self.last_sync = datetime.now(timezone.utc)
         db.session.commit()
+        
+    @classmethod
+    def set_as_primary(cls, calendar_email, provider, app_user_email):
+        """Set a calendar account as the primary account for a user.
+        
+        This will unset any other account that was previously set as primary.
+        
+        Args:
+            calendar_email: The email of the calendar account to set as primary
+            provider: The provider of the calendar account
+            app_user_email: The email of the app user
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # First, unset any existing primary account for this user
+            db.session.execute(
+                update(cls)
+                .where(cls.app_user_email == app_user_email)
+                .values(is_primary=False)
+            )
+            
+            # Then set the specified account as primary
+            account = cls.get_by_email_provider_and_user(
+                calendar_email, provider, app_user_email
+            )
+            if account:
+                account.is_primary = True
+                db.session.commit()
+                logger.info(f"Set {calendar_email} ({provider}) as primary calendar for {app_user_email}")
+                return True
+            else:
+                logger.error(f"Account not found: {calendar_email} ({provider}) for {app_user_email}")
+                return False
+        except Exception as e:
+            logger.error(f"Error setting primary calendar account: {e}")
+            db.session.rollback()
+            return False
+            
+    @classmethod
+    def get_primary_account(cls, app_user_email):
+        """Get the primary calendar account for a user.
+        
+        If no account is explicitly set as primary, returns the first account found.
+        
+        Args:
+            app_user_email: The email of the app user
+            
+        Returns:
+            CalendarAccount: The primary calendar account, or None if no accounts exist
+        """
+        # First try to find an account explicitly set as primary
+        primary = cls.query.filter_by(
+            app_user_email=app_user_email,
+            is_primary=True
+        ).first()
+        
+        if primary:
+            return primary
+            
+        # If no account is explicitly set as primary, return the first account
+        return cls.query.filter_by(app_user_email=app_user_email).first()

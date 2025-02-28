@@ -139,7 +139,8 @@ def settings():
                 'provider': account.provider,
                 'email': account.calendar_email,
                 'last_sync': account.last_sync.strftime('%Y-%m-%d %H:%M:%S') if account.last_sync else None,
-                'is_active': is_active
+                'is_active': is_active,
+                'is_primary': account.is_primary
             })
 
     return render_template('settings.html', user_email=user_email, calendar_accounts=accounts_data)

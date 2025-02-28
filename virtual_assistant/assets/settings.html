@@ -60,6 +60,7 @@
             <table class="table">
                 <thead>
                     <tr>
+                        <th>Primary</th>
                         <th>Provider</th>
                         <th>Email</th>
                         <th>Last Sync</th>
@@ -70,6 +71,15 @@
                 <tbody>
                     {% for account in calendar_accounts %}
                     <tr>
+                        <td>
+                            <form action="{{ url_for('meetings.set_primary_account') }}" method="POST" style="display: inline;" class="primary-form">
+                                <input type="hidden" name="provider" value="{{ account.provider }}">
+                                <input type="hidden" name="email" value="{{ account.email }}">
+                                <input type="radio" name="primary_account" value="{{ account.provider }}_{{ account.email }}"
+                                       {% if account.is_primary %}checked{% endif %}
+                                       onchange="setPrimaryAccount(this)">
+                            </form>
+                        </td>
                         <td>
                             {% if account.provider == 'google' %}
                             <i class="fab fa-google"></i> Google
@@ -130,7 +140,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center">No calendar accounts connected</td>
+                        <td colspan="6" class="text-center">No calendar accounts connected</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -170,4 +180,62 @@
         {% endif %}
     {% endwith %}
 </div>
+
+<script>
+function setPrimaryAccount(radioButton) {
+    // Store the selected radio button's provider and email
+    const form = radioButton.closest('form');
+    const provider = form.querySelector('input[name="provider"]').value;
+    const email = form.querySelector('input[name="email"]').value;
+    
+    // Show loading indicator
+    const flashDiv = document.getElementById('flash-messages');
+    flashDiv.innerHTML = '<div class="alert alert-info">Updating primary account...</div>';
+    
+    // Submit the form asynchronously
+    fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            // Add success message
+            flashDiv.innerHTML = '<div class="alert alert-success">Primary account updated successfully.</div>';
+            
+            // Update all radio buttons
+            document.querySelectorAll('.primary-form input[type="radio"]').forEach(radio => {
+                const radioProvider = radio.closest('form').querySelector('input[name="provider"]').value;
+                const radioEmail = radio.closest('form').querySelector('input[name="email"]').value;
+                
+                // Check the radio button if it matches the one we just set as primary
+                radio.checked = (radioProvider === provider && radioEmail === email);
+            });
+            
+            // Fade out the flash message after 3 seconds
+            setTimeout(() => {
+                const alerts = flashDiv.querySelectorAll('.alert');
+                alerts.forEach(alert => {
+                    alert.style.opacity = '0';
+                    alert.style.transition = 'opacity 1s';
+                    setTimeout(() => alert.remove(), 1000);
+                });
+            }, 3000);
+        } else {
+            // Show error message
+            flashDiv.innerHTML = '<div class="alert alert-danger">Failed to update primary account.</div>';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        // Show error message
+        flashDiv.innerHTML = '<div class="alert alert-danger">An error occurred while updating primary account.</div>';
+    });
+    
+    // Prevent the form from submitting normally
+    return false;
+}
+</script>
 {% endblock %}

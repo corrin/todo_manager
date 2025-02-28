@@ -320,12 +320,18 @@ class GoogleCalendarProvider(CalendarProvider):
             account = CalendarAccount.get_by_email_provider_and_user(
                 calendar_email, self.provider_name, app_user_email
             )
+            
+            # Check if this is the first calendar account for this user
+            existing_accounts = CalendarAccount.get_accounts_for_user(app_user_email)
+            is_first_account = len(existing_accounts) == 0
+            
             if not account:
                 logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user {app_user_email}")
                 account = CalendarAccount(
                     calendar_email=calendar_email,
                     app_user_email=app_user_email,
                     provider=self.provider_name,
+                    is_primary=is_first_account,  # Set as primary if it's the first account
                     **credentials_data
                 )
             else:

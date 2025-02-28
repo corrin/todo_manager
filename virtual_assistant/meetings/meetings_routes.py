@@ -19,6 +19,7 @@ from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.user_manager import UserManager
 from virtual_assistant.database.calendar_account import CalendarAccount
 from virtual_assistant.utils.settings import Settings
+from virtual_assistant.database.database import db
 
 meetings_bp = Blueprint("meetings", __name__, url_prefix="/meetings")
 
@@ -31,6 +32,46 @@ providers = {
 def manage_calendar_accounts():
     """Redirect to settings page for calendar management."""
     return redirect(url_for('settings'))
+
+@meetings_bp.route("/set_primary_account", methods=["POST"])
+def set_primary_account():
+    """Set a calendar account as the primary account."""
+    try:
+        email = session.get("user_email")
+        if not email:
+            logger.error("No user email in session")
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "error": "Not logged in"}), 401
+            return redirect(url_for("login"))
+        
+        provider = request.form.get("provider")
+        calendar_email = request.form.get("email")
+        
+        if not provider or not calendar_email:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "error": "Invalid request"}), 400
+            flash("Invalid request. Provider and email are required.", "error")
+            return redirect(url_for("settings"))
+        
+        # Set the account as primary
+        success = CalendarAccount.set_as_primary(calendar_email, provider, email)
+        
+        if success:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": True})
+            flash(f"Set {calendar_email} as your primary calendar account.", "success")
+        else:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "error": "Failed to set primary account"}), 500
+            flash("Failed to set primary calendar account.", "error")
+            
+    except Exception as e:
+        logger.error(f"Error setting primary calendar account: {e}")
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"success": False, "error": str(e)}), 500
+        flash("An error occurred while setting the primary calendar account.", "error")
+    
+    return redirect(url_for("settings"))
 
 @meetings_bp.route("/remove_calendar_account", methods=["POST"])
 def remove_calendar_account():
@@ -61,6 +102,10 @@ def remove_calendar_account():
             
             if existing:
                 logger.debug(f"Found existing account to delete: {existing.calendar_email}")
+                
+                # Check if this is the primary account
+                was_primary = existing.is_primary
+                
                 CalendarAccount.delete_by_email_and_provider(calendar_email, provider_name, email)
                 logger.info(f"Successfully deleted calendar account from database: {calendar_email} ({provider_name})")
                 
@@ -82,6 +127,19 @@ def remove_calendar_account():
                 except Exception as cred_error:
                     logger.warning(f"Could not remove credentials: {cred_error}")
                     # Continue anyway as the database entry is removed
+                
+                # If this was the primary account, set another account as primary if one exists
+                if was_primary:
+                    remaining_accounts = CalendarAccount.get_accounts_for_user(email)
+                    if remaining_accounts:
+                        # Set the first remaining account as primary
+                        first_account = remaining_accounts[0]
+                        CalendarAccount.set_as_primary(
+                            first_account.calendar_email,
+                            first_account.provider,
+                            email
+                        )
+                        logger.info(f"Set {first_account.calendar_email} as new primary account after deleting primary")
                 
                 flash(f"Successfully removed {provider_name} calendar account.", "success")
             else:
