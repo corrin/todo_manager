@@ -1,52 +1,171 @@
 {% extends "base.html" %}
 
-{% block title %}Configuration{% endblock %}
+{% block title %}Settings{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+{% endblock %}
 
 {% block content %}
-<h1>Configuration</h1>
-<form method="POST" action="{{ url_for('save_config') }}">
-    <div class="form-group">
-        <label>Task Provider:</label>
-        <select class="form-control" name="task_provider">
-            <option value="todoist">Todoist</option>
-            <option value="sqlite">Local DB</option>
-        </select>
+<div class="container">
+    <h1>Settings</h1>
+    
+    <!-- General Settings -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2 class="h5 mb-0">General Settings</h2>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('save_settings') }}">
+                <div class="form-group mb-3">
+                    <label>Task Provider:</label>
+                    <select class="form-control" name="task_provider">
+                        <option value="todoist">Todoist</option>
+                        <option value="sqlite">Local DB</option>
+                    </select>
+                </div>
+                <div class="form-group mb-3">
+                    <label>AI Provider:</label>
+                    <select class="form-control" name="ai_provider">
+                        <option value="openai">OpenAI</option>
+                        <option value="grok">Grok</option>
+                    </select>
+                </div>
+                <div class="form-group mb-3">
+                    <label>Todoist Authentication:</label>
+                    <a href="{{ url_for('todoist_auth.setup_credentials') }}" class="btn btn-primary">Authenticate</a>
+                </div>
+                <div class="form-group mb-3">
+                    <label>OpenAI API Key:</label>
+                    <input type="password" name="openai_key" class="form-control" placeholder="Enter API Key">
+                </div>
+                <div class="form-group mb-3">
+                    <label>Grok API Key:</label>
+                    <input type="password" name="grok_key" class="form-control" placeholder="Enter API Key">
+                </div>
+                <div class="form-group">
+                    <button type="submit" name="action" value="save" class="btn btn-primary">Save</button>
+                    <a href="{{ url_for('index') }}" class="btn btn-secondary">Close</a>
+                </div>
+            </form>
+        </div>
     </div>
-    <div class="form-group">
-        <label>AI Provider:</label>
-        <select class="form-control" name="ai_provider">
-            <option value="openai">OpenAI</option>
-            <option value="grok">Grok</option>
-        </select>
-    </div>
-    <div class="form-group">
-        <label>Calendar Accounts:</label>
-        <a href="{{ url_for('meetings.manage_calendar_accounts') }}" class="btn btn-primary">Manage Calendar Accounts</a>
-    </div>
-    <div class="form-group">
-        <label>Todoist Authentication:</label>
-        <a href="{{ url_for('todoist_auth.setup_credentials') }}" class="btn btn-primary">Authenticate</a>
-    </div>
-    <div class="form-group">
-        <label>OpenAI API Key:</label>
-        <input type="password" name="openai_key" class="form-control" placeholder="Enter API Key">
-    </div>
-    <div class="form-group">
-        <label>Grok API Key:</label>
-        <input type="password" name="grok_key" class="form-control" placeholder="Enter API Key">
-    </div>
-    <div class="form-group mt-4">
-        <button type="submit" name="action" value="save" class="btn btn-primary">Save Changes</button>
-        <button type="submit" name="action" value="save_and_return" class="btn btn-success">Save & Return Home</button>
-        <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
-    </div>
-</form>
 
+    <!-- Calendar Accounts Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2 class="h5 mb-0">Connected Calendar Accounts</h2>
+        </div>
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Provider</th>
+                        <th>Email</th>
+                        <th>Last Sync</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for account in calendar_accounts %}
+                    <tr>
+                        <td>
+                            {% if account.provider == 'google' %}
+                            <i class="fab fa-google"></i> Google
+                            {% elif account.provider == 'o365' %}
+                            <i class="fab fa-microsoft"></i> Office 365
+                            {% endif %}
+                        </td>
+                        <td>{{ account.email }}</td>
+                        <td>{{ account.last_sync|default('Never', true) }}</td>
+                        <td>
+                            {% if account.is_active %}
+                            <span class="badge bg-success">Active</span>
+                            {% else %}
+                            <span class="badge bg-warning">Needs Reauth</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                {% if not account.is_active %}
+                                <a href="{{ url_for('meetings.reauth_calendar_account', provider=account.provider, email=account.email) }}" 
+                                   class="btn btn-sm btn-warning">
+                                    <i class="fas fa-sync"></i> Reauthorize
+                                </a>
+                                {% endif %}
+                                <button type="button"
+                                        class="badge bg-danger"
+                                        style="border: none; cursor: pointer;"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#deleteModal{{ loop.index }}">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                            
+                            <!-- Delete Confirmation Modal -->
+                            <div class="modal fade" id="deleteModal{{ loop.index }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Confirm Account Deletion</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>Are you sure you want to delete the {{ account.provider }} account for {{ account.email }}?</p>
+                                            <p class="text-danger"><strong>This action is permanent and cannot be undone.</strong></p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <form action="{{ url_for('meetings.remove_calendar_account') }}" method="POST" style="display: inline;">
+                                                <input type="hidden" name="provider" value="{{ account.provider }}">
+                                                <input type="hidden" name="email" value="{{ account.email }}">
+                                                <button type="submit" class="btn btn-danger">Delete Account</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center">No calendar accounts connected</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add New Calendar Account Section -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="h5 mb-0">Add New Calendar Account</h2>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <a href="{{ url_for('meetings.authenticate_google_calendar') }}" class="btn btn-outline-primary w-100">
+                        <i class="fab fa-google me-2"></i> Connect Google Calendar
+                    </a>
+                </div>
+                <div class="col-md-6">
+                    <a href="{{ url_for('meetings.authenticate_o365_calendar') }}" class="btn btn-outline-primary w-100">
+                        <i class="fab fa-microsoft me-2"></i> Connect Office 365 Calendar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Flash Messages -->
 <div id="flash-messages">
-    {% with messages = get_flashed_messages() %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-info">{{ message }}</div>
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
             {% endfor %}
         {% endif %}
     {% endwith %}

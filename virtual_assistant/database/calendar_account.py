@@ -10,7 +10,7 @@ class CalendarAccount(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     calendar_email = db.Column(db.String(120), nullable=False)  # The specific calendar account email (e.g. google account email)
-    app_user_email = db.Column(db.String(120), nullable=False)  # The app user's email
+    app_user_email = db.Column(db.String(120), db.ForeignKey('user.app_user_email'), nullable=False)  # The app user's email (foreign key to User)
     provider = db.Column(db.String(50), nullable=False)  # 'google' or 'o365'
     token = db.Column(db.Text, nullable=False)
     refresh_token = db.Column(db.Text)
@@ -21,7 +21,7 @@ class CalendarAccount(db.Model):
     last_sync = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
-    __table_args__ = (db.UniqueConstraint('calendar_email', 'provider', name='_calendar_email_provider_uc'),)
+    __table_args__ = (db.UniqueConstraint('calendar_email', 'provider', 'app_user_email', name='_calendar_email_provider_app_user_email_uc'),)
 
     def __init__(self, calendar_email, provider, **kwargs):
         self.calendar_email = calendar_email
@@ -36,6 +36,15 @@ class CalendarAccount(db.Model):
     def get_by_email_and_provider(cls, calendar_email, provider):
         """Get calendar account by calendar email and provider."""
         return cls.query.filter_by(calendar_email=calendar_email, provider=provider).first()
+        
+    @classmethod
+    def get_by_email_provider_and_user(cls, calendar_email, provider, app_user_email):
+        """Get calendar account by calendar email, provider, and app user email."""
+        return cls.query.filter_by(
+            calendar_email=calendar_email,
+            provider=provider,
+            app_user_email=app_user_email
+        ).first()
 
     @classmethod
     def get_accounts_for_user(cls, app_user_email):
@@ -48,21 +57,16 @@ class CalendarAccount(db.Model):
         db.session.commit()
 
     @classmethod
-    def delete_by_email_and_provider(cls, calendar_email, provider):
-        """Delete calendar account by calendar email and provider."""
-        account = cls.get_by_email_and_provider(calendar_email, provider)
-        if account:
-            db.session.delete(account)
-            db.session.commit()
+    def delete_by_email_and_provider(cls, calendar_email, provider, app_user_email):
+        """Delete calendar account by calendar email, provider, and app user email."""
+        account = cls.get_by_email_provider_and_user(calendar_email, provider, app_user_email)
+        if not account:
+            raise ValueError(f"No calendar account found for {calendar_email} ({provider}) for user {app_user_email}")
+        
+        db.session.delete(account)
+        db.session.commit()
 
     def update_last_sync(self):
         """Update the last sync timestamp."""
-        try:
-            self.last_sync = datetime.now(timezone.utc)
-            db.session.commit()
-            logger.info(f"Updated last sync for {self.calendar_email} ({self.provider})")
-            return True
-        except Exception as e:
-            logger.error(f"Error updating last sync: {e}")
-            db.session.rollback()
-            return False
+        self.last_sync = datetime.now(timezone.utc)
+        db.session.commit()

@@ -1,6 +1,7 @@
 from flask_login import LoginManager
 
 from virtual_assistant.database.user import User
+from virtual_assistant.database.database import db
 
 # Instantiate the LoginManager
 login_manager = LoginManager()
@@ -13,6 +14,13 @@ def setup_login_manager(app):
 
 # Define the user loader function directly in the module scope
 @login_manager.user_loader
-def load_user(user_id):
-    # All authenticated Google users are valid
-    return User(user_id)
+def load_user(app_user_email):
+    # Check if the user exists in the database
+    user = User.query.filter_by(app_user_email=app_user_email).first()
+    
+    # If the user doesn't exist, create it
+    if not user:
+        user = User(app_user_email)
+        db.session.add(user)
+        db.session.commit()
+    return user

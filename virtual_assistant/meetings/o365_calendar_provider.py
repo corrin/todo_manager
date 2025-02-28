@@ -213,32 +213,43 @@ class O365CalendarProvider(CalendarProvider):
             logger.exception(e)
             return False
 
-    def store_credentials(self, calendar_email, credentials, app_user_email):
+    def store_credentials(self, calendar_email, credentials):
         """
         Store credentials for the given calendar email.
         
         Parameters:
             calendar_email (str): The email address of the calendar account.
             credentials (dict): The credentials to store.
-            app_user_email (str): The email address of the app user who owns this calendar.
         """
-        # Get existing account or create new one
-        account = CalendarAccount.get_by_email_and_provider(calendar_email, self.provider_name)
-        if not account:
-            account = CalendarAccount(
-                calendar_email=calendar_email,
-                app_user_email=app_user_email,
-                provider=self.provider_name,
-                **credentials
-            )
-        else:
-            # Update account with new credentials
-            for key, value in credentials.items():
-                setattr(account, key, value)
-        
-        account.last_sync = datetime.utcnow()
-        account.save()
-        logger.debug(f"O365 credentials stored in database for calendar {calendar_email}")
+        try:
+            app_user_email = session.get('user_email')
+            if not app_user_email:
+                logger.error("No user email in session when storing credentials")
+                return False
+                
+            # Get existing account or create new one
+            account = CalendarAccount.get_by_email_and_provider(calendar_email, self.provider_name)
+            if not account:
+                account = CalendarAccount(
+                    calendar_email=calendar_email,
+                    app_user_email=app_user_email,
+                    provider=self.provider_name,
+                    **credentials
+                )
+            else:
+                # Update account with new credentials
+                for key, value in credentials.items():
+                    setattr(account, key, value)
+                account.app_user_email = app_user_email  # Ensure this is set even on update
+            
+            account.last_sync = datetime.utcnow()
+            account.save()
+            logger.debug(f"O365 credentials stored in database for calendar {calendar_email}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error storing O365 credentials: {e}")
+            return False
 
     def get_credentials(self, calendar_email):
         """

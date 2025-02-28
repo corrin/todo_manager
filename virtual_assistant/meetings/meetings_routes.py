@@ -29,38 +29,8 @@ providers = {
 
 @meetings_bp.route("/manage_calendar_accounts")
 def manage_calendar_accounts():
-    """Display the calendar accounts management page."""
-    try:
-        app_user_email = session.get("user_email")
-        if not app_user_email:
-            logger.error("No user email in session")
-            return redirect(url_for("login"))
-
-        # Get all calendar accounts for the user
-        calendar_accounts = CalendarAccount.get_accounts_for_user(app_user_email)
-        accounts_data = []
-        
-        for account in calendar_accounts:
-            # Check if credentials are valid/active
-            provider = providers[account.provider]()
-            credentials = provider.get_credentials(account.calendar_email)
-            is_active = True
-            if hasattr(credentials, 'expired'):
-                is_active = not credentials.expired
-            
-            accounts_data.append({
-                'provider': account.provider,
-                'calendar_email': account.calendar_email,
-                'last_sync': account.last_sync.strftime('%Y-%m-%d %H:%M:%S') if account.last_sync else None,
-                'is_active': is_active
-            })
-        
-        return render_template('manage_calendar_accounts.html', calendar_accounts=accounts_data)
-    
-    except Exception as e:
-        logger.error(f"Error in manage_calendar_accounts: {e}")
-        flash("An error occurred while loading calendar accounts.", "error")
-        return redirect(url_for("index"))
+    """Redirect to settings page for calendar management."""
+    return redirect(url_for('settings'))
 
 @meetings_bp.route("/remove_calendar_account", methods=["POST"])
 def remove_calendar_account():
@@ -72,24 +42,60 @@ def remove_calendar_account():
             return redirect(url_for("login"))
         
         provider_name = request.form.get("provider")
+        calendar_email = request.form.get("email")
+        
         if provider_name not in providers:
             flash("Invalid calendar provider.", "error")
-            return redirect(url_for("meetings.manage_calendar_accounts"))
+            return redirect(url_for("settings"))
         
-        # Remove credentials
-        provider = providers[provider_name]()
-        UserManager.remove_provider_folder(provider_name, email)
-        
-        # Remove from database
-        CalendarAccount.delete_by_email_and_provider(email, provider_name)
-        
-        flash(f"Successfully removed {provider_name} calendar account.", "success")
+        # Remove from database first
+        if calendar_email:
+            logger.debug(f"Attempting to delete calendar account: {calendar_email} ({provider_name})")
+            
+            # Verify account exists before deletion
+            existing = CalendarAccount.query.filter_by(
+                calendar_email=calendar_email,
+                provider=provider_name,
+                app_user_email=email
+            ).first()
+            
+            if existing:
+                logger.debug(f"Found existing account to delete: {existing.calendar_email}")
+                CalendarAccount.delete_by_email_and_provider(calendar_email, provider_name, email)
+                logger.info(f"Successfully deleted calendar account from database: {calendar_email} ({provider_name})")
+                
+                # Verify deletion
+                verify = CalendarAccount.query.filter_by(
+                    calendar_email=calendar_email,
+                    provider=provider_name,
+                    app_user_email=email
+                ).first()
+                if verify:
+                    logger.error(f"Account still exists after deletion attempt: {calendar_email}")
+                    raise Exception("Failed to delete account from database")
+                
+                # Try to remove credentials if possible
+                try:
+                    provider = providers[provider_name]()
+                    if hasattr(provider, 'remove_credentials'):
+                        provider.remove_credentials(calendar_email)
+                except Exception as cred_error:
+                    logger.warning(f"Could not remove credentials: {cred_error}")
+                    # Continue anyway as the database entry is removed
+                
+                flash(f"Successfully removed {provider_name} calendar account.", "success")
+            else:
+                logger.warning(f"Account not found for deletion: {calendar_email} ({provider_name})")
+                flash("Calendar account not found.", "warning")
+        else:
+            flash("Calendar email not provided.", "error")
         
     except Exception as e:
         logger.error(f"Error removing calendar account: {e}")
         flash("An error occurred while removing the calendar account.", "error")
+        db.session.rollback()
     
-    return redirect(url_for("meetings.manage_calendar_accounts"))
+    return redirect(url_for("settings"))
 
 @meetings_bp.route("/reauth_calendar_account")
 def reauth_calendar_account():
@@ -179,7 +185,7 @@ def google_authenticate():
     logger.debug(f"Google Calendar OAuth callback received for URL: {request.url}")
     
     google_provider = GoogleCalendarProvider()
-    
+    provider="google"
     try:
         app_user_email = session.get("user_email")
         if not app_user_email:
@@ -187,51 +193,48 @@ def google_authenticate():
             return redirect(url_for("login"))
         
         credentials = google_provider.handle_oauth_callback(request.url)
-        
+        if not credentials:
+            raise ValueError("Failed to get credentials from OAuth callback")
+
         if credentials:
             # Get the actual Google account email
-            google_account_email = google_provider.get_google_email(credentials)
-            if not google_account_email:
+            calendar_account_email = google_provider.get_google_email(credentials)
+            if not calendar_account_email:
                 logger.error("Could not get Google account email")
                 flash("Failed to get Google account information.", "error")
-                return redirect(url_for("meetings.manage_calendar_accounts"))
+                return redirect(url_for("settings"))
             
-            logger.info(f"Google Calendar credentials received for account: {google_account_email}")
+            logger.info(f"Google Calendar credentials received for account: {calendar_account_email}")
             
             # Check if this Google account is already connected to this app user
             existing_account = CalendarAccount.query.filter_by(
-                calendar_email=google_account_email,
-                provider="google",
-                app_user_email=app_user_email
+                app_user_email=app_user_email,
+                calendar_email=calendar_account_email,
+                provider=provider
             ).first()
             
             if existing_account:
-                flash(f"Google account {google_account_email} is already connected.", "info")
-                return redirect(url_for("meetings.manage_calendar_accounts"))
+                flash(f"You have already connected this Google account.", "info")
+                return redirect(url_for("settings"))
             
             # Store credentials under the Google account email
-            google_provider.store_credentials(google_account_email, credentials)
+            # This will create or update the calendar account in the database
+            if not google_provider.store_credentials(calendar_account_email, credentials):
+                logger.error("Failed to store credentials")
+                flash("Failed to store Google Calendar credentials.", "error")
+                return redirect(url_for("settings"))
             
-            # Create new calendar account with both emails
-            calendar_account = CalendarAccount(
-                calendar_email=google_account_email,  # The Google account email
-                app_user_email=app_user_email,  # The app user's email
-                provider="google"
-            )
-            calendar_account.last_sync = datetime.now(UTC)
-            calendar_account.save()
-            
-            flash(f"Google Calendar {google_account_email} connected successfully.", "success")
-            return redirect(url_for("meetings.manage_calendar_accounts"))
+            flash(f"Google Calendar {calendar_account_email} connected successfully.", "success")
+            return redirect(url_for("settings"))
         else:
             logger.error("Failed to get credentials from OAuth callback")
             flash("Failed to connect Google Calendar.", "error")
-            return redirect(url_for("meetings.manage_calendar_accounts"))
+            return redirect(url_for("settings"))
             
     except Exception as e:
         logger.error(f"Error in Google OAuth callback: {e}", exc_info=True)
         flash(f"Error connecting Google Calendar: {str(e)}", "error")
-        return redirect(url_for("meetings.manage_calendar_accounts"))
+        return redirect(url_for("settings"))
 
 
 @meetings_bp.route("/o365_authenticate")

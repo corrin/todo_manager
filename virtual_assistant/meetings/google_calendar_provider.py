@@ -302,7 +302,6 @@ class GoogleCalendarProvider(CalendarProvider):
     def store_credentials(self, calendar_email, credentials):
         """Store credentials for the given calendar email."""
         try:
-            from flask import session
             app_user_email = session.get('user_email')
             if not app_user_email:
                 logger.error("No user email in session when storing credentials")
@@ -318,19 +317,22 @@ class GoogleCalendarProvider(CalendarProvider):
             }
             
             # Get existing account or create new one
-            account = CalendarAccount.get_by_email_and_provider(calendar_email, self.provider_name)
+            account = CalendarAccount.get_by_email_provider_and_user(
+                calendar_email, self.provider_name, app_user_email
+            )
             if not account:
+                logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user {app_user_email}")
                 account = CalendarAccount(
-                    calendar_email=calendar_email, 
+                    calendar_email=calendar_email,
                     app_user_email=app_user_email,
-                    provider=self.provider_name, 
+                    provider=self.provider_name,
                     **credentials_data
                 )
             else:
+                logger.info(f"Updating existing calendar account for {calendar_email} ({self.provider_name}) for user {app_user_email}")
                 # Update account with new credentials
                 for key, value in credentials_data.items():
                     setattr(account, key, value)
-                account.app_user_email = app_user_email  # Ensure this is set even on update
             
             account.last_sync = datetime.now(timezone.utc)
             account.save()
@@ -343,7 +345,10 @@ class GoogleCalendarProvider(CalendarProvider):
 
     def get_credentials(self, calendar_email):
         """Retrieve credentials for the given calendar email."""
-        account = CalendarAccount.get_by_email_and_provider(calendar_email, self.provider_name)
+        app_user_email = session.get('user_email')
+        account = CalendarAccount.get_by_email_provider_and_user(
+            calendar_email, self.provider_name, app_user_email
+        )
         if account:
             credentials = Credentials(
                 token=account.token,

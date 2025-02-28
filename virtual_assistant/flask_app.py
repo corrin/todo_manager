@@ -1,6 +1,6 @@
 import os
 import json
-from flask import request, session, make_response, jsonify, flash
+from flask import request, session, make_response, jsonify, flash, send_from_directory
 from flask import Flask, render_template, redirect, url_for
 from dotenv import load_dotenv
 
@@ -17,9 +17,11 @@ from virtual_assistant.ai.auth_routes import init_ai_routes
 from virtual_assistant.tasks.todoist_routes import init_todoist_routes
 from virtual_assistant.tasks.sqlite_routes import init_sqlite_routes
 from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
-from virtual_assistant.meetings.meetings_routes import init_app
+from virtual_assistant.meetings.meetings_routes import init_app, providers
 from virtual_assistant.database.database import Database
 from virtual_assistant.database.database_routes import database_bp
+from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.auth.user_auth import setup_login_manager
 
 
 def create_task_manager():
@@ -48,6 +50,9 @@ def create_app():
     
     # Initialize database
     Database.init_app(app)
+    
+    # Initialize Flask-Login
+    setup_login_manager(app)
 
     # Initialize managers
     task_manager = create_task_manager()
@@ -79,6 +84,13 @@ def create_app():
         logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
         return "Internal Server Error", 500
 
+    @app.route('/favicon.ico')
+    def favicon():
+        return send_from_directory(
+            os.path.join(app.root_path, 'assets'),
+            'favicon.ico', mimetype='image/vnd.microsoft.icon'
+        )
+
     return app
 
 
@@ -101,17 +113,39 @@ def index():
     return render_template('index.html', user_email=user_email)
 
 
-@app.route("/config", methods=['GET'])
-def config():
+@app.route('/settings', methods=['GET'])
+def settings():
     # Check if the user is logged in
     if 'user_email' not in session:
-        return redirect(url_for('login'))  # Redirect to login page
+        return redirect(url_for('login'))
 
     user_email = session.get('user_email')
-    return render_template('config.html', user_email=user_email)
+    
+    # Get calendar accounts data
+    calendar_accounts = CalendarAccount.get_accounts_for_user(user_email)
+    accounts_data = []
+    
+    for account in calendar_accounts:
+        # Check if credentials are valid/active
+        provider_class = providers.get(account.provider)
+        if provider_class:
+            provider = provider_class()
+            credentials = provider.get_credentials(account.calendar_email)
+            is_active = True
+            if hasattr(credentials, 'expired'):
+                is_active = not credentials.expired
+            
+            accounts_data.append({
+                'provider': account.provider,
+                'email': account.calendar_email,
+                'last_sync': account.last_sync.strftime('%Y-%m-%d %H:%M:%S') if account.last_sync else None,
+                'is_active': is_active
+            })
 
-@app.route("/save_config", methods=['POST'])
-def save_config():
+    return render_template('settings.html', user_email=user_email, calendar_accounts=accounts_data)
+
+@app.route('/settings', methods=['POST'])
+def save_settings():
     if 'user_email' not in session:
         return redirect(url_for('login'))
 
@@ -157,7 +191,7 @@ def save_config():
         flash(f'Error saving configuration: {str(e)}')
         logger.error(f"Error saving configuration for {user_email}: {e}")
     
-    return redirect(url_for('config'))
+    return redirect(url_for('settings'))
 
 
 @app.route("/logout")

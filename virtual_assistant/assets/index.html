@@ -1,9 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Home{% endblock %}
+{% block title %}Task Master - Your Intelligent Task Assistant{% endblock %}
 
 {% block content %}
-<h1>Welcome!</h1>
-<p>Configure your Virtual Assitant's </p>
-<a href="/config" class="btn btn-primary">settings</a>
+<div class="container mt-5">
+    <div class="text-center mb-5">
+        <h1>Welcome to Task Master</h1>
+        <p class="lead">Your intelligent task and meeting management assistant</p>
+    </div>
+    <p>Configure your Virtual Assistant's </p>
+    <a href="{{ url_for('settings') }}" class="btn btn-primary">settings</a>
+</div>
 {% endblock %}

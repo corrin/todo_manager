@@ -154,7 +154,7 @@ class GoogleAuth(AuthProvider):
         Returns:
             dict: The stored credentials
         """
-        return UserDataManager.get_credentials(email)
+        return UserDataManager.get_calendar_credentials(email)
 
     def store_credentials(self, email, credentials):
         """
