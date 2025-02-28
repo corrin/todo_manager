@@ -353,7 +353,7 @@ class GoogleCalendarProvider(CalendarProvider):
                 client_secret=account.client_secret,
                 scopes=account.scopes.split()  # Convert string back to list
             )
-            logger.debug(f"Credentials loaded from database for {calendar_email} (app user: {account.app_user_email})")
+            logger.debug(f"Credentials loaded from database for {calendar_email}")
             return credentials
 
         logger.warning(f"No Google credentials found for {calendar_email}")
