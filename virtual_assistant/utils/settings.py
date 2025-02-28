@@ -12,7 +12,8 @@ class Settings:
     # Project settings
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     USERS_FOLDER = os.path.join(PROJECT_ROOT, "users")
-    DATABASE_URI = "sqlite:///users/database.db"
+    DATABASE_PATH = os.path.join(PROJECT_ROOT, "data", "virtual_assistant.db")
+    DATABASE_URI = f"sqlite:///{DATABASE_PATH}"
 
     # Ensure users folder exists
     os.makedirs(USERS_FOLDER, exist_ok=True)

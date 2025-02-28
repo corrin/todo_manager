@@ -2,134 +2,132 @@
 
 ## System Overview
 
-The system follows a provider-based architecture with three main components:
+The system is built on Flask and follows a provider-based architecture with three main components:
 
 ### 1. Task Management (Source)
-- Todoist as the source system for tasks
-- Tasks represent work items
+- Todoist as the primary task source with SQLite alternative
 - Single AI instruction task defines scheduling behavior
-- Provider pattern for potential future task sources
+- `TaskProvider` interface with factory pattern implementation
+- Tasks represent work items with standardized data structure
 
 ### 2. AI Processing (Rules Engine)
-- Multiple AI provider support (OpenAI, Grok, Gemini, Claude, etc.)
-- Provider-based architecture for AI services
-- Each provider implements common interface
-- Automatic fallback between providers
-- User-specific credentials per provider
+- Multiple AI provider support (OpenAI, Grok)
+- Each provider implements the `AIProvider` interface
+- Automatic fallback between providers when one fails
 - Natural language instruction processing
+- API key management in user-specific secure storage
 
 ### 3. Calendar Management (Output)
-- Multiple calendar provider support
-- Provider-based architecture (Google, O365)
-- 30-minute block allocation
+- Google Calendar and O365 integration via `CalendarProvider` interface
+- OAuth-based authentication with token refresh
+- 30-minute block allocation for scheduling
 - Fixed appointment handling
 
-## Provider Pattern
+## Web Framework Implementation
 
-All external services follow a consistent provider pattern:
+The application uses Flask with these key architectural elements:
+- Application factory pattern (`create_app()`)
+- Blueprint organization for route modularization
+- Jinja2 templating with custom template directory
+- Session and cookie-based authentication persistence
 
-### Provider Interface
-- Common interface for each service type
-- Standard authentication methods
-- Consistent credential management
-- Error handling patterns
+## Provider Pattern Implementation
 
-### Credential Management
-- User-specific credentials
-- Secure storage in user folders
-- Provider-specific authentication flows
-- Credential refresh handling
+Each service type follows a shared implementation pattern:
 
-### Manager Layer
-- Manages multiple providers
-- Handles provider selection
-- Implements fallback logic
-- Coordinates authentication
+### Provider Interfaces
+Each service type has an abstract base class with common methods:
+- `_get_provider_name()`: Returns provider identifier
+- `authenticate(email)`: Checks/refreshes credentials
+- `get_credentials(email)`: Retrieves stored credentials
+- `store_credentials(email, credentials)`: Securely stores credentials
 
-## Task Provider Architecture
-
-### TaskProvider Interface
+### Manager Classes
+Manager classes (`AIManager`, `TaskManager`) coordinate providers:
 ```python
-class TaskProvider(ABC):
-    def _get_provider_name(self) -> str:
-        """Return provider name (e.g., 'todoist')"""
-        pass
-
-    def authenticate(self, email):
-        """Check/refresh credentials, return auth URL if needed"""
-        pass
-
-    def get_tasks(self, email):
-        """Get all tasks for user"""
-        pass
-
-    def get_ai_instructions(self, email):
-        """Get the AI instruction task content"""
-        pass
-
-    def update_task_status(self, email, task_id, status):
-        """Update task completion status"""
-        pass
+def generate_text(self, email, prompt, provider_name=None):
+    """Generate text using specified or default provider with fallback."""
+    providers_to_try = (
+        [self.providers[provider_name]] if provider_name
+        else self.providers.values()
+    )
+    
+    for provider in providers_to_try:
+        try:
+            return provider.generate_text(email, prompt)
+        except Exception as e:
+            logger.error(f"Error with {provider._get_provider_name()}: {e}")
+            continue
 ```
 
-### TodoistProvider Implementation
-- Implements TaskProvider interface
-- Handles Todoist API interactions
-- Manages user-specific credentials
-- Finds and reads AI instruction task
+## Task and Credential Management
 
-### TaskManager
-- Manages task provider instances
-- Handles provider selection
-- Coordinates task operations
-- Manages authentication flow
+### Todoist Provider Example
+The TodoistProvider implements specific Todoist API interactions:
+```python
+def get_ai_instructions(self, email):
+    """Get the AI instruction task content."""
+    self._initialize_api(email)
+    # Search for instruction task with specific title
+    tasks = self.api.get_tasks(filter=f"search:{self.INSTRUCTION_TASK_TITLE}")
+    instruction_task = next((t for t in tasks
+                             if t.content == self.INSTRUCTION_TASK_TITLE), None)
+    if instruction_task:
+        return instruction_task.description
+    return None
+```
 
-## Authentication Flow
+## Authentication Implementation
 
-### 1. System Authentication
-- User authenticates via Google
-- Creates user-specific secure storage
-- System checks for credentials
-- Redirects to setup if needed
-- Validates existing credentials
+### Google Identity Services
+- Client-side authentication using Google Identity Services API
+- JWT token verification and email extraction
+- Session and cookie-based persistence
+- Backend credential verification:
+```javascript
+function handleCredentialResponse(response) {
+    const responsePayload = jwt_decode(response.credential);
+    const email = responsePayload.email;
+    
+    fetch('/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ email: email })
+    })
+}
+```
 
-### 2. Provider Authentication
-- Each provider checks credentials
-- Missing credentials trigger OAuth flow
-- Direct redirect to provider's auth page
-- Secure callback handling
-- Credentials stored per user
+## Calendar Integration
 
-### 3. Credential Management
-- Secure credential storage
-- Provider-specific formats
-- Automatic token refresh
-- OAuth state validation
-- Error handling with user feedback
+### OAuth Implementation
+The application implements complete OAuth flows for calendar providers:
 
-## Implementation Structure
+```python
+def authenticate(self, email):
+    """Authenticate with Google Calendar."""
+    credentials = self.get_credentials(email)
+    
+    # Refresh expired tokens automatically
+    if credentials and credentials.expired and credentials.refresh_token:
+        credentials.refresh(Request())
+        self.store_credentials(email, credentials)
+        return credentials
+    
+    # Start new OAuth flow when needed
+    if not credentials or not credentials.valid:
+        flow = Flow.from_client_config(
+            client_config, scopes=self.scopes, redirect_uri=self.redirect_uri
+        )
+        authorization_url, state = flow.authorization_url(prompt="consent")
+        session["oauth_state"] = state  # CSRF protection
+        return None, authorization_url
+        
+    return credentials, None
+```
 
-### AI Layer
-- AIProvider interface
-- Provider implementations (OpenAI, Grok, Gemini, Claude)
-- AIManager for coordination
-- Provider-specific auth flows
+## Data Models and Database
 
-### Calendar Layer
-- CalendarProvider interface
-- Provider implementations (Google, O365)
-- Calendar coordination
-- OAuth handling
-
-### Task Layer
-- TaskProvider interface
-- Todoist implementation
-- AI instruction management
-- Status tracking
-
-## Data Structures
-
-### Task Format
+### Task Model
 ```python
 @dataclass
 class Task:
@@ -142,15 +140,50 @@ class Task:
     is_instruction: bool  # True only for AI instruction task
 ```
 
-## Module Organization
+### Database Singleton Pattern
+The system uses a Database singleton to manage the SQLAlchemy instance:
 
-The codebase is organized into separate modules for each layer:
+```python
+class Database:
+    """Database singleton class that wraps SQLAlchemy functionality."""
+    _instance = None
+    Model = db.Model
+    session = db.session
+    
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+    
+    @staticmethod
+    def init_app(app):
+        """Initialize the database with the Flask app"""
+        db.init_app(app)
+        # Get the singleton instance
+        database = Database.get_instance()
+```
 
-### Database Module
-- Handles interactions with task sources
-- Abstract base classes for common operations
-- Concrete implementations per provider
-- CRUD operations for tasks
+## Database Architecture
+
+The application uses a consolidated database approach:
+
+### Central Database
+- Single SQLAlchemy instance used throughout the application
+- Shared database connection for all models
+- User data is separated by user_id fields
+- Models use consistent relationship patterns
+
+### Database Models
+- User model: Stores user authentication information
+- CalendarAccount: Stores user's calendar provider credentials
+- Additional models for tasks and other data as needed
+
+### Implementation Strategy
+- Database singleton class exposes shared SQLAlchemy components
+- All models consistently use the same database connection
+- Queries filter by user_id to maintain data isolation
+- SQLAlchemy relationships maintain data integrity
 
 ### AI Module
 - Handles integration with AI services
@@ -179,17 +212,39 @@ The codebase is organized into separate modules for each layer:
 - Request validation
 
 ### 3. Data Protection
-- User data isolation
-- Secure storage
-- Access logging
-- Error tracking
+- User data isolation through user_id filtering
+- Secure JWT-based authentication
+- Comprehensive logging with custom logger
+- Exception handling with fallback mechanisms
+- Session-based user state management
+
+## UI Architecture
+
+The application maintains a minimalist UI approach with only three primary user-facing pages:
+
+### 1. Login Page
+- Google Identity Services authentication
+- JWT token verification
+- Automatic user account creation
+- Session/cookie management
+
+### 2. Main Dashboard
+- Central view displaying the AI-scheduled task blocks
+- Calendar integration showing fixed appointments
+- Navigation to configuration
+
+### 3. Configuration Hub
+- Task provider selection and authentication
+- AI provider selection and API key management
+- Calendar account management (connecting Google/O365)
+- All configuration consolidated in a single flow
+
+The UI design deliberately avoids page sprawl, with API provider setup, authentication flows, and management functions integrated into these three core pages rather than creating separate pages for each function.
 
 The architecture emphasizes:
-- Clean separation of concerns
+- Clean separation of concerns with Flask blueprints
 - Consistent patterns across services
-- User-specific credential management
-- Extensibility for new providers
-- Simple, natural language configuration
-- Modular and maintainable design
-- Factory pattern for provider instantiation
+- Factory pattern for app and provider instantiation
+- JWT-based Google authentication
+- Blueprint organization for route modularization
 - Dependency injection for flexible configuration

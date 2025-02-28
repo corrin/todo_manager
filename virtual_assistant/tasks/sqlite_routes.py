@@ -27,7 +27,7 @@ def init_sqlite_routes():
             sqlite_provider.create_instruction_task(email, default_instructions)
             
             flash('SQLite storage initialized successfully')
-            return redirect(url_for('main_app'))
+            return redirect(url_for('index'))
         except Exception as e:
             logger.error(f"Error initializing SQLite storage: {e}")
             flash('Error initializing storage')
@@ -43,7 +43,7 @@ def init_sqlite_routes():
         except Exception as e:
             logger.error(f"Error showing tasks: {e}")
             flash('Error showing tasks')
-            return redirect(url_for('main_app'))
+            return redirect(url_for('index'))
 
     @bp.route('/add_task', methods=['POST'])
     def add_task():

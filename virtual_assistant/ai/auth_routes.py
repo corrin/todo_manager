@@ -23,11 +23,11 @@ def init_ai_routes():
                 provider_instance = ai_manager.get_provider(provider)
                 if not provider_instance:
                     flash(f'Unknown provider: {provider}')
-                    return redirect(url_for('main_app'))
+                    return redirect(url_for('index'))
                 
                 provider_instance.store_credentials(email, {"api_key": api_key})
                 flash(f'{provider} credentials saved successfully')
-                return redirect(url_for('main_app'))
+                return redirect(url_for('index'))
             except Exception as e:
                 logger.error(f"Error saving {provider} credentials: {e}")
                 flash('Error saving credentials')

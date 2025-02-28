@@ -5,7 +5,7 @@ from flask_login import current_user, login_user, logout_user
 from google.oauth2.credentials import Credentials
 
 from virtual_assistant.database.calendar_account import CalendarAccount
-from virtual_assistant.database.database import Database
+from virtual_assistant.database.database import Database, db
 from virtual_assistant.database.user import User
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
@@ -61,7 +61,7 @@ class UserDataManager(Database):
         if not cls.current_user:
             raise ValueError("Current user not set. Please log in first.")
         calendar_accounts = (
-            cls._db.session.query(CalendarAccount)
+            db.session.query(CalendarAccount)
             .filter_by(user_id=cls.current_user)
             .all()
         )
@@ -95,8 +95,8 @@ class UserDataManager(Database):
             provider=provider,
             credentials=credentials,
         )
-        cls._db.session.add(calendar_account)
-        cls._db.session.commit()
+        db.session.add(calendar_account)
+        db.session.commit()
         logger.debug(f"Calendar account saved for {email_address}")
 
     @classmethod
@@ -114,7 +114,7 @@ class UserDataManager(Database):
         if not cls.current_user:
             raise ValueError("Current user not set. Please log in first.")
         calendar_account = (
-            cls._db.session.query(CalendarAccount)
+            db.session.query(CalendarAccount)
             .filter_by(user_id=cls.current_user, email_address=email)
             .first()
         )
@@ -131,6 +131,6 @@ class UserDataManager(Database):
     def create_user(email):
         """Create a new user in the database."""
         user = User(email=email)
-        Database.add(user)
-        Database.commit()
+        db.session.add(user)
+        db.session.commit()
         return user

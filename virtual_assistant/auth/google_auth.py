@@ -5,6 +5,7 @@ Google Auth module for handling Google OAuth authentication
 from authlib.integrations.flask_client import OAuth
 from google.auth.transport import requests
 from google.oauth2 import id_token
+from flask import request  # Add this import for the authorize method
 
 from virtual_assistant.auth.auth_provider import AuthProvider
 from virtual_assistant.database.user_manager import UserDataManager
@@ -46,7 +47,7 @@ class GoogleAuth(AuthProvider):
         Returns:
             redirect: The redirect response to the Google authorization page
         """
-        redirect_uri = Settings.LOGIN_REDIRECT_URI
+        redirect_uri = Settings.GOOGLE_REDIRECT_URI
         return self.google.authorize_redirect(redirect_uri)
 
     def authorize():
@@ -135,7 +136,7 @@ class GoogleAuth(AuthProvider):
     #             logger.info("Existing user logged in")
 
     #         login_user(user, remember=True)
-    #         return redirect(url_for("main_app"))
+    #         return redirect(url_for("index"))
     #     except RequestException as error:
     #         logger.error(f"Error during authorization: {str(error)}")
     #         return redirect(url_for("login"))

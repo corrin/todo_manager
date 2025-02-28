@@ -52,6 +52,14 @@ python virtual_assistant/flask_app.py
    - Credentials file
    - AI instruction task
 
+## Database Setup
+
+The application uses SQLAlchemy with SQLite for data storage:
+
+1. Database initialization happens automatically on first run
+2. User data is separated by user_id in database tables
+3. No manual database setup is required
+
 ## Troubleshooting
 
 If you get "Internal Server Error":
@@ -59,3 +67,15 @@ If you get "Internal Server Error":
 2. Verify .env exists with correct values
 3. Ensure virtual_assistant/users exists
 4. Check Flask logs for details
+
+### Database Issues
+
+If you encounter database-related errors:
+1. Check Settings.DATABASE_URI in virtual_assistant/utils/settings.py
+2. Ensure database file location is writable
+3. For development/testing environments only, you can use a backup strategy:
+   ```bash
+   # Create a backup before making schema changes
+   cp database.db database.db.backup
+   ```
+4. Use proper migrations for production environments to preserve user data

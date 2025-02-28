@@ -11,13 +11,15 @@ from virtual_assistant.utils.logger import logger
 
 import jinja2
 
-from tasks.task_manager import TaskManager
-from ai.ai_manager import AIManager
-from ai.auth_routes import init_ai_routes
-from tasks.todoist_routes import init_todoist_routes
-from tasks.sqlite_routes import init_sqlite_routes
-from meetings.google_calendar_provider import GoogleCalendarProvider
-from meetings.meetings_routes import init_app
+from virtual_assistant.tasks.task_manager import TaskManager
+from virtual_assistant.ai.ai_manager import AIManager
+from virtual_assistant.ai.auth_routes import init_ai_routes
+from virtual_assistant.tasks.todoist_routes import init_todoist_routes
+from virtual_assistant.tasks.sqlite_routes import init_sqlite_routes
+from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
+from virtual_assistant.meetings.meetings_routes import init_app
+from virtual_assistant.database.database import Database
+from virtual_assistant.database.database_routes import database_bp
 
 
 def create_task_manager():
@@ -39,6 +41,13 @@ def create_calendar_provider():
 
 def create_app():
     app = Flask(__name__)
+    
+    # Configure SQLAlchemy
+    app.config['SQLALCHEMY_DATABASE_URI'] = Settings.DATABASE_URI
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Initialize database
+    Database.init_app(app)
 
     # Initialize managers
     task_manager = create_task_manager()
@@ -50,8 +59,10 @@ def create_app():
     app.register_blueprint(init_todoist_routes(), url_prefix="/todoist_auth")
     app.register_blueprint(init_sqlite_routes(), url_prefix="/sqlite_auth")
     app.register_blueprint(init_app(calendar_provider), url_prefix="/meetings")
+    app.register_blueprint(database_bp, url_prefix="/database")
     
     app.secret_key = Settings.FLASK_SECRET_KEY
+    app.config['SERVER_NAME'] = Settings.SERVER_NAME
 
     template_dir = os.path.join(app.root_path, "assets")
     app.jinja_loader = jinja2.FileSystemLoader(template_dir)
@@ -62,6 +73,11 @@ def create_app():
         if not user_email:
             user_email = request.cookies.get('user_email')
         return dict(user_email=user_email, Settings=Settings)
+
+    @app.errorhandler(Exception)
+    def handle_error(e):
+        logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
+        return "Internal Server Error", 500
 
     return app
 

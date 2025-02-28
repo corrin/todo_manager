@@ -30,7 +30,7 @@ def init_todoist_routes():
                 todoist_provider.create_instruction_task(email, default_instructions)
                 
                 flash('Todoist credentials saved successfully')
-                return redirect(url_for('main_app'))
+                return redirect(url_for('index'))
             except Exception as e:
                 logger.error(f"Error saving Todoist credentials: {e}")
                 flash('Error saving credentials')

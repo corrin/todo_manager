@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Manage Calendar Accounts</h2>
+    
+    <div class="row mt-4">
+        <div class="col">
+            <div class="card">
+                <div class="card-header">
+                    Connected Calendar Accounts
+                </div>
+                <div class="card-body">
+                    {% if calendar_accounts %}
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Calendar Email</th>
+                                <th>Provider</th>
+                                <th>Last Sync</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for account in calendar_accounts %}
+                            <tr>
+                                <td>{{ account.calendar_email }}</td>
+                                <td>{{ account.provider|title }}</td>
+                                <td>{{ account.last_sync or 'Never' }}</td>
+                                <td>
+                                    {% if account.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">Needs Reauth</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if not account.is_active %}
+                                    <a href="{{ url_for('meetings.reauth_calendar_account', provider=account.provider) }}" class="btn btn-warning btn-sm">
+                                        Reauthorize
+                                    </a>
+                                    {% endif %}
+                                    <form action="{{ url_for('meetings.remove_calendar_account') }}" method="POST" style="display: inline;">
+                                        <input type="hidden" name="provider" value="{{ account.provider }}">
+                                        <input type="hidden" name="calendar_email" value="{{ account.calendar_email }}">
+                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to remove this calendar?')">
+                                            Remove
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p>No calendar accounts connected.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col">
+            <div class="card">
+                <div class="card-header">
+                    Add Calendar Account
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('meetings.authenticate_google_calendar') }}" class="btn btn-primary">
+                            Connect Google Calendar
+                        </a>
+                        <a href="{{ url_for('meetings.authenticate_o365_calendar') }}" class="btn btn-primary">
+                            Connect Office 365 Calendar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

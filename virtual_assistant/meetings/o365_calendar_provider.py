@@ -9,7 +9,8 @@ import requests
 from flask import render_template, session
 
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.utils.user_manager import UserManager
+from virtual_assistant.utils.settings import Settings
+from virtual_assistant.database.calendar_account import CalendarAccount
 from .calendar_provider import CalendarProvider
 
 
@@ -30,7 +31,13 @@ class O365CalendarProvider(CalendarProvider):
             client_credential=self.client_secret,
         )
 
-    def authenticate(self, email):
+    def authenticate(self, calendar_email):
+        """
+        Authenticate the user with the given calendar email.
+        
+        Parameters:
+            calendar_email (str): The email address of the calendar to authenticate.
+        """
         cache = msal.SerializableTokenCache()
         app = msal.ConfidentialClientApplication(
             self.client_id,
@@ -39,7 +46,7 @@ class O365CalendarProvider(CalendarProvider):
             token_cache=cache,
         )
 
-        accounts = app.get_accounts(username=email)
+        accounts = app.get_accounts(username=calendar_email)
         if accounts:
             result = app.acquire_token_silent(scopes=self.scopes, account=accounts[0])
             if "access_token" in result:
@@ -50,7 +57,7 @@ class O365CalendarProvider(CalendarProvider):
             scopes=self.scopes, redirect_uri=self.redirect_uri
         )
         session["flow"] = flow
-        session["current_email"] = email
+        session["current_email"] = calendar_email
 
         return None, flow["auth_uri"]
 
@@ -109,17 +116,22 @@ class O365CalendarProvider(CalendarProvider):
             logger.error(f"Failed to obtain tokens: {result.get('error_description')}")
             return None
 
-    def get_meetings(self, email):
-        """Get meetings for the given email."""
+    def get_meetings(self, calendar_email):
+        """
+        Get meetings for the given calendar email.
+        
+        Parameters:
+            calendar_email (str): The email address of the calendar to retrieve meetings from.
+        """
         try:
-            credentials = self.get_credentials(email)
+            credentials = self.get_credentials(calendar_email)
             if not credentials:
-                logger.error(f"No credentials found for {email}")
+                logger.error(f"No credentials found for {calendar_email}")
                 return []
 
             access_token = credentials.get("access_token")
             if not access_token:
-                logger.error(f"No access token found in credentials for {email}")
+                logger.error(f"No access token found in credentials for {calendar_email}")
                 return []
 
             endpoint = "https://graph.microsoft.com/v1.0/me/events"
@@ -159,21 +171,27 @@ class O365CalendarProvider(CalendarProvider):
             return meetings
 
         except Exception as e:
-            logger.error(f"Error getting meetings for {email}")
+            logger.error(f"Error getting meetings for {calendar_email}")
             logger.exception(e)
             return []
 
-    def create_meeting(self, email, event_data):
-        """Create a meeting for the given email."""
+    def create_meeting(self, calendar_email, event_data):
+        """
+        Create a meeting for the given calendar email.
+        
+        Parameters:
+            calendar_email (str): The email address of the calendar to create the meeting in.
+            event_data (dict): The meeting data to create.
+        """
         try:
-            credentials = self.get_credentials(email)
+            credentials = self.get_credentials(calendar_email)
             if not credentials:
-                logger.error(f"No credentials found for {email}")
+                logger.error(f"No credentials found for {calendar_email}")
                 return False
 
             access_token = credentials.get("access_token")
             if not access_token:
-                logger.error(f"No access token found in credentials for {email}")
+                logger.error(f"No access token found in credentials for {calendar_email}")
                 return False
 
             endpoint = "https://graph.microsoft.com/v1.0/me/events"
@@ -184,36 +202,63 @@ class O365CalendarProvider(CalendarProvider):
 
             response = requests.post(endpoint, headers=headers, json=event_data)
             if response.status_code == 201:
-                logger.info(f"Meeting created for {email}")
+                logger.info(f"Meeting created for {calendar_email}")
                 return True
             else:
                 logger.error(f"Failed to create meeting: {response.text}")
                 return False
 
         except Exception as e:
-            logger.error(f"Error creating meeting for {email}")
+            logger.error(f"Error creating meeting for {calendar_email}")
             logger.exception(e)
             return False
 
-    def store_credentials(self, email, credentials):
-        """Store credentials for the given email."""
-        provider_folder = UserManager.get_provider_folder(self.provider_name, email)
-        credentials_file = os.path.join(provider_folder, f"{email}_credentials.json")
+    def store_credentials(self, calendar_email, credentials, app_user_email):
+        """
+        Store credentials for the given calendar email.
         
-        with open(credentials_file, "w", encoding="utf-8") as file:
-            json.dump(credentials, file)
-        logger.debug(f"O365 credentials stored for {email}")
+        Parameters:
+            calendar_email (str): The email address of the calendar account.
+            credentials (dict): The credentials to store.
+            app_user_email (str): The email address of the app user who owns this calendar.
+        """
+        # Get existing account or create new one
+        account = CalendarAccount.get_by_email_and_provider(calendar_email, self.provider_name)
+        if not account:
+            account = CalendarAccount(
+                calendar_email=calendar_email,
+                app_user_email=app_user_email,
+                provider=self.provider_name,
+                **credentials
+            )
+        else:
+            # Update account with new credentials
+            for key, value in credentials.items():
+                setattr(account, key, value)
+        
+        account.last_sync = datetime.utcnow()
+        account.save()
+        logger.debug(f"O365 credentials stored in database for calendar {calendar_email}")
 
-    def get_credentials(self, email):
-        """Retrieve credentials for the given email."""
-        provider_folder = UserManager.get_provider_folder(self.provider_name, email)
-        credentials_file = os.path.join(provider_folder, f"{email}_credentials.json")
+    def get_credentials(self, calendar_email):
+        """
+        Retrieve credentials for the given calendar email.
         
-        if os.path.exists(credentials_file):
-            with open(credentials_file, "r", encoding="utf-8") as file:
-                credentials = json.load(file)
-                logger.debug(f"O365 credentials loaded for {email}")
-                return credentials
-        
-        logger.warning(f"No O365 credentials found for {email}")
+        Parameters:
+            calendar_email (str): The email address of the calendar to get credentials for.
+        """
+        account = CalendarAccount.get_by_email_and_provider(calendar_email, self.provider_name)
+        if account:
+            credentials = {
+                'token': account.token,
+                'refresh_token': account.refresh_token,
+                'token_uri': account.token_uri,
+                'client_id': account.client_id,
+                'client_secret': account.client_secret,
+                'scopes': account.scopes.split()  # Convert string back to list
+            }
+            logger.debug(f"O365 credentials loaded from database for {calendar_email}")
+            return credentials
+
+        logger.warning(f"No O365 credentials found for {calendar_email}")
         return None

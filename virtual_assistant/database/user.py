@@ -1,11 +1,5 @@
-from flask import Flask
 from flask_login import UserMixin
-from flask_sqlalchemy import SQLAlchemy
-
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///users.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-db = SQLAlchemy(app)
+from virtual_assistant.database.database import db
 
 
 class User(UserMixin, db.Model):
