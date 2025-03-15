@@ -8,21 +8,27 @@ from virtual_assistant.utils.logger import logger
 class CalendarAccount(db.Model):
     """Model for storing calendar account credentials and metadata."""
     
+    __tablename__ = 'calendar_account'
+    
     id = db.Column(db.Integer, primary_key=True)
-    calendar_email = db.Column(db.String(120), nullable=False)  # The specific calendar account email (e.g. google account email)
-    app_user_email = db.Column(db.String(120), db.ForeignKey('user.app_user_email'), nullable=False)  # The app user's email (foreign key to User)
+    calendar_email = db.Column(db.String(255), nullable=False)  # The specific calendar account email (e.g. google account email)
+    app_user_email = db.Column(db.String(255), db.ForeignKey('user.app_user_email'), nullable=False)  # The app user's email (foreign key to User)
     provider = db.Column(db.String(50), nullable=False)  # 'google' or 'o365'
     token = db.Column(db.Text, nullable=False)
     refresh_token = db.Column(db.Text)
-    token_uri = db.Column(db.String(200))
-    client_id = db.Column(db.String(200))
-    client_secret = db.Column(db.String(200))
+    token_uri = db.Column(db.String(255))
+    client_id = db.Column(db.String(255))
+    client_secret = db.Column(db.String(255))
     scopes = db.Column(db.Text)
     is_primary = db.Column(db.Boolean, default=False)  # Whether this is the user's primary calendar account
-    last_sync = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    last_sync = db.Column(db.DateTime(timezone=True))
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    needs_reauth = db.Column(db.Boolean, nullable=False, default=False)
     
-    __table_args__ = (db.UniqueConstraint('calendar_email', 'provider', 'app_user_email', name='_calendar_email_provider_app_user_email_uc'),)
+    __table_args__ = (
+        db.UniqueConstraint('app_user_email', 'calendar_email', 'provider',
+                          name='uq_calendar_account_user_email_provider'),
+    )
 
     def __init__(self, calendar_email, provider, **kwargs):
         self.calendar_email = calendar_email

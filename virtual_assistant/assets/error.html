@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Error - Task Master{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="alert alert-danger">
+        <h2><i class="bi bi-exclamation-triangle-fill"></i> Error</h2>
+        <p class="lead">Sorry, an error occurred while processing your request.</p>
+        {% if error %}
+        <div class="card mt-3 bg-light">
+            <div class="card-body">
+                <h5 class="card-title">Error Details</h5>
+                <pre class="text-danger mb-0">{{ error }}</pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="mt-4">
+        <p>You can try the following:</p>
+        <ul>
+            <li>Return to the <a href="{{ url_for('index') }}">home page</a></li>
+            <li><a href="{{ url_for('meetings.sync_meetings') }}">Sync your calendars</a></li>
+            <li>Check your <a href="{{ url_for('settings') }}">settings</a></li>
+        </ul>
+    </div>
+</div>
+{% endblock %} 

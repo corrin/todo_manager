@@ -1,21 +1,144 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Meetings for {{ email }}</title>
-</head>
-<body>
-    <h1>Meetings for {{ email }}</h1>
-    <ul>
-        {% for meeting in meetings %}
-        <li>
-            <strong>{{ meeting['title'] }}</strong><br>
-            Start: {{ meeting['start'] }}<br>
-            End: {{ meeting['end'] }}
-        </li>
-        {% else %}
-        <li>No meetings found.</li>
-        {% endfor %}
-    </ul>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}{{ title|default('Calendar Meetings') }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2 class="h4 mb-0">Calendar Sync Results</h2>
+                    <a href="{{ url_for('meetings.sync_meetings') }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-sync"></i> Sync Again
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if sync_results %}
+                        {% if sync_results.success %}
+                            <div class="mb-4">
+                                <h5 class="text-success">Successfully Synced</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Provider</th>
+                                                <th>Email</th>
+                                                <th>Meetings Count</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for account in sync_results.success %}
+                                            <tr>
+                                                <td>
+                                                    {% if account.provider == 'google' %}
+                                                        <i class="fab fa-google"></i> Google
+                                                    {% elif account.provider == 'o365' %}
+                                                        <i class="fab fa-microsoft"></i> Office 365
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ account.email }}</td>
+                                                <td>{{ account.meetings_count }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {% if sync_results.needs_reauth %}
+                            <div class="mb-4">
+                                <h5 class="text-warning">Needs Reauthorization</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Provider</th>
+                                                <th>Email</th>
+                                                <th>Reason</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for account in sync_results.needs_reauth %}
+                                            <tr>
+                                                <td>
+                                                    {% if account.provider == 'google' %}
+                                                        <i class="fab fa-google"></i> Google
+                                                    {% elif account.provider == 'o365' %}
+                                                        <i class="fab fa-microsoft"></i> Office 365
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ account.email }}</td>
+                                                <td>{{ account.reason }}</td>
+                                                <td>
+                                                    <a href="{{ account.reauth_url }}" class="btn btn-warning btn-sm">
+                                                        <i class="fas fa-sync"></i> Reauthorize
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {% if sync_results.errors %}
+                            <div class="mb-4">
+                                <h5 class="text-danger">Sync Errors</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Provider</th>
+                                                <th>Email</th>
+                                                <th>Error</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for error in sync_results.errors %}
+                                            <tr>
+                                                <td>
+                                                    {% if error.provider == 'google' %}
+                                                        <i class="fab fa-google"></i> Google
+                                                    {% elif error.provider == 'o365' %}
+                                                        <i class="fab fa-microsoft"></i> Office 365
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ error.email }}</td>
+                                                <td>{{ error.error }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        {# This section is for the debug_meetings route #}
+                        <h1>Meetings for {{ email }}</h1>
+                        <ul class="list-group">
+                            {% for meeting in meetings %}
+                            <li class="list-group-item">
+                                <strong>{{ meeting['title'] }}</strong><br>
+                                Start: {{ meeting['start'] }}<br>
+                                End: {{ meeting['end'] }}
+                            </li>
+                            {% else %}
+                            <li class="list-group-item">No meetings found.</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('settings') }}" class="btn btn-secondary">
+                        <i class="fas fa-cog"></i> Manage Calendar Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -81,8 +81,8 @@ def create_app():
 
     @app.errorhandler(Exception)
     def handle_error(e):
-        logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
-        return "Internal Server Error", 500
+        logger.error(f"Unhandled exception: {str(e)}")
+        return render_template('error.html', error=str(e)), 500
 
     @app.route('/favicon.ico')
     def favicon():
@@ -126,22 +126,13 @@ def settings():
     accounts_data = []
     
     for account in calendar_accounts:
-        # Check if credentials are valid/active
-        provider_class = providers.get(account.provider)
-        if provider_class:
-            provider = provider_class()
-            credentials = provider.get_credentials(account.calendar_email)
-            is_active = True
-            if hasattr(credentials, 'expired'):
-                is_active = not credentials.expired
-            
-            accounts_data.append({
-                'provider': account.provider,
-                'email': account.calendar_email,
-                'last_sync': account.last_sync.strftime('%Y-%m-%d %H:%M:%S') if account.last_sync else None,
-                'is_active': is_active,
-                'is_primary': account.is_primary
-            })
+        accounts_data.append({
+            'provider': account.provider,
+            'email': account.calendar_email,
+            'last_sync': account.last_sync.strftime('%Y-%m-%d %H:%M:%S') if account.last_sync else None,
+            'needs_reauth': account.needs_reauth,
+            'is_primary': account.is_primary
+        })
 
     return render_template('settings.html', user_email=user_email, calendar_accounts=accounts_data)
 

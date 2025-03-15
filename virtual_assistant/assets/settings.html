@@ -65,7 +65,7 @@
                         <th>Email</th>
                         <th>Last Sync</th>
                         <th>Status</th>
-                        <th>Actions</th>
+                        <th colspan="2">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -90,28 +90,25 @@
                         <td>{{ account.email }}</td>
                         <td>{{ account.last_sync|default('Never', true) }}</td>
                         <td>
-                            {% if account.is_active %}
+                            {% if not account.needs_reauth %}
                             <span class="badge bg-success">Active</span>
                             {% else %}
                             <span class="badge bg-warning">Needs Reauth</span>
                             {% endif %}
                         </td>
                         <td>
-                            <div class="btn-group">
-                                {% if not account.is_active %}
-                                <a href="{{ url_for('meetings.reauth_calendar_account', provider=account.provider, email=account.email) }}" 
-                                   class="btn btn-sm btn-warning">
-                                    <i class="fas fa-sync"></i> Reauthorize
-                                </a>
-                                {% endif %}
-                                <button type="button"
-                                        class="badge bg-danger"
-                                        style="border: none; cursor: pointer;"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#deleteModal{{ loop.index }}">
-                                    <i class="fas fa-trash"></i> Delete
-                                </button>
-                            </div>
+                            <a href="{{ url_for('meetings.reauth_calendar_account', provider=account.provider, email=account.email) }}" 
+                               class="btn btn-sm {% if account.needs_reauth %}btn-warning{% else %}btn-outline-secondary{% endif %}">
+                                <i class="fas fa-sync"></i>
+                            </a>
+                        </td>
+                        <td>
+                            <button type="button"
+                                    class="btn btn-sm btn-danger"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#deleteModal{{ loop.index }}">
+                                <i class="fas fa-trash"></i>
+                            </button>
                             
                             <!-- Delete Confirmation Modal -->
                             <div class="modal fade" id="deleteModal{{ loop.index }}" tabindex="-1">

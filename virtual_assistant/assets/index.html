@@ -8,7 +8,19 @@
         <h1>Welcome to Task Master</h1>
         <p class="lead">Your intelligent task and meeting management assistant</p>
     </div>
-    <p>Configure your Virtual Assistant's </p>
-    <a href="{{ url_for('settings') }}" class="btn btn-primary">settings</a>
+    <div class="row justify-content-center">
+        <div class="col-md-6 text-center">
+            <div class="mb-4">
+                <h4>Manage Your Settings</h4>
+                <p>Configure your Virtual Assistant's providers and preferences</p>
+                <a href="{{ url_for('settings') }}" class="btn btn-primary">Settings</a>
+            </div>
+            <div class="mb-4">
+                <h4>Sync Your Calendars</h4>
+                <p>Synchronize and view your calendar meetings</p>
+                <a href="{{ url_for('meetings.sync_meetings') }}" class="btn btn-success">Sync Now</a>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
