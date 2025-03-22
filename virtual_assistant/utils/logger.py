@@ -13,7 +13,7 @@ file_handler.setLevel(logging.DEBUG)
 
 # Create a console handler with proper encoding for Windows
 console_handler = logging.StreamHandler(stream=sys.stdout)
-console_handler.setLevel(logging.DEBUG)
+console_handler.setLevel(logging.INFO)  # Set console handler to INFO level to reduce output
 
 # Create a formatter with filename and line number
 formatter = logging.Formatter("%(asctime)s %(levelname)s [%(filename)s:%(lineno)d]: %(message)s")

@@ -5,15 +5,43 @@ class CalendarProvider(ABC):
     """Base class for calendar providers."""
 
     @abstractmethod
-    def authenticate(self, email):
+    def authenticate(self, app_user_email):
         """
         Authenticate with the calendar provider.
         
         Parameters:
-            email (str): The email address to authenticate
+            app_user_email (str): The email address used to log into this app.
             
         Returns:
             tuple: (credentials, auth_url) where auth_url is the URL to redirect to for auth
+        """
+        pass
+
+    @abstractmethod
+    def reauthenticate(self, calendar_email, app_user_email):
+        """
+        Reauthenticate an existing calendar connection.
+        
+        Parameters:
+            calendar_email (str): The email address of the calendar account to reauthenticate.
+            app_user_email (str): The email address used to log into this app.
+            
+        Returns:
+            tuple: (credentials, auth_url) where auth_url is the URL to redirect to for auth
+        """
+        pass
+
+    @abstractmethod
+    def handle_oauth_callback(self, callback_url, app_user_email):
+        """
+        Handle the OAuth callback from the provider.
+        
+        Parameters:
+            callback_url (str): The callback URL with authentication code
+            app_user_email (str): The email address used to log into this app.
+            
+        Returns:
+            The calendar email or credentials object (varies by provider)
         """
         pass
 
@@ -31,12 +59,13 @@ class CalendarProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_meetings(self, email):
+    async def get_meetings(self, calendar_email, app_user_email):
         """
         Get meetings for the given calendar email.
         
         Parameters:
-            email (str): The email address to get meetings for
+            calendar_email (str): The email address of the calendar to retrieve meetings from.
+            app_user_email (str): The email address used to log into this app.
             
         Returns:
             list: List of meeting dictionaries
@@ -44,7 +73,7 @@ class CalendarProvider(ABC):
         pass
 
     @abstractmethod
-    async def create_busy_block(self, calendar_email, meeting_data, original_event_id):
+    async def create_busy_block(self, calendar_email, meeting_data, original_event_id, app_user_email):
         """
         Create a busy block in the calendar.
         
@@ -52,6 +81,7 @@ class CalendarProvider(ABC):
             calendar_email (str): The email address to create the block for
             meeting_data (dict): The meeting data to use
             original_event_id (str): ID of the original event
+            app_user_email (str): The email address used to log into this app.
             
         Returns:
             str: The ID of the created busy block
@@ -59,14 +89,45 @@ class CalendarProvider(ABC):
         pass
 
     @abstractmethod
-    def get_credentials(self, email):
+    def create_meeting(self, meeting_details, app_user_email):
+        """
+        Create a meeting in the calendar.
+        
+        Parameters:
+            meeting_details (dict): Dictionary containing meeting details.
+                Required keys vary by provider.
+            app_user_email (str): The email address used to log into this app.
+            
+        Returns:
+            The ID of the created meeting
+        """
+        pass
+
+    @abstractmethod
+    def get_credentials(self, calendar_email, app_user_email):
         """
         Get credentials for the given email.
         
         Parameters:
-            email (str): The email address to get credentials for
+            calendar_email (str): The email address of the calendar to get credentials for.
+            app_user_email (str): The email address used to log into this app.
             
         Returns:
-            dict: The credentials if found, None otherwise
+            The credentials object if found
+        """
+        pass
+
+    @abstractmethod
+    def store_credentials(self, calendar_email, credentials, app_user_email):
+        """
+        Store credentials for the given calendar email.
+        
+        Parameters:
+            calendar_email (str): The email address of the calendar account.
+            credentials: The credentials to store.
+            app_user_email (str): The email address used to log into this app.
+            
+        Returns:
+            bool: True if successful
         """
         pass

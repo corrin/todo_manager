@@ -1,5 +1,7 @@
 import os
 import json
+import threading
+import asyncio
 from flask import request, session, make_response, jsonify, flash, send_from_directory
 from flask import Flask, render_template, redirect, url_for
 from dotenv import load_dotenv
@@ -22,6 +24,8 @@ from virtual_assistant.database.database import Database
 from virtual_assistant.database.database_routes import database_bp
 from virtual_assistant.database.calendar_account import CalendarAccount
 from virtual_assistant.auth.user_auth import setup_login_manager
+from virtual_assistant.tasks.token_refresh import start_token_refresh_scheduler
+from virtual_assistant.meetings.calendar_provider_factory import CalendarProviderFactory
 
 
 def create_task_manager():
@@ -36,8 +40,8 @@ def create_ai_manager():
 
 def create_calendar_provider():
     # Factory function to create the calendar provider
-    calendar_provider = GoogleCalendarProvider()
-    logger.debug(f"Calendar Provider created")
+    calendar_provider = CalendarProviderFactory.get_provider("google")
+    logger.debug("Calendar Provider created using factory")
     return calendar_provider
 
 
@@ -71,6 +75,20 @@ def create_app():
 
     template_dir = os.path.join(app.root_path, "assets")
     app.jinja_loader = jinja2.FileSystemLoader(template_dir)
+    
+    # Start the token refresh scheduler in a background thread
+    def run_token_refresh_scheduler():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        with app.app_context():
+            loop.run_until_complete(start_token_refresh_scheduler())
+    
+    token_refresh_thread = threading.Thread(
+        target=run_token_refresh_scheduler, 
+        daemon=True
+    )
+    token_refresh_thread.start()
+    logger.info("Started token refresh scheduler in background thread")
 
     @app.context_processor
     def inject_user():

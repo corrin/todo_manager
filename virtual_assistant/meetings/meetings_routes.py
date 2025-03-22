@@ -12,6 +12,7 @@ from flask import (
     request,
     session,
     url_for,
+    current_app
 )
 from google.auth.exceptions import RefreshError
 from asgiref.sync import async_to_sync
@@ -26,6 +27,7 @@ from functools import wraps
 from google.auth.credentials import Credentials
 from google.auth.transport.requests import Request
 import requests
+import asyncio
 
 meetings_bp = Blueprint("meetings", __name__, url_prefix="/meetings")
 
@@ -215,13 +217,43 @@ def reauth_calendar_account():
             return render_template("error.html", error="Calendar email not provided", title="Invalid Request")
         
         provider = providers[provider_name]()
-        _, auth_url = provider.authenticate(calendar_email, app_user_email=app_user_email)
         
+        # Store referrer URL for later redirect
+        referrer = request.referrer
+        if referrer:
+            session['calendar_auth_referrer'] = referrer
+        
+        # Use the appropriate method based on provider - both use reauthenticate now
+        if provider_name == "google":
+            credentials, auth_url = provider.reauthenticate(calendar_email=calendar_email, app_user_email=app_user_email)
+        elif provider_name == "o365":
+            # O365 provider's reauthenticate method is async, so we need to use async_to_sync
+            credentials, auth_url = async_to_sync(provider.reauthenticate)(calendar_email=calendar_email, app_user_email=app_user_email)
+        else:
+            flash(f"Unsupported calendar provider: {provider_name}", "error")
+            return render_template("error.html", error=f"Unsupported calendar provider: {provider_name}", title="Invalid Provider")
+        
+        # If auth_url is None but credentials exist, it means token was refreshed without needing reauth
+        if auth_url is None and credentials is not None:
+            logger.info(f"Token refreshed for {calendar_email} without needing reauthorization")
+            # Mark account as no longer needing reauth
+            account = CalendarAccount.get_by_email_provider_and_user(
+                calendar_email, provider_name, app_user_email
+            )
+            if account:
+                account.needs_reauth = False
+                account.save()
+            
+            flash(f"Successfully refreshed access to {calendar_email}", "success")
+            return redirect(url_for("meetings.sync_single_calendar", provider=provider_name, calendar_email=calendar_email))
+        
+        # If we have an auth_url, redirect to it for full reauth (this is what we want when user clicks reauth)
         if auth_url:
-            # Instead of returning the auth_url, redirect to it
+            logger.info(f"Redirecting to auth URL for {provider_name} reauthorization: {calendar_email}")
             return redirect(auth_url)
         
-        flash("Account already authorized.", "info")
+        # We should never get here if the implementation is correct
+        flash("Account already authorized, but full reauthorization failed.", "warning")
         return redirect(url_for("meetings.manage_calendar_accounts"))
         
     except Exception as e:
@@ -229,30 +261,28 @@ def reauth_calendar_account():
         flash("An error occurred while reauthorizing the calendar account.", "error")
         return render_template("error.html", error=str(e), title="Authentication Error")
 
-
 @meetings_bp.route("/authenticate_google_calendar")
 def authenticate_google_calendar():
     """Initiate Google Calendar authentication."""
     try:
-        logger.info("Starting Google Calendar authentication")
-        email = session.get("user_email")
-        logger.debug(f"User email from session: {email}")
-        
-        if not email:
+        app_user_email = session.get("user_email")
+        if not app_user_email:
             logger.error("No user email in session")
             return redirect(url_for("login"))
         
+        # Store referrer URL for later redirect
+        referrer = request.referrer
+        if referrer:
+            session['calendar_auth_referrer'] = referrer
+        
         provider = GoogleCalendarProvider()
-        logger.debug("Calling provider.authenticate with force_new_auth=True")
-        credentials, auth_url = provider.authenticate(email, force_new_auth=True)
-        logger.debug(f"Got auth_url: {auth_url}")
+        # Google's authenticate only takes app_user_email
+        _, auth_url = provider.authenticate(app_user_email)
         
         if auth_url:
-            logger.info(f"Redirecting to Google auth URL: {auth_url}")
             return redirect(auth_url)
         
-        logger.error("Failed to get authentication URL")
-        flash("Unable to initiate Google Calendar authentication.", "error")
+        flash("Account already authorized.", "info")
         return redirect(url_for("meetings.manage_calendar_accounts"))
         
     except Exception as e:
@@ -264,19 +294,26 @@ def authenticate_google_calendar():
 def authenticate_o365_calendar():
     """Initiate O365 Calendar authentication."""
     try:
-        email = session.get("user_email")
-        if not email:
+        app_user_email = session.get("user_email")
+        if not app_user_email:
             logger.error("No user email in session")
             return redirect(url_for("login"))
         
+        # Store referrer URL for later redirect
+        referrer = request.referrer
+        if referrer:
+            session['calendar_auth_referrer'] = referrer
+        
         provider = O365CalendarProvider()
-        _, auth_url = provider.authenticate(email)
+        _, auth_url = provider.authenticate(app_user_email)
         
         if auth_url:
+            logger.error(f"REDIRECTING TO MICROSOFT: {auth_url}")
             return redirect(auth_url)
-        
-        flash("Account already authorized.", "info")
-        return redirect(url_for("meetings.manage_calendar_accounts"))
+        else:
+            error_msg = "No authorization URL generated - this should never happen"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
     except Exception as e:
         logger.error(f"Error initiating O365 Calendar auth: {e}")
@@ -298,7 +335,7 @@ def google_authenticate():
         return redirect(url_for("login"))
     
     try:
-        credentials = google_provider.handle_oauth_callback(request.url)
+        credentials = google_provider.handle_oauth_callback(request.url, app_user_email)
         if not credentials:
             raise ValueError("Failed to get credentials from OAuth callback")
     
@@ -315,10 +352,10 @@ def google_authenticate():
         ).first()
         
         # Store/update credentials
-        google_provider.store_credentials(calendar_account_email, credentials)
+        google_provider.store_credentials(calendar_account_email, credentials, app_user_email)
         
         # Verify credentials work by attempting to get meetings
-        google_provider.get_meetings(calendar_account_email)
+        google_provider.get_meetings_sync(calendar_account_email, app_user_email)
         
         # Update account status
         if existing_account:
@@ -329,7 +366,7 @@ def google_authenticate():
         else:
             flash(f"Google Calendar {calendar_account_email} connected successfully.", "success")
         
-        return redirect(url_for("meetings.sync_meetings"))
+        return redirect(url_for("meetings.sync_single_calendar", provider=provider, calendar_email=calendar_account_email))
         
     except Exception as e:
         logger.error(f"❌ AUTH ERROR: Error in google_authenticate: {e}")
@@ -352,7 +389,7 @@ def o365_authenticate():
     
     try:
         # Handle the callback synchronously by wrapping the async call
-        calendar_email = async_to_sync(o365_provider.handle_oauth_callback)(request.url)
+        calendar_email = async_to_sync(o365_provider.handle_oauth_callback)(request.url, app_user_email)
         if not calendar_email:
             logger.error("Failed to complete O365 authentication - no email returned")
             flash("Failed to connect Office 365 Calendar.", "error")
@@ -374,7 +411,7 @@ def o365_authenticate():
         else:
             flash("Office 365 Calendar connected successfully.", "success")
         
-        return redirect(url_for("meetings.sync_meetings"))
+        return redirect(url_for("meetings.sync_single_calendar", provider='o365', calendar_email=calendar_email))
         
     except Exception as e:
         logger.error(f"❌ AUTH ERROR in o365_authenticate: {str(e)}")
@@ -385,9 +422,11 @@ def o365_authenticate():
 @login_required
 def debug_meetings(email):
     """Debug endpoint to test calendar access."""
+    app_user_email = session.get('user_email')
+    
     google_provider = GoogleCalendarProvider()
     try:
-        meetings = google_provider.get_meetings(email)
+        meetings = google_provider.get_meetings_sync(email, app_user_email)
         logger.info("Meetings for %s: %s", email, meetings)
         return render_template("meetings.html", meetings=meetings, email=email)
     except Exception as error:
@@ -436,11 +475,28 @@ def sync_meetings():
         provider = providers[account.provider]()
         
         try:
-            # Handle both sync and async get_meetings calls
+            # Skip unsupported providers
+            if account.provider not in providers:
+                logger.error(f"Unsupported provider: {account.provider}")
+                results['errors'].append({
+                    'email': account.calendar_email,
+                    'provider': account.provider,
+                    'error': f"Unsupported calendar provider: {account.provider}"
+                })
+                results['status'] = 'error'
+                continue
+
+            # Handle O365 and Google providers differently
             if account.provider == 'o365':
-                meetings = async_to_sync(provider.get_meetings)(account.calendar_email)
+                # O365 needs to use async methods with async_to_sync
+                meetings = async_to_sync(provider.get_meetings)(account.calendar_email, app_user_email)
             else:
-                meetings = provider.get_meetings(account.calendar_email)
+                # Google can use synchronous methods directly
+                meetings = provider.get_meetings_sync(account.calendar_email, app_user_email)
+            
+            # Log success
+            logger.info(f"Successfully synced {len(meetings)} meetings for {account.calendar_email}")
+            flash(f"Successfully synced {len(meetings)} meetings from {account.calendar_email}", "success")
             
             # Only log as a success if we get here (no exceptions were thrown)
             success_info = {
@@ -593,13 +649,13 @@ def refresh_google_calendar(calendar_email):
             
         try:
             credentials.refresh(Request())
-            provider.store_credentials(calendar_email, credentials)
+            provider.store_credentials(calendar_email, credentials, app_user_email)
             account.needs_reauth = False
             account.save()
             
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({"success": True})
-            flash("Successfully refreshed Google Calendar access.", "success")
+            flash(f"Successfully refreshed access to {calendar_email}", "success")
             return redirect(url_for("meetings.sync_meetings"))
             
         except Exception as e:
@@ -674,13 +730,13 @@ def refresh_o365_calendar(calendar_email):
                     'client_secret': account.client_secret,
                     'scopes': account.scopes
                 }
-                provider.store_credentials(calendar_email, credentials)
+                provider.store_credentials(calendar_email, credentials, app_user_email)
                 account.needs_reauth = False
                 account.save()
                 
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     return jsonify({"success": True})
-                flash("Successfully refreshed Office 365 Calendar access.", "success")
+                flash(f"Successfully refreshed access to {calendar_email}", "success")
                 return redirect(url_for("meetings.sync_meetings"))
             else:
                 logger.error(f"Failed to refresh O365 token: {response.text}")
@@ -708,6 +764,62 @@ def refresh_o365_calendar(calendar_email):
             return jsonify({"error": str(e)}), 500
         flash("An error occurred while refreshing calendar access.", "error")
         return render_template("error.html", error=str(e), title="Refresh Error")
+
+@meetings_bp.route("/sync_single_calendar/<provider>/<calendar_email>")
+@login_required
+def sync_single_calendar(provider, calendar_email):
+    """Sync meetings from a single calendar that was just authenticated."""
+    app_user_email = session.get('user_email')
+    
+    # Check for original referrer in session
+    original_referrer = session.pop('calendar_auth_referrer', None)
+    came_from_settings = original_referrer and 'settings' in original_referrer
+    
+    # Get the specific account
+    account = CalendarAccount.get_by_email_provider_and_user(
+        calendar_email, provider, app_user_email
+    )
+    
+    if not account:
+        flash(f"Calendar account {calendar_email} not found", 'error')
+        return render_template("error.html", error="Calendar account not found", title="Not Found")
+    
+    if provider not in providers:
+        flash(f"Unsupported provider: {provider}", 'error')
+        return render_template("error.html", error=f"Unsupported provider: {provider}", title="Invalid Provider")
+        
+    logger.info(f"Syncing newly authenticated {provider} calendar for {calendar_email}")
+    provider_obj = providers[provider]()
+    
+    try:
+        # Handle O365 and Google differently
+        if provider == 'o365':
+            # O365 needs to use async methods with async_to_sync
+            meetings = async_to_sync(provider_obj.get_meetings)(calendar_email, app_user_email)
+        else:
+            # Google can use synchronous methods directly
+            meetings = provider_obj.get_meetings_sync(calendar_email, app_user_email)
+        
+        # Log success
+        logger.info(f"Successfully synced {len(meetings)} meetings for {calendar_email}")
+        flash(f"Successfully synced {len(meetings)} meetings from {calendar_email}", "success")
+        
+        # Redirect to the settings page if that's where we came from, otherwise to meetings
+        if came_from_settings:
+            return redirect(url_for("settings"))
+        elif original_referrer:
+            # Try to redirect back to original page
+            return redirect(original_referrer)
+        else:
+            return redirect(url_for("meetings.index"))
+            
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Error syncing {provider} calendar for {calendar_email}: {error_msg}")
+        flash(f"Error syncing {provider.upper()} calendar: {error_msg}", "error")
+        
+        # Always render error template on errors
+        return render_template("error.html", error=error_msg, title="Sync Error")
 
 def init_app(calendar_manager):
     """Initialize the meetings blueprint."""

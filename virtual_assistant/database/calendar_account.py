@@ -140,3 +140,20 @@ class CalendarAccount(db.Model):
             
         # If no account is explicitly set as primary, return the first account
         return cls.query.filter_by(app_user_email=app_user_email).first()
+        
+    @classmethod
+    def get_accounts_by_last_sync(cls, older_than=None):
+        """Get calendar accounts that were last synced before the given time.
+        
+        Args:
+            older_than: datetime, only return accounts last synced before this time
+            
+        Returns:
+            list: List of CalendarAccount objects matching the criteria
+        """
+        if older_than is None:
+            return cls.query.all()
+            
+        return cls.query.filter(
+            cls.last_sync < older_than
+        ).all()
