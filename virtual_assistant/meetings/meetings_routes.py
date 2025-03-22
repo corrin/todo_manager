@@ -53,20 +53,7 @@ def handle_token_expiry(account, error):
         }
     return {'error': str(error)}
 
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        app_user_email = session.get('user_email')
-        if not app_user_email:
-            logger.error("No user email in session")
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({"error": "Not logged in"}), 401
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
 @meetings_bp.route("/manage_calendar_accounts")
-@login_required
 def manage_calendar_accounts():
     """Redirect to settings page for calendar management."""
     return redirect(url_for('settings'))
@@ -76,11 +63,6 @@ def set_primary_account():
     """Set a calendar account as the primary account."""
     try:
         email = session.get("user_email")
-        if not email:
-            logger.error("No user email in session")
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({"success": False, "error": "Not logged in"}), 401
-            return redirect(url_for("login"))
         
         provider = request.form.get("provider")
         calendar_email = request.form.get("email")
@@ -117,9 +99,6 @@ def remove_calendar_account():
     """Remove a calendar account."""
     try:
         email = session.get("user_email")
-        if not email:
-            logger.error("No user email in session")
-            return redirect(url_for("login"))
         
         provider_name = request.form.get("provider")
         calendar_email = request.form.get("email")
@@ -201,9 +180,6 @@ def reauth_calendar_account():
     """Reauthorize a calendar account."""
     try:
         app_user_email = session.get("user_email")
-        if not app_user_email:
-            logger.error("No user email in session")
-            return redirect(url_for("login"))
         
         provider_name = request.args.get("provider")
         calendar_email = request.args.get("email")
@@ -266,9 +242,6 @@ def authenticate_google_calendar():
     """Initiate Google Calendar authentication."""
     try:
         app_user_email = session.get("user_email")
-        if not app_user_email:
-            logger.error("No user email in session")
-            return redirect(url_for("login"))
         
         # Store referrer URL for later redirect
         referrer = request.referrer
@@ -295,9 +268,6 @@ def authenticate_o365_calendar():
     """Initiate O365 Calendar authentication."""
     try:
         app_user_email = session.get("user_email")
-        if not app_user_email:
-            logger.error("No user email in session")
-            return redirect(url_for("login"))
         
         # Store referrer URL for later redirect
         referrer = request.referrer
@@ -321,7 +291,6 @@ def authenticate_o365_calendar():
         return redirect(url_for("meetings.manage_calendar_accounts"))
 
 @meetings_bp.route("/google_authenticate")
-@login_required
 def google_authenticate():
     """Handle Google OAuth callback."""
     logger.debug(f"Google Calendar OAuth callback received for URL: {request.url}")
@@ -330,9 +299,6 @@ def google_authenticate():
     provider="google"
     
     app_user_email = session.get("user_email")
-    if not app_user_email:
-        logger.error("No user email in session")
-        return redirect(url_for("login"))
     
     try:
         credentials = google_provider.handle_oauth_callback(request.url, app_user_email)
@@ -373,9 +339,7 @@ def google_authenticate():
         flash(f"Failed to connect Google Calendar: {str(e)}", "error")
         return render_template("error.html", error=str(e), title="Authentication Error")
 
-
 @meetings_bp.route("/o365_authenticate")
-@login_required
 def o365_authenticate():
     """Handle O365 OAuth callback."""
     logger.info(f"O365 authenticate route called with URL: {request.url}")
@@ -383,9 +347,6 @@ def o365_authenticate():
     o365_provider = O365CalendarProvider()
     
     app_user_email = session.get("user_email")
-    if not app_user_email:
-        logger.error("No user email in session")
-        return redirect(url_for("login"))
     
     try:
         # Handle the callback synchronously by wrapping the async call
@@ -419,7 +380,6 @@ def o365_authenticate():
         return render_template("error.html", error=str(e), title="Authentication Error")
 
 @meetings_bp.route("/debug/<email>")
-@login_required
 def debug_meetings(email):
     """Debug endpoint to test calendar access."""
     app_user_email = session.get('user_email')
@@ -433,9 +393,7 @@ def debug_meetings(email):
         logger.error("Error in debug_meetings for %s: %s", email, error)
         return jsonify({"error": str(error)}), 500
 
-
 @meetings_bp.route("/sync")
-@login_required
 def sync_meetings():
     """Sync meetings from all connected calendars."""
     app_user_email = session.get('user_email')
@@ -604,17 +562,11 @@ def test_route():
     return "Test route working"
 
 @meetings_bp.route("/refresh_google_calendar/<calendar_email>")
-@login_required
 def refresh_google_calendar(calendar_email):
     """Refresh Google Calendar token."""
     try:
         app_user_email = session.get("user_email")
-        if not app_user_email:
-            logger.error("No user email in session")
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({"error": "Not logged in"}), 401
-            return redirect(url_for("login"))
-            
+        
         # Get the account
         account = CalendarAccount.get_by_email_provider_and_user(
             calendar_email, "google", app_user_email
@@ -676,17 +628,11 @@ def refresh_google_calendar(calendar_email):
         return render_template("error.html", error=str(e), title="Refresh Error")
 
 @meetings_bp.route("/refresh_o365_calendar/<calendar_email>")
-@login_required
 def refresh_o365_calendar(calendar_email):
     """Refresh O365 Calendar token."""
     try:
         app_user_email = session.get("user_email")
-        if not app_user_email:
-            logger.error("No user email in session")
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({"error": "Not logged in"}), 401
-            return redirect(url_for("login"))
-            
+        
         # Get the account
         account = CalendarAccount.get_by_email_provider_and_user(
             calendar_email, "o365", app_user_email
@@ -766,7 +712,6 @@ def refresh_o365_calendar(calendar_email):
         return render_template("error.html", error=str(e), title="Refresh Error")
 
 @meetings_bp.route("/sync_single_calendar/<provider>/<calendar_email>")
-@login_required
 def sync_single_calendar(provider, calendar_email):
     """Sync meetings from a single calendar that was just authenticated."""
     app_user_email = session.get('user_email')

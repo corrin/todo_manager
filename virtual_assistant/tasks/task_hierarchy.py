@@ -126,10 +126,24 @@ class TaskHierarchy:
             path_string = self.get_task_path_string(task.id)
             project_name = self.project_names.get(task.project_id, "")
             
+            # Create the flattened_name by combining project and path information
+            parts = []
+            if project_name:
+                parts.append(f"[{project_name}]")
+                
+            # If path contains more than just the task name, add the path
+            if path_string and path_string != task.title:
+                parts.append(path_string)
+            else:
+                parts.append(task.title)
+                
+            flattened_name = " > ".join(parts)
+            
             flattened.append({
                 "task": task,
                 "path": path_string,
-                "project": project_name
+                "project": project_name,
+                "flattened_name": flattened_name
             })
             
         return flattened

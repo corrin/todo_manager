@@ -26,7 +26,7 @@ ngrok http --subdomain=virtual-assistant 3000
 python virtual_assistant/flask_app.py
 ```
 
-2. Visit https://virtual-assistant.ngrok.io/initial_setup
+2. Visit https://virtual-assistant.au.ngrok.io/initial_setup
 
 3. The system will:
    - Create user folder for lakeland@gmail.com

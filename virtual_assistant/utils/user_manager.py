@@ -3,6 +3,12 @@ from flask import session
 from virtual_assistant.utils.settings import Settings
 from virtual_assistant.utils.logger import logger
 
+# ############################################################################################
+# DEPRECATION NOTICE: This module is marked for removal in a future version.
+# All code should begin migrating away from file-based credential storage.
+# Future versions will use database credential storage with proper encryption.
+# ############################################################################################
+
 class UserManager:
     """
     Handles user session state and folder management.

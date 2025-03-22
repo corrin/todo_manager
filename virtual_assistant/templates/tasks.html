@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Your Tasks{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}">
+<style>
+    .readonly-notice {
+        font-size: 0.85rem;
+        font-style: italic;
+        color: #6c757d;
+        margin-bottom: 10px;
+    }
+    
+    /* Add a subtle visual indicator that task details aren't editable */
+    .task-content {
+        cursor: default;
+    }
+    
+    /* Make the task completion button more prominent */
+    .task-complete-btn {
+        min-width: 38px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-12">
+            <h1>Your Tasks</h1>
+            <p class="lead">View and manage your tasks</p>
+            <div class="readonly-notice">
+                <i class="fas fa-info-circle"></i> Note: Only task completion status can be changed. Other task details can only be edited in the source task provider.
+            </div>
+            
+            <!-- Error Display Container -->
+            <div id="error-container" class="alert alert-danger mt-3 mb-3" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Task Operation Failed</h5>
+                    <button type="button" class="btn-close" onclick="hideErrorMessage()"></button>
+                </div>
+                <hr>
+                <p id="error-message"></p>
+            </div>
+            
+            {% if error %}
+            <div class="alert alert-danger">
+                <p>{{ error }}</p>
+                <a href="{{ url_for('settings') }}" class="btn btn-outline-danger">Go to Settings</a>
+            </div>
+            {% elif prioritized_tasks or unprioritized_tasks %}
+
+            <!-- Prioritized Tasks -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Prioritized Tasks</h5>
+                </div>
+                <div class="card-body" id="prioritized-container">
+                    <ul class="list-group" id="prioritized-tasks">
+                        {% for item in prioritized_tasks %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center" data-task-id="{{ item.task.id }}">
+                            <div class="d-flex align-items-center">
+                                <form method="POST" action="{{ url_for('tasks.update_task_status', task_id=item.task.id) }}" style="display: inline;">
+                                    <input type="hidden" name="status" value="{% if item.task.status == 'completed' %}active{% else %}completed{% endif %}">
+                                    <button type="submit" class="btn btn-sm task-complete-btn {% if item.task.status == 'completed' %}btn-success{% else %}btn-outline-success{% endif %} me-2">
+                                        <i class="fas {% if item.task.status == 'completed' %}fa-check-circle{% else %}fa-circle{% endif %}"></i>
+                                    </button>
+                                </form>
+                                <div class="task-content">
+                                    <span>{{ item.flattened_name }}</span>
+                                </div>
+                            </div>
+                            {% if item.task.due_date %}
+                            <small class="text-muted">{{ item.task.due_date.strftime('%Y-%m-%d') }}</small>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Unprioritized Tasks -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Unprioritized Tasks</h5>
+                </div>
+                <div class="card-body" id="unprioritized-container">
+                    <ul class="list-group" id="unprioritized-tasks">
+                        {% for item in unprioritized_tasks %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center" data-task-id="{{ item.task.id }}">
+                            <div class="d-flex align-items-center">
+                                <form method="POST" action="{{ url_for('tasks.update_task_status', task_id=item.task.id) }}" style="display: inline;">
+                                    <input type="hidden" name="status" value="{% if item.task.status == 'completed' %}active{% else %}completed{% endif %}">
+                                    <button type="submit" class="btn btn-sm task-complete-btn {% if item.task.status == 'completed' %}btn-success{% else %}btn-outline-success{% endif %} me-2">
+                                        <i class="fas {% if item.task.status == 'completed' %}fa-check-circle{% else %}fa-circle{% endif %}"></i>
+                                    </button>
+                                </form>
+                                <div class="task-content">
+                                    <span>{{ item.flattened_name }}</span>
+                                </div>
+                            </div>
+                            {% if item.task.due_date %}
+                            <small class="text-muted">{{ item.task.due_date.strftime('%Y-%m-%d') }}</small>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            {% else %}
+            <div class="alert alert-info">
+                <p>No tasks found. Add tasks in your task provider to see them here.</p>
+            </div>
+            {% endif %}
+            
+            <div class="mt-4">
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Home</a>
+                <a href="{{ url_for('tasks') }}" class="btn btn-primary">Refresh Tasks</a>
+                <a href="{{ url_for('tasks.sync_tasks') }}" class="btn btn-info">Sync All Task Providers</a>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Include SortableJS and our custom JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="{{ url_for('static', filename='js/tasks.js') }}"></script>
+{% endblock %}

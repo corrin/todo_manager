@@ -233,14 +233,45 @@ class GoogleTaskProvider(TaskProvider):
             # Map our status to Google Tasks status
             google_status = "completed" if status == "completed" else "needsAction"
             
-            # In a real implementation, we would update the task status
-            # using the Google Tasks API
-            
-            logger.debug(f"Updated task {task_id} status to {status}")
-            return True
+            # Try to verify the task exists first
+            try:
+                # In a real implementation, we would get the task to verify it exists
+                # using the Google Tasks API
+                
+                # Mock check - in a real implementation, this would be replaced with an API call
+                task_exists = True  # Placeholder - would check if task exists
+                
+                if task_exists:
+                    # In a real implementation, we would update the task status
+                    # using the Google Tasks API
+                    
+                    logger.debug(f"Updated task {task_id} status to {status}")
+                    return True
+                else:
+                    raise Exception(f"Task {task_id} not found in Google Tasks")
+                    
+            except Exception as task_error:
+                error_msg = str(task_error).lower()
+                if "not found" in error_msg or "404" in error_msg:
+                    raise Exception(f"Task {task_id} not found in Google Tasks. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
+                # For other errors, log and propagate
+                logger.error(f"Error updating Google Tasks task status: {task_error}")
+                raise
+                
         except Exception as e:
-            logger.error(f"Error updating task status: {e}")
-            raise
+            # Check for common API errors and provide better messages
+            error_msg = str(e).lower()
+            
+            if "quota" in error_msg or "rate limit" in error_msg or "429" in error_msg:
+                raise Exception("Google Tasks API rate limit reached. Please wait a moment and try again.")
+            elif "authentication" in error_msg or "unauthorized" in error_msg or "401" in error_msg:
+                raise Exception("Google Tasks authentication error. Please check your Google account connection in Settings.")
+            elif "network" in error_msg or "timeout" in error_msg or "connection" in error_msg:
+                raise Exception("Network error when connecting to Google Tasks. Please check your internet connection.")
+            else:
+                # If not a specific known error, log the original error and pass it along
+                logger.error(f"Error updating task status: {e}")
+                raise
 
     def create_instruction_task(self, task_user_email, instructions: str) -> bool:
         """Create or update the AI instruction task."""

@@ -165,6 +165,14 @@ class TaskManager:
         """Get list of available provider names."""
         return list(self.providers.keys())
 
-    def get_provider(self, provider_name):
-        """Get specific provider instance."""
+    def get_provider(self, provider_name, email=None):
+        """Get specific provider instance.
+        
+        Args:
+            provider_name: Name of the provider
+            email: User's email (optional)
+            
+        Returns:
+            The provider instance
+        """
         return self.providers.get(provider_name)

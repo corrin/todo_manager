@@ -266,14 +266,46 @@ class OutlookTaskProvider(TaskProvider):
             # Map our status to Outlook status
             outlook_status = "completed" if status == "completed" else "notStarted"
             
-            # In a real implementation, we would use:
-            # self.client.me.todo.tasks.by_todo_task_id(task_id).patch({"status": outlook_status})
-            
-            logger.debug(f"Updated task {task_id} status to {status}")
-            return True
+            # Try to verify the task exists first
+            try:
+                # In a real implementation, we would get the task to verify it exists
+                # using the Microsoft Graph API
+                # Example: task = self.client.me.todo.tasks.by_todo_task_id(task_id).get()
+                
+                # Mock check - in a real implementation, this would be replaced with an API call
+                task_exists = True  # Placeholder - would check if task exists
+                
+                if task_exists:
+                    # In a real implementation, we would update the task status using:
+                    # self.client.me.todo.tasks.by_todo_task_id(task_id).patch({"status": outlook_status})
+                    
+                    logger.debug(f"Updated task {task_id} status to {status}")
+                    return True
+                else:
+                    raise Exception(f"Task {task_id} not found in Outlook Tasks")
+                    
+            except Exception as task_error:
+                error_msg = str(task_error).lower()
+                if "not found" in error_msg or "404" in error_msg:
+                    raise Exception(f"Task {task_id} not found in Outlook Tasks. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
+                # For other errors, log and propagate
+                logger.error(f"Error updating Outlook Tasks task status: {task_error}")
+                raise
+                
         except Exception as e:
-            logger.error(f"Error updating task status: {e}")
-            raise
+            # Check for common API errors and provide better messages
+            error_msg = str(e).lower()
+            
+            if "throttled" in error_msg or "rate limit" in error_msg or "429" in error_msg:
+                raise Exception("Microsoft Graph API rate limit reached. Please wait a moment and try again.")
+            elif "authentication" in error_msg or "unauthorized" in error_msg or "401" in error_msg:
+                raise Exception("Outlook Tasks authentication error. Please check your Microsoft account connection in Settings.")
+            elif "network" in error_msg or "timeout" in error_msg or "connection" in error_msg:
+                raise Exception("Network error when connecting to Outlook Tasks. Please check your internet connection.")
+            else:
+                # If not a specific known error, log the original error and pass it along
+                logger.error(f"Error updating task status: {e}")
+                raise
 
     def create_instruction_task(self, task_user_email, instructions: str) -> bool:
         """Create or update the AI instruction task."""

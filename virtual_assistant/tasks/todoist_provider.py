@@ -51,18 +51,26 @@ class TodoistProvider(TaskProvider):
             raise Exception(f"No Todoist API client for {email}")
 
         try:
+            logger.info(f"[TODOIST] Retrieving tasks for {email}")
+            
             # Get projects first to map project IDs to names
             projects = {}
             try:
                 todoist_projects = self.api.get_projects()
                 for p in todoist_projects:
                     projects[p.id] = p.name
-                logger.debug(f"Retrieved {len(projects)} projects for {email}")
+                logger.debug(f"[TODOIST] Retrieved {len(projects)} projects for {email}")
             except Exception as e:
-                logger.warning(f"Error getting Todoist projects: {e}")
+                logger.warning(f"[TODOIST] Error getting Todoist projects: {e}")
             
             # Get tasks
             todoist_tasks = self.api.get_tasks()
+            logger.info(f"[TODOIST] Retrieved {len(todoist_tasks)} raw tasks from Todoist API")
+            
+            # Count completed and active tasks
+            completed_count = 0
+            active_count = 0
+            
             tasks = []
             for t in todoist_tasks:
                 # Skip the instruction task as it's handled separately
@@ -77,13 +85,23 @@ class TodoistProvider(TaskProvider):
                 # Get project name if available
                 project_name = projects.get(t.project_id)
                 
+                is_completed = t.is_completed
+                status = "completed" if is_completed else "active"
+                
+                if is_completed:
+                    completed_count += 1
+                    logger.debug(f"[TODOIST] Task {t.id} '{t.content}' is COMPLETED")
+                else:
+                    active_count += 1
+                    logger.debug(f"[TODOIST] Task {t.id} '{t.content}' is ACTIVE")
+                
                 task = Task(
                     id=t.id,
                     title=t.content,
                     project_id=t.project_id,
                     priority=t.priority,
                     due_date=due_date,
-                    status="completed" if t.is_completed else "active",
+                    status=status,
                     is_instruction=False,
                     parent_id=getattr(t, 'parent_id', None),
                     section_id=getattr(t, 'section_id', None),
@@ -91,10 +109,15 @@ class TodoistProvider(TaskProvider):
                 )
                 tasks.append(task)
             
-            logger.debug(f"Retrieved {len(tasks)} tasks for {email}")
+            logger.info(f"[TODOIST] Task summary for {email}: {len(tasks)} total tasks ({completed_count} completed, {active_count} active)")
+            
+            # Log all task IDs and statuses at once for easy comparison
+            status_summary = {task.id: task.status for task in tasks}
+            logger.debug(f"[TODOIST] Task status map: {status_summary}")
+            
             return tasks
         except Exception as e:
-            logger.error(f"Error getting Todoist tasks: {e}")
+            logger.error(f"[TODOIST] Error getting Todoist tasks: {e}")
             raise
 
     def get_ai_instructions(self, email) -> Optional[str]:
@@ -125,16 +148,65 @@ class TodoistProvider(TaskProvider):
         if not self.api:
             raise Exception(f"No Todoist API client for {email}")
 
+        logger.info(f"[TODOIST] Attempting to update task {task_id} status to '{status}' for {email}")
+        
         try:
-            if status == "completed":
-                self.api.close_task(task_id)
-            else:
-                self.api.reopen_task(task_id)
-            logger.debug(f"Updated task {task_id} status to {status}")
-            return True
+            # First, check if the task exists by trying to get it
+            try:
+                task = self.api.get_task(task_id)
+                # Task exists, check if status change is needed
+                current_status = "completed" if task.is_completed else "active"
+                logger.info(f"[TODOIST] Task {task_id} '{task.content}' current status: '{current_status}', requested status: '{status}'")
+                
+                if current_status == status:
+                    # Task is already in requested status, no need to update
+                    logger.info(f"[TODOIST] Task {task_id} already has status '{status}', no update needed")
+                    return True
+            except Exception as task_error:
+                # If we can't get the task, it might be deleted or invalid
+                error_msg = str(task_error).lower()
+                if "not found" in error_msg or "404" in error_msg:
+                    logger.warning(f"[TODOIST] Task {task_id} not found: {task_error}")
+                    raise Exception(f"Task {task_id} not found in Todoist. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
+                # For other errors with task lookup, continue and try to update anyway
+                logger.warning(f"[TODOIST] Could not verify task {task_id} existence: {task_error}. Attempting update anyway.")
+            
+            # Try to update the task status
+            try:
+                if status == "completed":
+                    logger.info(f"[TODOIST] Marking task {task_id} as completed")
+                    self.api.close_task(task_id)
+                else:
+                    logger.info(f"[TODOIST] Marking task {task_id} as active (reopening)")
+                    self.api.reopen_task(task_id)
+                logger.info(f"[TODOIST] Successfully updated task {task_id} status to '{status}'")
+                return True
+            except Exception as update_error:
+                error_msg = str(update_error).lower()
+                logger.error(f"[TODOIST] Error updating task status: {update_error}")
+                # Handle common errors with better messages
+                if "not found" in error_msg or "404" in error_msg:
+                    raise Exception(f"Task {task_id} not found in Todoist. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
+                else:
+                    raise update_error
+                
         except Exception as e:
-            logger.error(f"Error updating task status: {e}")
-            raise
+            # Check for common API errors and provide better messages
+            error_msg = str(e).lower()
+            
+            if "rate limit" in error_msg or "429" in error_msg:
+                logger.error(f"[TODOIST] Rate limit exceeded: {e}")
+                raise Exception("Todoist API rate limit reached. Please wait a moment and try again.")
+            elif "authentication" in error_msg or "unauthorized" in error_msg or "401" in error_msg:
+                logger.error(f"[TODOIST] Authentication error: {e}")
+                raise Exception("Todoist authentication error. Please check your API key in Settings.")
+            elif "network" in error_msg or "timeout" in error_msg or "connection" in error_msg:
+                logger.error(f"[TODOIST] Network error: {e}")
+                raise Exception("Network error when connecting to Todoist. Please check your internet connection.")
+            else:
+                # If not a specific known error, log the original error and pass it along
+                logger.error(f"[TODOIST] Error updating task status: {e}")
+                raise
 
     def create_instruction_task(self, email, instructions: str) -> bool:
         """Create or update the AI instruction task."""

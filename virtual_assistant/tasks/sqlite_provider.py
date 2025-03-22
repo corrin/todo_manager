@@ -122,12 +122,24 @@ class SQLiteTaskProvider(TaskProvider):
             db_path = self._get_db_path(email)
             
             with sqlite3.connect(db_path) as conn:
-                # Get current task data
-                cursor = conn.execute("SELECT data FROM tasks WHERE id = ? AND email = ?", (task_id, email))
+                # Check if task exists
+                cursor = conn.execute(
+                    "SELECT data FROM tasks WHERE id = ? AND email = ?",
+                    (task_id, email)
+                )
                 row = cursor.fetchone()
                 
                 if row:
+                    # Parse task data
                     task_data = json.loads(row[0])
+                    
+                    # Check if status is already the requested value
+                    current_status = task_data.get('status', 'active')
+                    if current_status == status:
+                        logger.debug(f"Task {task_id} already has status {status}, no update needed")
+                        return True
+                    
+                    # Update status
                     task_data['status'] = status
                     
                     # Update task
@@ -140,8 +152,21 @@ class SQLiteTaskProvider(TaskProvider):
                     logger.debug(f"Updated task {task_id} status to {status}")
                     return True
                 else:
-                    logger.warning(f"Task {task_id} not found")
-                    return False
+                    # Task not found
+                    error_msg = f"Task {task_id} not found in SQLite database for {email}"
+                    logger.warning(error_msg)
+                    raise Exception(error_msg)
+                    
+        except sqlite3.Error as e:
+            error_msg = str(e)
+            logger.error(f"SQLite database error: {error_msg}")
+            raise Exception(f"Database error: {error_msg}")
+            
+        except json.JSONDecodeError as e:
+            error_msg = str(e)
+            logger.error(f"Error parsing task data: {error_msg}")
+            raise Exception(f"Error reading task data: {error_msg}")
+            
         except Exception as e:
             logger.error(f"Error updating task status in SQLite: {e}")
             raise

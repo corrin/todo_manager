@@ -1,0 +1,76 @@
+# Task Master Project Intelligence
+
+## Code Style and Organization
+
+1. **Import Organization**
+   - Standard library imports first
+   - Third-party imports second
+   - Local imports last
+   - Group related imports (e.g., all Flask imports together)
+   - No imports inside functions or methods
+
+2. **Error Handling**
+   - Fail early principle - detect and report errors as soon as possible
+   - Use specific exception types rather than generic exceptions
+   - Do not use fallbacks for critical operations
+   - Log errors with appropriate context information
+
+3. **Function Design**
+   - Single-responsibility functions preferred
+   - Descriptive function and variable names
+   - Type hints preferred where appropriate
+   - Document complex functions with docstrings
+
+## Project-Specific Patterns
+
+1. **Provider Pattern Implementation**
+   - All service integrations follow the provider pattern
+   - Abstract interface classes define required methods
+   - Concrete provider classes implement specific services
+   - Manager classes coordinate provider selection and operation
+
+2. **Authentication Flows**
+   - User authentication through Google Identity Services
+   - Provider authentication through OAuth or API keys
+   - Credentials stored in user-specific files
+   - Token refresh handled automatically where possible
+
+3. **Database Access**
+   - Central Database singleton for all database operations
+   - All queries filter by user_id for data isolation
+   - SQLAlchemy relationships maintain data integrity
+   - Models consistently use the same database connection
+
+## Known Implementation Preferences
+
+1. **Code Organization**
+   - Flask Blueprint pattern for route organization
+   - Application factory pattern for Flask app creation
+   - Manager classes coordinate between components
+   - Provider interfaces define component contracts
+
+2. **Common Implementation Paths**
+   - Add new providers by implementing the appropriate interface
+   - Extend manager classes to support new providers
+   - Follow existing authentication patterns for new services
+   - Use dependency injection for flexible configuration
+
+3. **User Interface Approach**
+   - Minimal UI with three primary pages
+   - Single-page configuration hub
+   - OAuth flows integrated into main flow
+   - Session and cookie-based state management
+
+## Technical Constraints
+
+1. **Error Handling Philosophy**
+   - Trust model is valid - if a field is required, it will be present
+   - Don't use if statements to hide errors - raise exceptions
+   - Do not use fallbacks for critical operations
+   - Specific exception types with descriptive messages
+
+2. **Code Maintenance**
+   - Follow existing patterns when extending functionality
+   - Validate credentials before attempting operations
+   - Use manager classes to coordinate component interactions
+   - Maintain clean separation between provider implementations 

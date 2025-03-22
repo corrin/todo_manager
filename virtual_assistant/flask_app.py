@@ -77,8 +77,13 @@ def create_app():
     app.secret_key = Settings.FLASK_SECRET_KEY
     app.config['SERVER_NAME'] = Settings.SERVER_NAME
 
-    template_dir = os.path.join(app.root_path, "assets")
+    # Configure templates to be loaded from the templates directory
+    template_dir = os.path.join(app.root_path, "templates")
     app.jinja_loader = jinja2.FileSystemLoader(template_dir)
+    
+    # Configure static files to be served from the static directory
+    app.static_folder = os.path.join(app.root_path, "static")
+    app.static_url_path = "/static"
     
     # Start the token refresh scheduler in a background thread
     def run_token_refresh_scheduler():
@@ -109,10 +114,12 @@ def create_app():
     @app.route('/favicon.ico')
     def favicon():
         return send_from_directory(
-            os.path.join(app.root_path, 'assets'),
+            os.path.join(app.root_path, 'static'),
             'favicon.ico', mimetype='image/vnd.microsoft.icon'
         )
-
+    
+    # Flask's built-in static file handling through app.static_folder will handle static files
+    
     return app
 
 
@@ -137,10 +144,6 @@ def index():
 
 @app.route('/settings', methods=['GET'])
 def settings():
-    # Check if the user is logged in
-    if 'user_email' not in session:
-        return redirect(url_for('login'))
-
     user_email = session.get('user_email')
     
     # Get calendar accounts data
@@ -187,9 +190,6 @@ def settings():
 
 @app.route('/settings', methods=['POST'])
 def save_settings():
-    if 'user_email' not in session:
-        return redirect(url_for('login'))
-
     user_email = session.get('user_email')
     try:
         # Get form data
@@ -262,96 +262,8 @@ def save_settings():
 
 @app.route('/tasks')
 def tasks():
-    """Display the user's tasks from Todoist."""
-    if 'user_email' not in session:
-        return redirect(url_for('login'))
-
-    user_email = session.get('user_email')
-    task_manager = create_task_manager()
-    
-    try:
-        # Try to authenticate with Todoist
-        auth_results = task_manager.authenticate(user_email, provider_name='todoist')
-        
-        # If authentication is needed, redirect to the auth URL
-        if 'todoist' in auth_results and auth_results['todoist']:
-            provider_name, redirect_url = auth_results['todoist']
-            return redirect_url
-        
-        # Get tasks from Todoist
-        tasks = task_manager.get_tasks(user_email, provider_name='todoist')
-        
-        # Create a task hierarchy to organize tasks
-        hierarchy = TaskHierarchy(tasks)
-        flattened_tasks = hierarchy.get_flattened_tasks()
-        
-        return render_template('tasks.html', flattened_tasks=flattened_tasks)
-    
-    except Exception as e:
-        logger.error(f"Error getting tasks: {e}")
-        return render_template('tasks.html', error=str(e))
-
-
-@app.route('/sync_todoist')
-def sync_todoist():
-    """Sync Todoist tasks."""
-    if 'user_email' not in session:
-        return redirect(url_for('login'))
-
-    user_email = session.get('user_email')
-    task_manager = create_task_manager()
-    
-    try:
-        # Try to authenticate with Todoist
-        auth_results = task_manager.authenticate(user_email, provider_name='todoist')
-        
-        # If authentication is needed, redirect to the auth URL
-        if 'todoist' in auth_results and auth_results['todoist']:
-            provider_name, redirect_url = auth_results['todoist']
-            return redirect_url
-        
-        # Get tasks from Todoist to refresh the cache
-        tasks = task_manager.get_tasks(user_email, provider_name='todoist')
-        
-        # Create a task hierarchy to get a better count of tasks
-        hierarchy = TaskHierarchy(tasks)
-        flattened_tasks = hierarchy.get_flattened_tasks()
-        
-        flash(f'Successfully synced {len(tasks)} Todoist tasks', 'success')
-        logger.info(f"Successfully synced {len(tasks)} Todoist tasks for {user_email}")
-        
-        # Redirect to the tasks page to show the synced tasks
-        return redirect(url_for('tasks'))
-    
-    except Exception as e:
-        logger.error(f"Error syncing Todoist tasks: {e}")
-        flash(f'Error syncing Todoist tasks: {str(e)}', 'error')
-        return redirect(url_for('tasks'))
-
-
-@app.route('/tasks/<task_id>/status', methods=['POST'])
-def update_task_status(task_id):
-    """Update a task's status (completed/active)."""
-    if 'user_email' not in session:
-        return redirect(url_for('login'))
-
-    user_email = session.get('user_email')
-    status = request.form.get('status')
-    
-    if not status:
-        flash('Status is required', 'danger')
-        return redirect(url_for('tasks'))
-    
-    task_manager = create_task_manager()
-    
-    try:
-        task_manager.update_task_status(user_email, task_id, status, provider_name='todoist')
-        flash(f'Task status updated to {status}', 'success')
-    except Exception as e:
-        logger.error(f"Error updating task status: {e}")
-        flash(f'Error updating task status: {str(e)}', 'danger')
-    
-    return redirect(url_for('tasks'))
+    """Redirect to the tasks blueprint."""
+    return redirect(url_for('tasks.list_tasks'))
 
 
 @app.route("/logout")
