@@ -2,16 +2,20 @@ from virtual_assistant.utils.user_manager import UserManager
 from virtual_assistant.utils.logger import logger
 from .todoist_provider import TodoistProvider
 from .sqlite_provider import SQLiteTaskProvider
+from .outlook_task_provider import OutlookTaskProvider
+from .google_task_provider import GoogleTaskProvider
 
 
 class TaskManager:
-    """Manages task providers (Todoist, etc.)"""
+    """Manages task providers (Todoist, Outlook, Google Tasks, etc.)"""
 
     def __init__(self):
         self.providers = {}
         self.provider_classes = {
             "todoist": TodoistProvider,
             "sqlite": SQLiteTaskProvider,
+            "outlook": OutlookTaskProvider,
+            "google_tasks": GoogleTaskProvider,
             # Add other providers here as needed
         }
         self._initialize_providers()

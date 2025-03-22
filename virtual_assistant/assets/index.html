@@ -16,9 +16,17 @@
                 <a href="{{ url_for('settings') }}" class="btn btn-primary">Settings</a>
             </div>
             <div class="mb-4">
-                <h4>Sync Your Calendars</h4>
-                <p>Synchronize and view your calendar meetings</p>
-                <a href="{{ url_for('meetings.sync_meetings') }}" class="btn btn-success">Sync Now</a>
+                <h4>Sync Your Data</h4>
+                <p>Synchronize your calendar meetings and tasks</p>
+                <div class="btn-group">
+                    <a href="{{ url_for('meetings.sync_meetings') }}" class="btn btn-success">Sync Calendars</a>
+                    <a href="{{ url_for('tasks.sync_tasks') }}" class="btn btn-outline-success">Sync Tasks</a>
+                </div>
+            </div>
+            <div class="mb-4">
+                <h4>Prioritize Your Tasks</h4>
+                <p>View and manage your Todoist tasks</p>
+                <a href="{{ url_for('tasks') }}" class="btn btn-info">View Tasks</a>
             </div>
         </div>
     </div>

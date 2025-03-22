@@ -1,4 +1,4 @@
-from flask import Blueprint, request, render_template, redirect, url_for, flash
+from flask import Blueprint, request, render_template, redirect, url_for, flash, jsonify
 from virtual_assistant.utils.user_manager import UserManager
 from virtual_assistant.utils.logger import logger
 from .todoist_provider import TodoistProvider
@@ -13,8 +13,8 @@ def init_todoist_routes():
         if request.method == 'POST':
             api_key = request.form.get('api_key')
             if not api_key:
-                flash('API key is required')
-                return redirect(url_for('todoist_auth.setup_credentials'))
+                flash('API key is required', 'danger')
+                return redirect(url_for('settings'))
 
             try:
                 email = UserManager.get_current_user()
@@ -29,13 +29,31 @@ def init_todoist_routes():
                 
                 todoist_provider.create_instruction_task(email, default_instructions)
                 
-                flash('Todoist credentials saved successfully')
+                flash('Todoist credentials saved successfully', 'success')
                 return redirect(url_for('index'))
             except Exception as e:
                 logger.error(f"Error saving Todoist credentials: {e}")
-                flash('Error saving credentials')
-                return redirect(url_for('todoist_auth.setup_credentials'))
+                flash(f'Error saving credentials: {str(e)}', 'danger')
+                return redirect(url_for('settings'))
 
-        return render_template('todoist_setup.html')
+        # Redirect to settings page instead of trying to render a non-existent template
+        return redirect(url_for('settings'))
+
+    @bp.route('/test', methods=['POST'])
+    def test_connection():
+        """Test Todoist API connection with provided API key"""
+        api_key = request.form.get('api_key')
+        if not api_key:
+            return jsonify({'success': False, 'message': 'API key is required'})
+            
+        try:
+            # Test the API key by creating a temporary API client
+            from todoist_api_python.api import TodoistAPI
+            api = TodoistAPI(api_key)
+            api.get_projects()  # Simple API call to test credentials
+            return jsonify({'success': True, 'message': 'Connection successful'})
+        except Exception as e:
+            logger.error(f"Error testing Todoist API key: {e}")
+            return jsonify({'success': False, 'message': f'Connection failed: {str(e)}'})
 
     return bp

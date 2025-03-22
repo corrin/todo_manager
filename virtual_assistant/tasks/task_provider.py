@@ -18,6 +18,9 @@ class Task:
     due_date: Optional[datetime]
     status: str
     is_instruction: bool = False
+    parent_id: Optional[str] = None
+    section_id: Optional[str] = None
+    project_name: Optional[str] = None
 
 
 class TaskProvider(ABC):

@@ -43,7 +43,7 @@ class TodoistProvider(TaskProvider):
         except Exception as e:
             logger.error(f"Todoist credentials invalid for {email}: {e}")
             return self.provider_name, redirect(url_for('todoist_auth.setup_credentials'))
-
+            
     def get_tasks(self, email) -> List[Task]:
         """Get all tasks from Todoist."""
         self._initialize_api(email)
@@ -51,6 +51,17 @@ class TodoistProvider(TaskProvider):
             raise Exception(f"No Todoist API client for {email}")
 
         try:
+            # Get projects first to map project IDs to names
+            projects = {}
+            try:
+                todoist_projects = self.api.get_projects()
+                for p in todoist_projects:
+                    projects[p.id] = p.name
+                logger.debug(f"Retrieved {len(projects)} projects for {email}")
+            except Exception as e:
+                logger.warning(f"Error getting Todoist projects: {e}")
+            
+            # Get tasks
             todoist_tasks = self.api.get_tasks()
             tasks = []
             for t in todoist_tasks:
@@ -63,6 +74,9 @@ class TodoistProvider(TaskProvider):
                 if t.due:
                     due_date = datetime.fromisoformat(t.due.datetime) if t.due.datetime else None
 
+                # Get project name if available
+                project_name = projects.get(t.project_id)
+                
                 task = Task(
                     id=t.id,
                     title=t.content,
@@ -70,7 +84,10 @@ class TodoistProvider(TaskProvider):
                     priority=t.priority,
                     due_date=due_date,
                     status="completed" if t.is_completed else "active",
-                    is_instruction=False
+                    is_instruction=False,
+                    parent_id=getattr(t, 'parent_id', None),
+                    section_id=getattr(t, 'section_id', None),
+                    project_name=project_name
                 )
                 tasks.append(task)
             
