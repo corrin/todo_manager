@@ -166,3 +166,4 @@ cython_debug/
 users/
 
 *.db
+virtual_assistant/data/virtual_assistant.db
