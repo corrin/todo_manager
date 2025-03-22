@@ -459,7 +459,7 @@ def init_task_routes():
             
             # Update the task status in the provider
             logger.info(f"Updating task status in provider: task_id={task_id}, provider={task.provider}, old_status='{task.status}', new_status='{new_status}'")
-            provider.update_task_status(task.provider_task_id, new_status)
+            provider.update_task_status(task_id=task.provider_task_id, status=new_status)
             
             # If we get here, the provider update was successful, so update our database
             old_status = task.status
