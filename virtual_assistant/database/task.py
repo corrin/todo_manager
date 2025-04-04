@@ -10,9 +10,10 @@ class Task(db.Model):
     
     # Primary identification
     id = db.Column(db.Integer, primary_key=True)
-    user_email = db.Column(db.String(255), nullable=False, index=True)
+    app_login = db.Column(db.String(255), nullable=False, index=True) # The login identifier for the app user
     
     # Provider identification (composite unique constraint)
+    task_user_email = db.Column(db.String(255), nullable=True, index=True) # Email associated with the task provider account (e.g., Google account email for Google Tasks)
     provider = db.Column(db.String(50), nullable=False)  # 'todoist', 'google_tasks', 'outlook', 'sqlite'
     provider_task_id = db.Column(db.String(255), nullable=False)  # ID from the provider
     
@@ -41,15 +42,17 @@ class Task(db.Model):
     
     # Composite unique constraint
     __table_args__ = (
-        db.UniqueConstraint('user_email', 'provider', 'provider_task_id', name='uq_user_provider_task'),
+        # Ensure a task from a specific provider account for a specific app user is unique
+        db.UniqueConstraint('app_login', 'task_user_email', 'provider', 'provider_task_id', name='uq_app_login_task_user_provider_task'),
     )
     
     @classmethod
-    def create_or_update_from_provider_task(cls, user_email, provider, provider_task):
+    def create_or_update_from_provider_task(cls, app_login, task_user_email, provider, provider_task):
         """Create or update a task from provider data.
         
         Args:
-            user_email: The user's email
+            app_login: The user's login identifier for this application
+            task_user_email: The email associated with the task provider account
             provider: Provider name ('todoist', 'google_tasks', etc.)
             provider_task: Task object from the provider
             
@@ -75,10 +78,17 @@ class Task(db.Model):
         
         # Look for existing task with same provider/provider_task_id
         existing_task = cls.query.filter_by(
-            user_email=user_email,
+            app_login=app_login,
             provider=provider,
             provider_task_id=provider_task.id
         ).first()
+        # TODO: Decide if we should also filter by task_user_email here if it's provided and not null?
+        # existing_task = cls.query.filter_by(
+        #     app_login=app_login,
+        #     task_user_email=task_user_email,
+        #     provider=provider,
+        #     provider_task_id=provider_task.id
+        # ).first()
         
         if existing_task:
             logger.debug(f"[SYNC] Found existing task in database: id={existing_task.id}, status='{existing_task.status}'")
@@ -114,7 +124,7 @@ class Task(db.Model):
                 
                 # Update task content
                 existing_task.title = provider_task.title
-                existing_task.status = provider_task.status  # Always update status
+                existing_task.status = provider_task.status
                 existing_task.due_date = provider_task.due_date
                 existing_task.priority = provider_task.priority
                 existing_task.project_id = provider_task.project_id
@@ -123,6 +133,9 @@ class Task(db.Model):
                 existing_task.section_id = getattr(provider_task, 'section_id', None)
                 existing_task.content_hash = content_hash
                 existing_task.last_synced = datetime.utcnow()
+                # Update task_user_email if it has changed or wasn't set before
+                if existing_task.task_user_email != task_user_email:
+                     existing_task.task_user_email = task_user_email
                 
                 db.session.commit()
                 updated = True
@@ -131,7 +144,8 @@ class Task(db.Model):
         else:
             # Create new task
             new_task = cls(
-                user_email=user_email,
+                app_login=app_login,
+                task_user_email=task_user_email,
                 provider=provider,
                 provider_task_id=provider_task.id,
                 title=provider_task.title,
@@ -156,17 +170,17 @@ class Task(db.Model):
             return new_task, True
     
     @classmethod
-    def sync_task_deletions(cls, user_email, provider, current_provider_task_ids):
+    def sync_task_deletions(cls, app_login, provider, current_provider_task_ids):
         """Remove tasks that no longer exist in the provider.
         
         Args:
-            user_email: The user's email
+            app_login: The user's login identifier
             provider: Provider name
             current_provider_task_ids: List of current task IDs from the provider
         """
         # Find tasks in our database that aren't in the current provider list
         deleted_tasks = cls.query.filter(
-            cls.user_email == user_email,
+            cls.app_login == app_login,
             cls.provider == provider,
             ~cls.provider_task_id.in_(current_provider_task_ids)
         ).all()
@@ -178,22 +192,22 @@ class Task(db.Model):
         db.session.commit()
     
     @classmethod
-    def get_user_tasks_by_list(cls, user_email):
+    def get_user_tasks_by_list(cls, app_login):
         """Get prioritized and unprioritized task lists for a user.
         
         Args:
-            user_email: The user's email
+            app_login: The user's login identifier
             
         Returns:
             tuple: (prioritized_tasks, unprioritized_tasks)
         """
         prioritized = cls.query.filter_by(
-            user_email=user_email, 
+            app_login=app_login,
             list_type='prioritized'
         ).order_by(cls.position).all()
         
         unprioritized = cls.query.filter_by(
-            user_email=user_email, 
+            app_login=app_login,
             list_type='unprioritized'
         ).order_by(cls.position).all()
         
@@ -223,14 +237,14 @@ class Task(db.Model):
             if position is None:
                 # Find the highest position in the destination list
                 max_position_result = db.session.query(db.func.max(cls.position))\
-                    .filter_by(user_email=task.user_email, list_type=destination).first()
+                    .filter_by(app_login=task.app_login, list_type=destination).first()
                 max_position = max_position_result[0] if max_position_result[0] is not None else -1
                 position = max_position + 1
             
             # Update positions of other tasks in the destination list
             if not same_list or position < task.position:
                 cls.query.filter(
-                    cls.user_email == task.user_email,
+                    cls.app_login == task.app_login,
                     cls.list_type == destination,
                     cls.id != task_id,
                     cls.position >= position
@@ -244,7 +258,7 @@ class Task(db.Model):
             elif same_list and position > task.position:
                 # When moving later in same list, account for the shift
                 tasks_between = cls.query.filter(
-                    cls.user_email == task.user_email,
+                    cls.app_login == task.app_login,
                     cls.list_type == destination,
                     cls.position > task.position,
                     cls.position <= position
@@ -276,11 +290,11 @@ class Task(db.Model):
         return cls.move_task(task_id, list_type)
     
     @classmethod
-    def update_task_order(cls, user_email, list_type, task_positions):
+    def update_task_order(cls, app_login, list_type, task_positions):
         """Update the order of multiple tasks in a list.
         
         Args:
-            user_email: The user's email
+            app_login: The user's login identifier
             list_type: 'prioritized' or 'unprioritized'
             task_positions: Dict mapping task IDs to positions
         """
@@ -289,7 +303,7 @@ class Task(db.Model):
         
         try:
             for task_id, position in task_positions.items():
-                cls.query.filter_by(id=task_id, user_email=user_email).update({
+                cls.query.filter_by(id=task_id, app_login=app_login).update({
                     'list_type': list_type,
                     'position': position
                 })
@@ -305,7 +319,9 @@ class Task(db.Model):
     def to_dict(self):
         """Convert task to dictionary representation."""
         return {
-            'id': self.id,
+            'id': self.id, # This is the internal DB id, maybe rename to db_id?
+            'app_login': self.app_login,
+            'task_user_email': self.task_user_email,
             'provider': self.provider,
             'provider_task_id': self.provider_task_id,
             'title': self.title,

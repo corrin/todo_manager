@@ -136,7 +136,7 @@ class O365CalendarProvider(CalendarProvider):
         Used when the user wants to connect a calendar for the first time.
         
         Parameters:
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             tuple: (None, auth_url) where auth_url is the URL to redirect to for auth
@@ -156,8 +156,8 @@ class O365CalendarProvider(CalendarProvider):
         logger.debug(f"O365 scopes: {self.scopes}")
         logger.debug(f"O365 authority: {self.authority}")
         
-        # Store the app user email in session for use in callback
-        session['user_email'] = app_login
+        # Store the app login in session for use in callback
+        session['app_login'] = app_login
         
         # Generate state for CSRF protection
         state = str(uuid.uuid4())
@@ -251,7 +251,7 @@ class O365CalendarProvider(CalendarProvider):
         """
         # Store account details in session for callback
         session['o365_calendar_email'] = calendar_email
-        session['user_email'] = app_login
+        session['app_login'] = app_login
         
         # Generate state for CSRF protection
         state = str(uuid.uuid4())
@@ -276,7 +276,7 @@ class O365CalendarProvider(CalendarProvider):
         Parameters:
             calendar_email (str): The email address of the O365 Calendar account to reauthenticate.
                                  This is the actual O365 account email.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             tuple: (credentials, None) if token refresh successful,
@@ -448,7 +448,7 @@ class O365CalendarProvider(CalendarProvider):
         
         Parameters:
             calendar_email (str): The email address of the calendar to retrieve meetings from.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
 
         Returns:
             A list of meeting dictionaries containing:
@@ -650,7 +650,7 @@ class O365CalendarProvider(CalendarProvider):
             calendar_email (str): The email address of the calendar to create the block in.
             meeting_data (dict): The original meeting data.
             original_event_id (str): The ID of the original event this busy block is based on.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
 
         Returns:
             str: The meeting ID if created successfully.
@@ -718,7 +718,7 @@ class O365CalendarProvider(CalendarProvider):
             meeting_details (dict): Dictionary containing meeting details.
                 Required keys: 'subject', 'start_time', 'end_time', 'calendar_email'
                 Optional: 'description', 'location', 'attendees'
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
                 
         Returns:
             dict: Dictionary with meeting details if successful.
@@ -846,13 +846,13 @@ class O365CalendarProvider(CalendarProvider):
         Parameters:
             calendar_email (str): The email address of the calendar account.
             credentials (dict): The credentials to store.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Raises:
             Exception: If storing credentials fails for any reason
         """
         if not app_login:
-            error_msg = "No user email provided when storing credentials" 
+            error_msg = "No app login provided when storing credentials"
             logger.error(error_msg)
             raise Exception(error_msg)
 
@@ -911,7 +911,7 @@ class O365CalendarProvider(CalendarProvider):
         
         Parameters:
             calendar_email (str): The email address of the calendar to get credentials for.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             dict: Credential dictionary if found and valid
@@ -924,7 +924,7 @@ class O365CalendarProvider(CalendarProvider):
                      - If account is already marked as needing reauth
         """
         if not app_login:
-            error_msg = "No user email provided when getting credentials"
+            error_msg = "No app login provided when getting credentials"
             logger.error(f"❌ AUTH ISSUE: {error_msg}")
             raise Exception(error_msg)
             
@@ -1000,15 +1000,15 @@ class O365CalendarProvider(CalendarProvider):
                 logger.error(error_msg)
                 raise Exception(error_msg)
                 
-            user_email = user.user_principal_name
+            graph_user_principal_name = user.user_principal_name
             
-            if not user_email:
-                error_msg = "User email not found in Graph API response"
+            if not graph_user_principal_name:
+                error_msg = "User principal name not found in Graph API response"
                 logger.error(error_msg)
                 raise Exception(error_msg)
                 
-            logger.info(f"Successfully retrieved O365 email: {user_email}")
-            return user_email
+            logger.info(f"Successfully retrieved O365 user principal name: {graph_user_principal_name}")
+            return graph_user_principal_name
             
         except Exception as e:
             error_msg = f"Error getting O365 email: {str(e)}"
@@ -1115,7 +1115,7 @@ class O365CalendarProvider(CalendarProvider):
         
         Parameters:
             redirect_uri (str): The URI to redirect to after authentication.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             tuple: (None, auth_url) where auth_url is the authorization URL to redirect the user to.
@@ -1131,8 +1131,8 @@ class O365CalendarProvider(CalendarProvider):
             
         logger.debug(f"Initiating O365 auth flow with redirect URI: {redirect_uri}")
         
-        # Store the app user email in session
-        session['user_email'] = app_login
+        # Store the app login in session
+        session['app_login'] = app_login
             
         try:
             # Create the authorization flow

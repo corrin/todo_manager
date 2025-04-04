@@ -19,7 +19,7 @@ from asgiref.sync import async_to_sync
 from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
 from virtual_assistant.meetings.o365_calendar_provider import O365CalendarProvider
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.utils.user_manager import UserManager
+from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.database.calendar_account import CalendarAccount
 from virtual_assistant.utils.settings import Settings
 from virtual_assistant.database.database import db
@@ -62,7 +62,7 @@ def manage_calendar_accounts():
 def set_primary_account():
     """Set a calendar account as the primary account."""
     try:
-        email = session.get("user_email")
+        app_login = session.get("app_login")
         
         provider = request.form.get("provider")
         calendar_email = request.form.get("email")
@@ -74,7 +74,7 @@ def set_primary_account():
             return render_template("error.html", error="Provider and email are required", title="Invalid Request")
         
         # Set the account as primary
-        success = CalendarAccount.set_as_primary(calendar_email, provider, email)
+        success = CalendarAccount.set_as_primary(calendar_email, provider, app_login)
         
         if success:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -98,7 +98,7 @@ def set_primary_account():
 def remove_calendar_account():
     """Remove a calendar account."""
     try:
-        email = session.get("user_email")
+        app_login = session.get("app_login")
         
         provider_name = request.form.get("provider")
         calendar_email = request.form.get("email")
@@ -115,7 +115,7 @@ def remove_calendar_account():
             existing = CalendarAccount.query.filter_by(
                 calendar_email=calendar_email,
                 provider=provider_name,
-                app_login=email
+                app_login=app_login
             ).first()
             
             if existing:
@@ -124,14 +124,14 @@ def remove_calendar_account():
                 # Check if this is the primary account
                 was_primary = existing.is_primary
                 
-                CalendarAccount.delete_by_email_and_provider(calendar_email, provider_name, email)
+                CalendarAccount.delete_by_email_and_provider(calendar_email, provider_name, app_login)
                 logger.info(f"Successfully deleted calendar account from database: {calendar_email} ({provider_name})")
                 
                 # Verify deletion
                 verify = CalendarAccount.query.filter_by(
                     calendar_email=calendar_email,
                     provider=provider_name,
-                    app_login=email
+                    app_login=app_login
                 ).first()
                 if verify:
                     logger.error(f"Account still exists after deletion attempt: {calendar_email}")
@@ -148,14 +148,14 @@ def remove_calendar_account():
                 
                 # If this was the primary account, set another account as primary if one exists
                 if was_primary:
-                    remaining_accounts = CalendarAccount.get_accounts_for_user(email)
+                    remaining_accounts = CalendarAccount.get_accounts_for_user(app_login)
                     if remaining_accounts:
                         # Set the first remaining account as primary
                         first_account = remaining_accounts[0]
                         CalendarAccount.set_as_primary(
                             first_account.calendar_email,
                             first_account.provider,
-                            email
+                            app_login
                         )
                         logger.info(f"Set {first_account.calendar_email} as new primary account after deleting primary")
                 
@@ -179,10 +179,10 @@ def remove_calendar_account():
 def reauth_calendar_account():
     """Reauthorize a calendar account."""
     try:
-        app_login = session.get("user_email")
+        app_login = session.get("app_login")
         
         provider_name = request.args.get("provider")
-        calendar_email = request.args.get("email")
+        calendar_email = request.args.get("calendar_email") 
         
         if provider_name not in providers:
             flash("Invalid calendar provider.", "error")
@@ -241,7 +241,7 @@ def reauth_calendar_account():
 def authenticate_google_calendar():
     """Initiate Google Calendar authentication."""
     try:
-        app_login = session.get("user_email")
+        app_login = session.get("app_login")
         
         # Store referrer URL for later redirect
         referrer = request.referrer
@@ -267,7 +267,7 @@ def authenticate_google_calendar():
 def authenticate_o365_calendar():
     """Initiate O365 Calendar authentication."""
     try:
-        app_login = session.get("user_email")
+        app_login = session.get("app_login")
         
         # Store referrer URL for later redirect
         referrer = request.referrer
@@ -298,7 +298,7 @@ def google_authenticate():
     google_provider = GoogleCalendarProvider()
     provider="google"
     
-    app_login = session.get("user_email")
+    app_login = session.get("app_login")
     
     try:
         credentials = google_provider.handle_oauth_callback(request.url, app_login)
@@ -346,7 +346,7 @@ def o365_authenticate():
     
     o365_provider = O365CalendarProvider()
     
-    app_login = session.get("user_email")
+    app_login = session.get("app_login")
     
     try:
         # Handle the callback synchronously by wrapping the async call
@@ -382,7 +382,7 @@ def o365_authenticate():
 @meetings_bp.route("/debug/<email>")
 def debug_meetings(email):
     """Debug endpoint to test calendar access."""
-    app_login = session.get('user_email')
+    app_login = session.get('app_login')
     
     google_provider = GoogleCalendarProvider()
     try:
@@ -396,7 +396,7 @@ def debug_meetings(email):
 @meetings_bp.route("/sync")
 def sync_meetings():
     """Sync meetings from all connected calendars."""
-    app_login = session.get('user_email')
+    app_login = session.get('app_login')
     
     results = {
         'success': [],
@@ -565,7 +565,7 @@ def test_route():
 def refresh_google_calendar(calendar_email):
     """Refresh Google Calendar token."""
     try:
-        app_login = session.get("user_email")
+        app_login = session.get("app_login")
         
         # Get the account
         account = CalendarAccount.get_by_email_provider_and_user(
@@ -631,7 +631,7 @@ def refresh_google_calendar(calendar_email):
 def refresh_o365_calendar(calendar_email):
     """Refresh O365 Calendar token."""
     try:
-        app_login = session.get("user_email")
+        app_login = session.get("app_login")
         
         # Get the account
         account = CalendarAccount.get_by_email_provider_and_user(
@@ -714,7 +714,7 @@ def refresh_o365_calendar(calendar_email):
 @meetings_bp.route("/sync_single_calendar/<provider>/<calendar_email>")
 def sync_single_calendar(provider, calendar_email):
     """Sync meetings from a single calendar that was just authenticated."""
-    app_login = session.get('user_email')
+    app_login = session.get('app_login')
     
     # Check for original referrer in session
     original_referrer = session.pop('calendar_auth_referrer', None)

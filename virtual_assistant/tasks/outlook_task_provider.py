@@ -27,11 +27,13 @@ class OutlookTaskProvider(TaskProvider):
     def _get_provider_name(self) -> str:
         return "outlook"
 
-    def _initialize_client(self, task_user_email):
+    def _initialize_client(self, app_login, task_user_email):
         """Initialize or refresh the Microsoft Graph client using existing O365 credentials."""
         if self.client is None:
-            # Get the O365 account for this user
-            account = CalendarAccount.get_by_email_and_provider(task_user_email, 'o365')
+            # Get the O365 account for this specific app_login and task_user_email
+            account = CalendarAccount.get_by_email_provider_and_user(
+                calendar_email=task_user_email, provider='o365', app_login=app_login
+            )
             
             if account and account.token:  # Using token instead of access_token
                 # Create a credential using the existing access token
@@ -39,34 +41,38 @@ class OutlookTaskProvider(TaskProvider):
                 
                 # Create a Graph client using the credential
                 self.client = GraphServiceClient(credential)
-                logger.debug(f"Initialized Microsoft Graph client for {task_user_email} using existing O365 credentials")
+                logger.debug(f"Initialized Microsoft Graph client for app_login '{app_login}' / task_user_email '{task_user_email}' using existing O365 credentials")
             else:
-                logger.warning(f"No O365 account found for {task_user_email} or missing token")
+                logger.warning(f"No O365 account found for app_login '{app_login}' / task_user_email '{task_user_email}' or missing token")
 
-    def authenticate(self, task_user_email):
-        """Check if we have valid O365 credentials and return auth URL if needed."""
-        # Check if the user has an O365 account
-        account = CalendarAccount.get_by_email_and_provider(task_user_email, 'o365')
+    def authenticate(self, app_login, task_user_email):
+        """Check if we have valid O365 credentials for the user/account and return auth URL if needed."""
+        # Check if the user has an O365 account linked
+        account = CalendarAccount.get_by_email_provider_and_user(
+            calendar_email=task_user_email, provider='o365', app_login=app_login
+        )
         
         if not account:
-            logger.info(f"No O365 account found for {email}")
+            logger.info(f"No O365 account found for app_login '{app_login}' / task_user_email '{task_user_email}'")
+            # Redirect to the general O365 auth flow
             return self.provider_name, redirect(url_for('meetings.authenticate_o365_calendar'))
         
         # Check if the account needs reauthorization
         if account.needs_reauth:
-            logger.info(f"O365 account for {task_user_email} needs reauthorization")
-            return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='o365', email=account.calendar_email))
+            logger.info(f"O365 account for app_login '{app_login}' / task_user_email '{task_user_email}' needs reauthorization")
+            # Redirect to reauth specific account, using 'calendar_email' parameter
+            return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='o365', calendar_email=account.calendar_email))
         
         # Test the credentials by initializing the client
         try:
-            self._initialize_client(task_user_email)
+            self._initialize_client(app_login=app_login, task_user_email=task_user_email)
             if not self.client:
                 raise Exception("Failed to initialize Microsoft Graph client")
                 
-            logger.debug(f"O365 credentials valid for {task_user_email}")
+            logger.debug(f"O365 credentials valid for app_login '{app_login}' / task_user_email '{task_user_email}'")
             return None
         except Exception as e:
-            logger.error(f"O365 credentials invalid for {task_user_email}: {e}")
+            logger.error(f"O365 credentials invalid for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
             
             # Mark the account as needing reauthorization
             if account:
@@ -75,11 +81,11 @@ class OutlookTaskProvider(TaskProvider):
                 
             return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='o365', email=account.calendar_email))
 
-    def get_tasks(self, task_user_email) -> List[Task]:
+    def get_tasks(self, app_login, task_user_email) -> List[Task]:
         """Get all tasks from Outlook using Microsoft Graph API."""
-        self._initialize_client(task_user_email)
+        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Microsoft Graph client for {task_user_email}")
+            raise Exception(f"No Microsoft Graph client for app_login '{app_login}' / task_user_email '{task_user_email}'")
 
         try:
             # Get all task lists (folders)
@@ -94,7 +100,7 @@ class OutlookTaskProvider(TaskProvider):
                     {"id": "list1", "displayName": "Work"},
                     {"id": "list2", "displayName": "Personal"}
                 ]
-                logger.debug(f"Retrieved {len(task_lists)} task lists for {email}")
+                logger.debug(f"Retrieved {len(task_lists)} task lists for app_login '{app_login}' / task_user_email '{task_user_email}'")
             except Exception as e:
                 logger.warning(f"Error getting Outlook task lists: {e}")
                 task_lists = [{"id": "default", "displayName": "Tasks"}]
@@ -204,17 +210,17 @@ class OutlookTaskProvider(TaskProvider):
                 )
                 tasks.append(task)
             
-            logger.debug(f"Retrieved {len(tasks)} tasks for {task_user_email}")
+            logger.debug(f"Retrieved {len(tasks)} tasks for app_login '{app_login}' / task_user_email '{task_user_email}'")
             return tasks
         except Exception as e:
-            logger.error(f"Error getting Outlook tasks: {e}")
+            logger.error(f"Error getting Outlook tasks for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
             raise
 
-    def get_ai_instructions(self, task_user_email) -> Optional[str]:
+    def get_ai_instructions(self, app_login, task_user_email) -> Optional[str]:
         """Get the AI instruction task content."""
-        self._initialize_client(task_user_email)
+        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Microsoft Graph client for {task_user_email}")
+            raise Exception(f"No Microsoft Graph client for app_login '{app_login}' / task_user_email '{task_user_email}'")
 
         try:
             # Get all task lists
@@ -250,17 +256,17 @@ class OutlookTaskProvider(TaskProvider):
                 except Exception as e:
                     logger.warning(f"Error searching for instruction task in list {list_id}: {e}")
             
-            logger.warning(f"No AI instruction task found for {task_user_email}")
+            logger.warning(f"No AI instruction task found for app_login '{app_login}' / task_user_email '{task_user_email}'")
             return None
         except Exception as e:
-            logger.error(f"Error getting AI instructions: {e}")
+            logger.error(f"Error getting AI instructions for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
             raise
 
-    def update_task_status(self, task_user_email, task_id: str, status: str) -> bool:
+    def update_task_status(self, app_login, task_user_email, task_id: str, status: str) -> bool:
         """Update task completion status."""
-        self._initialize_client(task_user_email)
+        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Microsoft Graph client for {task_user_email}")
+            raise Exception(f"No Microsoft Graph client for app_login '{app_login}' / task_user_email '{task_user_email}'")
 
         try:
             # Map our status to Outlook status
@@ -279,7 +285,7 @@ class OutlookTaskProvider(TaskProvider):
                     # In a real implementation, we would update the task status using:
                     # self.client.me.todo.tasks.by_todo_task_id(task_id).patch({"status": outlook_status})
                     
-                    logger.debug(f"Updated task {task_id} status to {status}")
+                    logger.debug(f"Updated task {task_id} status to {status} for app_login '{app_login}' / task_user_email '{task_user_email}'")
                     return True
                 else:
                     raise Exception(f"Task {task_id} not found in Outlook Tasks")
@@ -289,7 +295,7 @@ class OutlookTaskProvider(TaskProvider):
                 if "not found" in error_msg or "404" in error_msg:
                     raise Exception(f"Task {task_id} not found in Outlook Tasks. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
                 # For other errors, log and propagate
-                logger.error(f"Error updating Outlook Tasks task status: {task_error}")
+                logger.error(f"Error updating Outlook Tasks task status for app_login '{app_login}' / task_user_email '{task_user_email}': {task_error}")
                 raise
                 
         except Exception as e:
@@ -304,14 +310,14 @@ class OutlookTaskProvider(TaskProvider):
                 raise Exception("Network error when connecting to Outlook Tasks. Please check your internet connection.")
             else:
                 # If not a specific known error, log the original error and pass it along
-                logger.error(f"Error updating task status: {e}")
+                logger.error(f"Error updating task status for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
                 raise
 
-    def create_instruction_task(self, task_user_email, instructions: str) -> bool:
+    def create_instruction_task(self, app_login, task_user_email, instructions: str) -> bool:
         """Create or update the AI instruction task."""
-        self._initialize_client(task_user_email)
+        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Microsoft Graph client for {task_user_email}")
+            raise Exception(f"No Microsoft Graph client for app_login '{app_login}' / task_user_email '{task_user_email}'")
 
         try:
             # Get the default task list
@@ -340,7 +346,7 @@ class OutlookTaskProvider(TaskProvider):
                 # Update existing task
                 # In a real implementation, we would use:
                 # self.client.me.todo.tasks.by_todo_task_id(instruction_task_id).patch({"body": {"content": instructions}})
-                logger.debug(f"Updated AI instruction task for {task_user_email}")
+                logger.debug(f"Updated AI instruction task for app_login '{app_login}' / task_user_email '{task_user_email}'")
             else:
                 # Create new task
                 # In a real implementation, we would use:
@@ -350,9 +356,24 @@ class OutlookTaskProvider(TaskProvider):
                 #     "importance": "high"
                 # }
                 # self.client.me.todo.lists.by_todo_task_list_id(default_list_id).tasks.post(new_task)
-                logger.debug(f"Created AI instruction task for {task_user_email}")
+                logger.debug(f"Created AI instruction task for app_login '{app_login}' / task_user_email '{task_user_email}'")
             
             return True
         except Exception as e:
-            logger.error(f"Error managing instruction task: {e}")
+            logger.error(f"Error managing instruction task for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
             raise
+
+    # --- Credential Management (Not Applicable for OAuth Providers) ---
+
+    def get_credentials(self, app_login, task_user_email):
+        """Credentials for Outlook are handled via CalendarAccount (OAuth)."""
+        logger.debug("OutlookTaskProvider.get_credentials called but not implemented (uses CalendarAccount)")
+        # This method might be called by generic logic but isn't used for OAuth flow.
+        # Returning None is safer than raising NotImplementedError if called unexpectedly.
+        return None
+
+    def store_credentials(self, app_login, task_user_email, credentials):
+        """Credentials for Outlook are handled via CalendarAccount (OAuth)."""
+        logger.error("OutlookTaskProvider.store_credentials should not be called directly.")
+        # Raise error because storing credentials here bypasses the OAuth flow.
+        raise NotImplementedError("Outlook credentials should be stored via the OAuth flow in CalendarAccount.")

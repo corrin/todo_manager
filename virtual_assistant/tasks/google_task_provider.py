@@ -26,57 +26,67 @@ class GoogleTaskProvider(TaskProvider):
     def _get_provider_name(self) -> str:
         return "google_tasks"
 
-    def _initialize_client(self, task_user_email):
+    def _initialize_client(self, app_login, task_user_email):
         """Initialize or refresh the Google Tasks client using existing Google credentials."""
         if self.client is None:
-            # Get the Google account for this user
-            account = CalendarAccount.get_by_email_and_provider(task_user_email, 'google')
+            # Get the Google account for this specific app_login and task_user_email
+            account = CalendarAccount.get_by_email_provider_and_user(
+                calendar_email=task_user_email, provider='google', app_login=app_login
+            )
             
             if account and not account.needs_reauth:
                 # In a real implementation, we would create a Google Tasks client
                 # using the existing credentials
                 self.client = True  # Stub client
-                logger.debug(f"Initialized Google Tasks client for {task_user_email} using existing Google credentials")
+                logger.debug(f"Initialized Google Tasks client for app_login '{app_login}' / task_user_email '{task_user_email}' using existing Google credentials")
             else:
-                logger.warning(f"No Google account found for {task_user_email} or needs reauth")
+                logger.warning(f"No Google account found for app_login '{app_login}' / task_user_email '{task_user_email}' or needs reauth")
 
-    def authenticate(self, task_user_email):
-        """Check if we have valid Google credentials and return auth URL if needed."""
-        # Check if the user has a Google account
-        account = CalendarAccount.get_by_email_and_provider(task_user_email, 'google')
+    def authenticate(self, app_login, task_user_email):
+        """Check if we have valid Google credentials for the user/account and return auth URL if needed."""
+        # Check if the user has a Google account linked
+        account = CalendarAccount.get_by_email_provider_and_user(
+            calendar_email=task_user_email, provider='google', app_login=app_login
+        )
         
         if not account:
-            logger.info(f"No Google account found for {task_user_email}")
+            logger.info(f"No Google account found for app_login '{app_login}' / task_user_email '{task_user_email}'")
+            # Redirect to the general Google auth flow
             return self.provider_name, redirect(url_for('meetings.authenticate_google_calendar'))
         
         # Check if the account needs reauthorization
         if account.needs_reauth:
-            logger.info(f"Google account for {task_user_email} needs reauthorization")
-            return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='google', email=task_user_email))
+            logger.info(f"Google account for app_login '{app_login}' / task_user_email '{task_user_email}' needs reauthorization")
+            # Redirect to reauth specific account
+            # Redirect to reauth specific account, using 'calendar_email' parameter
+            # Note: task_user_email holds the calendar email for Google Tasks provider
+            return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='google', calendar_email=task_user_email))
         
         # Test the credentials by initializing the client
         try:
-            self._initialize_client(task_user_email)
+            self._initialize_client(app_login=app_login, task_user_email=task_user_email)
             if not self.client:
                 raise Exception("Failed to initialize Google Tasks client")
                 
-            logger.debug(f"Google credentials valid for {task_user_email}")
+            logger.debug(f"Google credentials valid for app_login '{app_login}' / task_user_email '{task_user_email}'")
             return None
         except Exception as e:
-            logger.error(f"Google credentials invalid for {task_user_email}: {e}")
+            logger.error(f"Google credentials invalid for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
             
             # Mark the account as needing reauthorization
             if account:
                 account.needs_reauth = True
                 account.save()
                 
-            return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='google', email=task_user_email))
+            # Redirect to reauth specific account, using 'calendar_email' parameter
+            # Note: task_user_email holds the calendar email for Google Tasks provider
+            return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='google', calendar_email=task_user_email))
 
-    def get_tasks(self, task_user_email) -> List[Task]:
+    def get_tasks(self, app_login, task_user_email) -> List[Task]:
         """Get all tasks from Google Tasks API."""
-        self._initialize_client(task_user_email)
+        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Google Tasks client for {task_user_email}")
+            raise Exception(f"No Google Tasks client for app_login '{app_login}' / task_user_email '{task_user_email}'")
 
         try:
             # Get all task lists (folders)
@@ -88,7 +98,7 @@ class GoogleTaskProvider(TaskProvider):
                     {"id": "list1", "title": "Work"},
                     {"id": "list2", "title": "Personal"}
                 ]
-                logger.debug(f"Retrieved {len(task_lists)} task lists for {task_user_email}")
+                logger.debug(f"Retrieved {len(task_lists)} task lists for app_login '{app_login}' / task_user_email '{task_user_email}'")
             except Exception as e:
                 logger.warning(f"Error getting Google task lists: {e}")
                 task_lists = [{"id": "default", "title": "My Tasks"}]
@@ -178,17 +188,17 @@ class GoogleTaskProvider(TaskProvider):
                 )
                 tasks.append(task)
             
-            logger.debug(f"Retrieved {len(tasks)} tasks for {task_user_email}")
+            logger.debug(f"Retrieved {len(tasks)} tasks for app_login '{app_login}' / task_user_email '{task_user_email}'")
             return tasks
         except Exception as e:
-            logger.error(f"Error getting Google tasks: {e}")
+            logger.error(f"Error getting Google tasks for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
             raise
 
-    def get_ai_instructions(self, task_user_email) -> Optional[str]:
+    def get_ai_instructions(self, app_login, task_user_email) -> Optional[str]:
         """Get the AI instruction task content."""
-        self._initialize_client(task_user_email)
+        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Google Tasks client for {task_user_email}")
+            raise Exception(f"No Google Tasks client for app_login '{app_login}' / task_user_email '{task_user_email}'")
 
         try:
             # Get all task lists
@@ -217,17 +227,17 @@ class GoogleTaskProvider(TaskProvider):
                 except Exception as e:
                     logger.warning(f"Error searching for instruction task in list {list_id}: {e}")
             
-            logger.warning(f"No AI instruction task found for {task_user_email}")
+            logger.warning(f"No AI instruction task found for app_login '{app_login}' / task_user_email '{task_user_email}'")
             return None
         except Exception as e:
-            logger.error(f"Error getting AI instructions: {e}")
+            logger.error(f"Error getting AI instructions for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
             raise
 
-    def update_task_status(self, task_user_email, task_id: str, status: str) -> bool:
+    def update_task_status(self, app_login, task_user_email, task_id: str, status: str) -> bool:
         """Update task completion status."""
-        self._initialize_client(task_user_email)
+        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Google Tasks client for {task_user_email}")
+            raise Exception(f"No Google Tasks client for app_login '{app_login}' / task_user_email '{task_user_email}'")
 
         try:
             # Map our status to Google Tasks status
@@ -245,7 +255,7 @@ class GoogleTaskProvider(TaskProvider):
                     # In a real implementation, we would update the task status
                     # using the Google Tasks API
                     
-                    logger.debug(f"Updated task {task_id} status to {status}")
+                    logger.debug(f"Updated task {task_id} status to {status} for app_login '{app_login}' / task_user_email '{task_user_email}'")
                     return True
                 else:
                     raise Exception(f"Task {task_id} not found in Google Tasks")
@@ -255,7 +265,7 @@ class GoogleTaskProvider(TaskProvider):
                 if "not found" in error_msg or "404" in error_msg:
                     raise Exception(f"Task {task_id} not found in Google Tasks. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
                 # For other errors, log and propagate
-                logger.error(f"Error updating Google Tasks task status: {task_error}")
+                logger.error(f"Error updating Google Tasks task status for app_login '{app_login}' / task_user_email '{task_user_email}': {task_error}")
                 raise
                 
         except Exception as e:
@@ -270,14 +280,29 @@ class GoogleTaskProvider(TaskProvider):
                 raise Exception("Network error when connecting to Google Tasks. Please check your internet connection.")
             else:
                 # If not a specific known error, log the original error and pass it along
-                logger.error(f"Error updating task status: {e}")
+                logger.error(f"Error updating task status for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
                 raise
+    
+        # --- Credential Management (Not Applicable for OAuth Providers) ---
+    
+        def get_credentials(self, app_login, task_user_email):
+            """Credentials for Google Tasks are handled via CalendarAccount (OAuth)."""
+            logger.debug("GoogleTaskProvider.get_credentials called but not implemented (uses CalendarAccount)")
+            # This method might be called by generic logic but isn't used for OAuth flow.
+            # Returning None is safer than raising NotImplementedError if called unexpectedly.
+            return None
+    
+        def store_credentials(self, app_login, task_user_email, credentials):
+            """Credentials for Google Tasks are handled via CalendarAccount (OAuth)."""
+            logger.error("GoogleTaskProvider.store_credentials should not be called directly.")
+            # Raise error because storing credentials here bypasses the OAuth flow.
+            raise NotImplementedError("Google Tasks credentials should be stored via the OAuth flow in CalendarAccount.")
 
-    def create_instruction_task(self, task_user_email, instructions: str) -> bool:
+    def create_instruction_task(self, app_login, task_user_email, instructions: str) -> bool:
         """Create or update the AI instruction task."""
-        self._initialize_client(task_user_email)
+        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Google Tasks client for {task_user_email}")
+            raise Exception(f"No Google Tasks client for app_login '{app_login}' / task_user_email '{task_user_email}'")
 
         try:
             # Get the default task list
@@ -302,14 +327,14 @@ class GoogleTaskProvider(TaskProvider):
                 # Update existing task
                 # In a real implementation, we would update the task
                 # using the Google Tasks API
-                logger.debug(f"Updated AI instruction task for {task_user_email}")
+                logger.debug(f"Updated AI instruction task for app_login '{app_login}' / task_user_email '{task_user_email}'")
             else:
                 # Create new task
                 # In a real implementation, we would create a new task
                 # using the Google Tasks API
-                logger.debug(f"Created AI instruction task for {task_user_email}")
+                logger.debug(f"Created AI instruction task for app_login '{app_login}' / task_user_email '{task_user_email}'")
             
             return True
         except Exception as e:
-            logger.error(f"Error managing instruction task: {e}")
+            logger.error(f"Error managing instruction task for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
             raise

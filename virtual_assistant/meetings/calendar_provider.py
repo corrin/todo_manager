@@ -10,7 +10,7 @@ class CalendarProvider(ABC):
         Authenticate with the calendar provider.
         
         Parameters:
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             tuple: (credentials, auth_url) where auth_url is the URL to redirect to for auth
@@ -24,7 +24,7 @@ class CalendarProvider(ABC):
         
         Parameters:
             calendar_email (str): The email address of the calendar account to reauthenticate.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             tuple: (credentials, auth_url) where auth_url is the URL to redirect to for auth
@@ -38,7 +38,7 @@ class CalendarProvider(ABC):
         
         Parameters:
             callback_url (str): The callback URL with authentication code
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             The calendar email or credentials object (varies by provider)
@@ -65,7 +65,7 @@ class CalendarProvider(ABC):
         
         Parameters:
             calendar_email (str): The email address of the calendar to retrieve meetings from.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             list: List of meeting dictionaries
@@ -81,7 +81,7 @@ class CalendarProvider(ABC):
             calendar_email (str): The email address to create the block for
             meeting_data (dict): The meeting data to use
             original_event_id (str): ID of the original event
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             str: The ID of the created busy block
@@ -96,7 +96,7 @@ class CalendarProvider(ABC):
         Parameters:
             meeting_details (dict): Dictionary containing meeting details.
                 Required keys vary by provider.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             The ID of the created meeting
@@ -110,7 +110,7 @@ class CalendarProvider(ABC):
         
         Parameters:
             calendar_email (str): The email address of the calendar to get credentials for.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             The credentials object if found
@@ -125,7 +125,7 @@ class CalendarProvider(ABC):
         Parameters:
             calendar_email (str): The email address of the calendar account.
             credentials: The credentials to store.
-            app_login (str): The email address used to log into this app.
+            app_login (str): The login identifier used to log into this app.
             
         Returns:
             bool: True if successful

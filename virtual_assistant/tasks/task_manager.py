@@ -1,7 +1,6 @@
-from virtual_assistant.utils.user_manager import UserManager
+from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.utils.logger import logger
 from .todoist_provider import TodoistProvider
-from .sqlite_provider import SQLiteTaskProvider
 from .outlook_task_provider import OutlookTaskProvider
 from .google_task_provider import GoogleTaskProvider
 
@@ -13,7 +12,6 @@ class TaskManager:
         self.providers = {}
         self.provider_classes = {
             "todoist": TodoistProvider,
-            "sqlite": SQLiteTaskProvider,
             "outlook": OutlookTaskProvider,
             "google_tasks": GoogleTaskProvider,
             # Add other providers here as needed
@@ -29,12 +27,13 @@ class TaskManager:
             except Exception as e:
                 logger.error(f"Failed to initialize {provider_name} provider: {e}")
 
-    def authenticate(self, email, provider_name=None):
-        """Authenticate with specified or all providers.
-        
+    def authenticate(self, app_login, task_user_email, provider_name=None):
+        """Authenticate with specified or all providers for the given user/account.
+
         Args:
-            email: User's email
-            provider_name: Optional specific provider to authenticate with
+            app_login: The application login identifier.
+            task_user_email: The email associated with the task provider account.
+            provider_name: Optional specific provider to authenticate with.
         
         Returns:
             Dict of provider_name: auth_result pairs
@@ -48,40 +47,49 @@ class TaskManager:
 
         for name, provider in providers_to_check.items():
             try:
-                result = provider.authenticate(email)
-                if result:
+                # Call provider authenticate with correct arguments
+                if name == 'todoist':
+                    # TodoistProvider.authenticate expects only app_login
+                    result = provider.authenticate(app_login=app_login)
+                else:
+                    # Other providers (Outlook, Google) expect both
+                    result = provider.authenticate(app_login=app_login, task_user_email=task_user_email)
+
+                if result: # result is (provider_name, redirect_url) if auth needed
                     auth_results[name] = result
-                logger.debug(f"Authentication result for {name}: {result is not None}")
+                logger.debug(f"Authentication result for {name} ({app_login}/{task_user_email}): {result is not None}")
             except Exception as e:
-                logger.error(f"Error authenticating with {name}: {e}")
+                logger.error(f"Error authenticating with {name} ({app_login}/{task_user_email}): {e}")
                 auth_results[name] = None
 
         return auth_results
 
-    def get_tasks(self, email, provider_name=None):
-        """Get tasks from specified or default provider.
-        
-        Args:
-            email: User's email
-            provider_name: Optional specific provider to use
-        
-        Returns:
-            List of tasks
-        """
-        if provider_name and provider_name not in self.providers:
-            raise ValueError(f"Unknown task provider: {provider_name}")
+    def get_tasks(self, app_login, task_user_email, provider_name):
+        """Get tasks from the specified provider for a given user and provider account.
 
-        provider = (
-            self.providers[provider_name]
-            if provider_name
-            else next(iter(self.providers.values()))
-        )
+        Args:
+            app_login: The application login identifier (for credential lookup).
+            task_user_email: The email associated with the task provider account.
+            provider_name: The name of the specific provider to use.
+
+        Returns:
+            List of tasks obtained from the provider.
+
+        Raises:
+            ValueError: If the specified provider is not found.
+            Exception: Propagates exceptions raised by the provider's get_tasks method.
+        """
+        # Get the provider instance; raises ValueError if not found.
+        provider = self.get_provider(provider_name)
 
         try:
-            return provider.get_tasks(email)
+            # Call the specific provider's get_tasks method.
+            # Assuming all provider methods will be updated to accept both arguments.
+            return provider.get_tasks(app_login=app_login, task_user_email=task_user_email)
         except Exception as e:
-            logger.error(f"Error getting tasks: {e}")
-            raise
+            # Log provider-specific errors and re-raise
+            logger.error(f"Error getting tasks from provider '{provider_name}' for user '{app_login}' / account '{task_user_email}': {e}")
+            raise # Re-raise the original exception to be handled by the caller
 
     def get_ai_instructions(self, email, provider_name=None):
         """Get AI instructions from specified or default provider.
@@ -165,14 +173,21 @@ class TaskManager:
         """Get list of available provider names."""
         return list(self.providers.keys())
 
-    def get_provider(self, provider_name, email=None):
+    def get_provider(self, provider_name):
         """Get specific provider instance.
-        
+
         Args:
             provider_name: Name of the provider
-            email: User's email (optional)
-            
+
         Returns:
             The provider instance
+
+        Raises:
+            ValueError: If the provider is not found.
         """
-        return self.providers.get(provider_name)
+        provider = self.providers.get(provider_name)
+        if provider is None:
+            logger.warning(f"Attempted to get non-existent provider: {provider_name}")
+            # Raise ValueError instead of a custom exception
+            raise ValueError(f"Task provider '{provider_name}' not found or configured.")
+        return provider

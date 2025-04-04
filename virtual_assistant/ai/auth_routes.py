@@ -1,5 +1,5 @@
 from flask import Blueprint, request, render_template, redirect, url_for, flash
-from virtual_assistant.utils.user_manager import UserManager
+from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.utils.logger import logger
 from .ai_manager import AIManager
 
@@ -19,13 +19,14 @@ def init_ai_routes():
                 return redirect(url_for('ai_auth.setup_credentials', provider=provider))
             
             try:
-                email = UserManager.get_current_user()
+                app_login = UserDataManager.get_current_user() # Use correct manager and variable name
                 provider_instance = ai_manager.get_provider(provider)
                 if not provider_instance:
                     flash(f'Unknown provider: {provider}')
                     return redirect(url_for('index'))
                 
-                provider_instance.store_credentials(email, {"api_key": api_key})
+                # Assuming AI providers also need app_login for credential storage context
+                provider_instance.store_credentials(app_login, {"api_key": api_key}) # Use app_login
                 flash(f'{provider} credentials saved successfully')
                 return redirect(url_for('index'))
             except Exception as e:

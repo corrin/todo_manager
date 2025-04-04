@@ -1,5 +1,5 @@
 from flask import Blueprint, request, render_template, redirect, url_for, flash, jsonify
-from virtual_assistant.utils.user_manager import UserManager
+from virtual_assistant.database.user_manager import UserDataManager # Correct import
 from virtual_assistant.utils.logger import logger
 from .todoist_provider import TodoistProvider
 
@@ -17,8 +17,12 @@ def init_todoist_routes():
                 return redirect(url_for('settings'))
 
             try:
-                email = UserManager.get_current_user()
-                todoist_provider.store_credentials(email, {"api_key": api_key})
+                app_login = UserDataManager.get_current_user() # Correct manager and variable name
+                # HACK/TODO: Using app_login as task_user_email for file storage key.
+                # Replace when proper credential storage is implemented.
+                task_user_email_for_storage = app_login
+                # Call base class store_credentials with both args
+                todoist_provider.store_credentials(app_login, task_user_email_for_storage, {"api_key": api_key})
                 
                 # Create default AI instruction task if it doesn't exist
                 default_instructions = """AI Instructions:
@@ -27,7 +31,8 @@ def init_todoist_routes():
 - Keep mornings free for focused work
 - Handle urgent tasks within 24 hours"""
                 
-                todoist_provider.create_instruction_task(email, default_instructions)
+                # Update create_instruction_task call signature
+                todoist_provider.create_instruction_task(app_login, task_user_email_for_storage, default_instructions)
                 
                 flash('Todoist credentials saved successfully', 'success')
                 return redirect(url_for('index'))

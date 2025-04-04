@@ -2,7 +2,7 @@
 Routes for Outlook task provider authentication and setup.
 """
 from flask import Blueprint, request, render_template, redirect, url_for, flash, jsonify
-from virtual_assistant.utils.user_manager import UserManager
+from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.utils.logger import logger
 from .outlook_task_provider import OutlookTaskProvider
 
@@ -25,12 +25,12 @@ def init_outlook_routes():
                 return redirect(url_for('outlook_auth.setup_credentials'))
 
             try:
-                email = UserManager.get_current_user()
-                outlook_provider.store_credentials(email, {
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "refresh_token": refresh_token
-                })
+                app_login = UserDataManager.get_current_user()
+                # Remove incorrect call to store_credentials for Outlook
+                # Credentials should be handled via OAuth flow and CalendarAccount
+                logger.warning("Attempted to call store_credentials from outlook_routes setup - this route seems obsolete or incorrect for OAuth.")
+                # We cannot store credentials here as we don't know the task_user_email yet.
+                # The user should authenticate via the meetings blueprint for O365.
                 
                 # Create default AI instruction task if it doesn't exist
                 default_instructions = """AI Instructions:
@@ -40,8 +40,10 @@ def init_outlook_routes():
 - Handle urgent tasks within 24 hours"""
                 
                 try:
-                    outlook_provider.create_instruction_task(email, default_instructions)
-                    logger.info(f"Created default AI instruction task for {email}")
+                    # Cannot reliably create instruction task here without knowing the specific task_user_email
+                    # This should likely happen after successful OAuth authentication.
+                    # outlook_provider.create_instruction_task(app_login, task_user_email_placeholder, default_instructions)
+                    logger.warning(f"Skipping AI instruction task creation in outlook_routes setup for {app_login} - requires OAuth.")
                 except Exception as e:
                     logger.warning(f"Could not create AI instruction task: {e}")
                 

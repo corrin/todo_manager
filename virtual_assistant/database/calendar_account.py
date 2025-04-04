@@ -27,7 +27,7 @@ class CalendarAccount(db.Model):
     
     __table_args__ = (
         db.UniqueConstraint('app_login', 'calendar_email', 'provider',
-                          name='uq_calendar_account_user_email_provider'),
+                          name='uq_calendar_account_app_login_provider'),
     )
 
     def __init__(self, calendar_email, provider, **kwargs):

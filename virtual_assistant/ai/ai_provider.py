@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from virtual_assistant.utils.user_manager import UserManager
+from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.utils.logger import logger
 import os
 import json
@@ -19,7 +19,7 @@ class AIProvider(ABC):
     def get_credentials(self, email):
         """Get AI provider credentials for the user."""
         logger.debug(f"Retrieving {self.provider_name} credentials for {email}")
-        user_folder = UserManager.get_user_folder()
+        user_folder = UserDataManager.get_user_folder()
         provider_folder = os.path.join(user_folder, self.provider_name)
         credentials_file = os.path.join(provider_folder, f"{email}_credentials.json")
 
@@ -34,7 +34,7 @@ class AIProvider(ABC):
     def store_credentials(self, email, credentials):
         """Store AI provider credentials for the user."""
         logger.debug(f"Storing {self.provider_name} credentials for {email}")
-        user_folder = UserManager.get_user_folder()
+        user_folder = UserDataManager.get_user_folder()
         provider_folder = os.path.join(user_folder, self.provider_name)
 
         if not os.path.exists(provider_folder):
