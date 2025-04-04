@@ -19,14 +19,14 @@ depends_on = None
 def upgrade():
     # Create user table
     op.create_table('user',
-        sa.Column('app_user_email', sa.String(120), nullable=False),
-        sa.PrimaryKeyConstraint('app_user_email')
+        sa.Column('app_login', sa.String(120), nullable=False),
+        sa.PrimaryKeyConstraint('app_login')
     )
     
-    # Populate user table with existing app_user_emails from calendar_account
+    # Populate user table with existing app_logins from calendar_account
     op.execute("""
-        INSERT INTO user (app_user_email)
-        SELECT DISTINCT app_user_email
+        INSERT INTO user (app_login)
+        SELECT DISTINCT app_login
         FROM calendar_account
     """)
 

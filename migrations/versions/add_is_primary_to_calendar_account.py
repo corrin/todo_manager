@@ -26,8 +26,8 @@ def upgrade():
         WITH RankedAccounts AS (
             SELECT 
                 id,
-                app_user_email,
-                ROW_NUMBER() OVER (PARTITION BY app_user_email ORDER BY created_at) as rn
+                app_login,
+                ROW_NUMBER() OVER (PARTITION BY app_login ORDER BY created_at) as rn
             FROM calendar_account
         )
         UPDATE calendar_account

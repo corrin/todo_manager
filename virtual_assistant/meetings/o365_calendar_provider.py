@@ -130,34 +130,34 @@ class O365CalendarProvider(CalendarProvider):
             
         return date_time
 
-    def authenticate(self, app_user_email):
+    def authenticate(self, app_login):
         """
         Initiate authentication to connect a new O365 Calendar account.
         Used when the user wants to connect a calendar for the first time.
         
         Parameters:
-            app_user_email (str): The email address used to log into this app.
+            app_login (str): The email address used to log into this app.
             
         Returns:
             tuple: (None, auth_url) where auth_url is the URL to redirect to for auth
             
         Raises:
-            ValueError: If app_user_email is not provided or authentication fails
+            ValueError: If app_login is not provided or authentication fails
         """
         # FAIL EARLY: Validate required parameters
-        if not app_user_email:
-            error_msg = "app_user_email is required for authentication"
+        if not app_login:
+            error_msg = "app_login is required for authentication"
             logger.error(error_msg)
             raise ValueError(error_msg)
             
-        logger.info(f"Starting O365 authentication for user {app_user_email}")
+        logger.info(f"Starting O365 authentication for user {app_login}")
         logger.debug(f"O365 client_id: {self.client_id}")
         logger.debug(f"O365 redirect_uri: {self.redirect_uri}")
         logger.debug(f"O365 scopes: {self.scopes}")
         logger.debug(f"O365 authority: {self.authority}")
         
         # Store the app user email in session for use in callback
-        session['user_email'] = app_user_email
+        session['user_email'] = app_login
         
         # Generate state for CSRF protection
         state = str(uuid.uuid4())
@@ -193,7 +193,7 @@ class O365CalendarProvider(CalendarProvider):
             logger.exception(e)
             raise ValueError(error_msg)
         
-    async def refresh_token(self, calendar_email, app_user_email):
+    async def refresh_token(self, calendar_email, app_login):
         """
         Try to refresh the token using the refresh token.
         
@@ -204,7 +204,7 @@ class O365CalendarProvider(CalendarProvider):
             Exception: If token refresh fails and should be handled by caller
         """
         account = CalendarAccount.get_by_email_provider_and_user(
-            calendar_email, self.provider_name, app_user_email
+            calendar_email, self.provider_name, app_login
         )
         
         if not account or not account.refresh_token:
@@ -238,11 +238,11 @@ class O365CalendarProvider(CalendarProvider):
             'scopes': account.scopes
         }
         
-        self.store_credentials(calendar_email, credentials, app_user_email)
+        self.store_credentials(calendar_email, credentials, app_login)
         logger.info(f"Token refreshed for {calendar_email}")
         return credentials, None
     
-    def get_auth_url(self, calendar_email, app_user_email):
+    def get_auth_url(self, calendar_email, app_login):
         """
         Get the authorization URL for full reauthentication.
         
@@ -251,7 +251,7 @@ class O365CalendarProvider(CalendarProvider):
         """
         # Store account details in session for callback
         session['o365_calendar_email'] = calendar_email
-        session['user_email'] = app_user_email
+        session['user_email'] = app_login
         
         # Generate state for CSRF protection
         state = str(uuid.uuid4())
@@ -268,7 +268,7 @@ class O365CalendarProvider(CalendarProvider):
         logger.info(f"Created auth URL for {calendar_email}")
         return None, auth_url
     
-    async def reauthenticate(self, calendar_email, app_user_email):
+    async def reauthenticate(self, calendar_email, app_login):
         """
         Reauthenticate an existing O365 Calendar connection.
         First tries to refresh the token, then falls back to full reauthentication if that fails.
@@ -276,30 +276,30 @@ class O365CalendarProvider(CalendarProvider):
         Parameters:
             calendar_email (str): The email address of the O365 Calendar account to reauthenticate.
                                  This is the actual O365 account email.
-            app_user_email (str): The email address used to log into this app.
+            app_login (str): The email address used to log into this app.
             
         Returns:
             tuple: (credentials, None) if token refresh successful,
                   (None, auth_url) if full reauth is needed
         """
-        logger.info(f"Reauthorizing O365 Calendar {calendar_email} for user {app_user_email}")
+        logger.info(f"Reauthorizing O365 Calendar {calendar_email} for user {app_login}")
         
         # First, try to refresh the token
         try:
             if CalendarAccount.get_by_email_provider_and_user(
-                calendar_email, self.provider_name, app_user_email
+                calendar_email, self.provider_name, app_login
             ) and CalendarAccount.get_by_email_provider_and_user(
-                calendar_email, self.provider_name, app_user_email
+                calendar_email, self.provider_name, app_login
             ).refresh_token:
-                return await self.refresh_token(calendar_email, app_user_email)
+                return await self.refresh_token(calendar_email, app_login)
         except Exception as e:
             logger.error(f"Token refresh failed: {str(e)}")
             # Fall back to full reauth
         
         # If refresh failed or was not possible, get auth URL for full reauth
-        return self.get_auth_url(calendar_email, app_user_email)
+        return self.get_auth_url(calendar_email, app_login)
 
-    async def handle_oauth_callback(self, callback_url, app_user_email):
+    async def handle_oauth_callback(self, callback_url, app_login):
         """Handle the OAuth callback from O365."""
         logger.debug(f"O365 OAuth callback handling initiated with URL: {callback_url}")
         
@@ -424,11 +424,11 @@ class O365CalendarProvider(CalendarProvider):
                 
             # Store the credentials
             logger.debug(f"Storing credentials for {email}")
-            self.store_credentials(email, credentials, app_user_email)
+            self.store_credentials(email, credentials, app_login)
             
             # Explicitly set needs_reauth to False since we have a valid token
             account = CalendarAccount.get_by_email_provider_and_user(
-                email, self.provider_name, app_user_email
+                email, self.provider_name, app_login
             )
             if account:
                 account.needs_reauth = False
@@ -442,13 +442,13 @@ class O365CalendarProvider(CalendarProvider):
             logger.error(f"Error retrieving tokens: {str(e)}")
             raise Exception(f"Error retrieving tokens: {str(e)}")
 
-    async def get_meetings(self, calendar_email, app_user_email):
+    async def get_meetings(self, calendar_email, app_login):
         """
         Get meetings for the given calendar email.
         
         Parameters:
             calendar_email (str): The email address of the calendar to retrieve meetings from.
-            app_user_email (str): The email address used to log into this app.
+            app_login (str): The email address used to log into this app.
 
         Returns:
             A list of meeting dictionaries containing:
@@ -464,7 +464,7 @@ class O365CalendarProvider(CalendarProvider):
         Raises:
             Exception: If authentication fails, token is expired, or any other error occurs
         """
-        credentials = self.get_credentials(calendar_email, app_user_email)
+        credentials = self.get_credentials(calendar_email, app_login)
         if not credentials:
             # Account already marked as needing reauth in get_credentials
             raise Exception("Authentication failed: Missing or invalid credentials")
@@ -504,7 +504,7 @@ class O365CalendarProvider(CalendarProvider):
                 logger.info(f"No events found for {calendar_email}")
                 # Token is valid since API call succeeded
                 account = CalendarAccount.get_by_email_provider_and_user(
-                    calendar_email, self.provider_name, app_user_email
+                    calendar_email, self.provider_name, app_login
                 )
                 if account:
                     account.last_sync = datetime.now(timezone.utc)
@@ -549,7 +549,7 @@ class O365CalendarProvider(CalendarProvider):
             
             # Update last sync timestamp on successful API completion
             account = CalendarAccount.get_by_email_provider_and_user(
-                calendar_email, self.provider_name, app_user_email
+                calendar_email, self.provider_name, app_login
             )
             if account:
                 account.last_sync = datetime.now(timezone.utc)
@@ -571,7 +571,7 @@ class O365CalendarProvider(CalendarProvider):
                 logger.error(f"❌ AUTH ISSUE: O365 authentication error for {calendar_email}: {error_msg}")
                 # Mark account as needing reauth
                 account = CalendarAccount.get_by_email_provider_and_user(
-                    calendar_email, self.provider_name, app_user_email
+                    calendar_email, self.provider_name, app_login
                 )
                 if account:
                     account.needs_reauth = True
@@ -642,7 +642,7 @@ class O365CalendarProvider(CalendarProvider):
             }
         return None
 
-    async def create_busy_block(self, calendar_email, meeting_data, original_event_id, app_user_email):
+    async def create_busy_block(self, calendar_email, meeting_data, original_event_id, app_login):
         """
         Create a busy block in the calendar based on an existing meeting.
 
@@ -650,7 +650,7 @@ class O365CalendarProvider(CalendarProvider):
             calendar_email (str): The email address of the calendar to create the block in.
             meeting_data (dict): The original meeting data.
             original_event_id (str): The ID of the original event this busy block is based on.
-            app_user_email (str): The email address used to log into this app.
+            app_login (str): The email address used to log into this app.
 
         Returns:
             str: The meeting ID if created successfully.
@@ -658,7 +658,7 @@ class O365CalendarProvider(CalendarProvider):
         Raises:
             Exception: If credentials are missing or API call fails
         """
-        credentials = self.get_credentials(calendar_email, app_user_email)
+        credentials = self.get_credentials(calendar_email, app_login)
         if not credentials:
             raise Exception(f"No credentials found for {calendar_email}")
 
@@ -710,7 +710,7 @@ class O365CalendarProvider(CalendarProvider):
             logger.error(f"❌ API ERROR: {error_msg}")
             raise Exception(error_msg)
 
-    def create_meeting(self, meeting_details, app_user_email):
+    def create_meeting(self, meeting_details, app_login):
         """
         Create a meeting in the O365 calendar.
         
@@ -718,7 +718,7 @@ class O365CalendarProvider(CalendarProvider):
             meeting_details (dict): Dictionary containing meeting details.
                 Required keys: 'subject', 'start_time', 'end_time', 'calendar_email'
                 Optional: 'description', 'location', 'attendees'
-            app_user_email (str): The email address used to log into this app.
+            app_login (str): The email address used to log into this app.
                 
         Returns:
             dict: Dictionary with meeting details if successful.
@@ -728,9 +728,9 @@ class O365CalendarProvider(CalendarProvider):
         """
         # Use a synchronous implementation to match the base class,
         # but internally use async_to_sync to call our async implementation
-        return async_to_sync(self._create_meeting_async)(meeting_details, app_user_email)
+        return async_to_sync(self._create_meeting_async)(meeting_details, app_login)
     
-    async def _create_meeting_async(self, meeting_details, app_user_email):
+    async def _create_meeting_async(self, meeting_details, app_login):
         """Async implementation of create_meeting."""
         # Verify required parameters
         required_params = ["subject", "start_time", "end_time", "calendar_email"]
@@ -742,7 +742,7 @@ class O365CalendarProvider(CalendarProvider):
 
         calendar_email = meeting_details.get("calendar_email")
         # Get token information for the calendar
-        credentials = self.get_credentials(calendar_email, app_user_email)
+        credentials = self.get_credentials(calendar_email, app_login)
         if not credentials:
             error_msg = f"No credentials found for calendar: {calendar_email}"
             logger.error(error_msg)
@@ -839,19 +839,19 @@ class O365CalendarProvider(CalendarProvider):
             logger.error(error_msg)
             raise Exception(error_msg)
 
-    def store_credentials(self, calendar_email, credentials, app_user_email):
+    def store_credentials(self, calendar_email, credentials, app_login):
         """
         Store credentials for the given calendar email.
         
         Parameters:
             calendar_email (str): The email address of the calendar account.
             credentials (dict): The credentials to store.
-            app_user_email (str): The email address used to log into this app.
+            app_login (str): The email address used to log into this app.
             
         Raises:
             Exception: If storing credentials fails for any reason
         """
-        if not app_user_email:
+        if not app_login:
             error_msg = "No user email provided when storing credentials" 
             logger.error(error_msg)
             raise Exception(error_msg)
@@ -877,59 +877,59 @@ class O365CalendarProvider(CalendarProvider):
         
         # Get existing account or create new one
         account = CalendarAccount.get_by_email_provider_and_user(
-            calendar_email, self.provider_name, app_user_email
+            calendar_email, self.provider_name, app_login
         )
         
         # Check if this is the first calendar account for this user
-        existing_accounts = CalendarAccount.get_accounts_for_user(app_user_email)
+        existing_accounts = CalendarAccount.get_accounts_for_user(app_login)
         is_first_account = len(existing_accounts) == 0
         
         if not account:
-            logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user {app_user_email}")
+            logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user {app_login}")
             account = CalendarAccount(
                 calendar_email=calendar_email,
-                app_user_email=app_user_email,
+                app_login=app_login,
                 provider=self.provider_name,
                 is_primary=is_first_account,  # Set as primary if it's the first account
                 **credentials
             )
         else:
-            logger.info(f"Updating existing calendar account for {calendar_email} ({self.provider_name}) for user {app_user_email}")
+            logger.info(f"Updating existing calendar account for {calendar_email} ({self.provider_name}) for user {app_login}")
             # Update account with new credentials
             for key, value in credentials.items():
                 setattr(account, key, value)
-            account.app_user_email = app_user_email  # Ensure this is set even on update
+            account.app_login = app_login  # Ensure this is set even on update
         
         account.last_sync = datetime.now(timezone.utc)
         account.save()
         logger.debug(f"O365 credentials stored in database for calendar {calendar_email}")
         return True
 
-    def get_credentials(self, calendar_email, app_user_email):
+    def get_credentials(self, calendar_email, app_login):
         """
         Retrieve credentials for the given calendar email.
         
         Parameters:
             calendar_email (str): The email address of the calendar to get credentials for.
-            app_user_email (str): The email address used to log into this app.
+            app_login (str): The email address used to log into this app.
             
         Returns:
             dict: Credential dictionary if found and valid
             
         Raises:
             Exception: In all error cases:
-                     - If app_user_email is missing
+                     - If app_login is missing
                      - If no account is found for the calendar_email 
                      - If required credential fields are missing
                      - If account is already marked as needing reauth
         """
-        if not app_user_email:
+        if not app_login:
             error_msg = "No user email provided when getting credentials"
             logger.error(f"❌ AUTH ISSUE: {error_msg}")
             raise Exception(error_msg)
             
         account = CalendarAccount.get_by_email_provider_and_user(
-            calendar_email, self.provider_name, app_user_email
+            calendar_email, self.provider_name, app_login
         )
         if not account:
             error_msg = f"No O365 credentials found for {calendar_email}"
@@ -1109,13 +1109,13 @@ class O365CalendarProvider(CalendarProvider):
         
         return credentials
 
-    def initiate_auth_flow(self, redirect_uri, app_user_email):
+    def initiate_auth_flow(self, redirect_uri, app_login):
         """
         Initiate the O365 OAuth authentication flow.
         
         Parameters:
             redirect_uri (str): The URI to redirect to after authentication.
-            app_user_email (str): The email address used to log into this app.
+            app_login (str): The email address used to log into this app.
             
         Returns:
             tuple: (None, auth_url) where auth_url is the authorization URL to redirect the user to.
@@ -1132,7 +1132,7 @@ class O365CalendarProvider(CalendarProvider):
         logger.debug(f"Initiating O365 auth flow with redirect URI: {redirect_uri}")
         
         # Store the app user email in session
-        session['user_email'] = app_user_email
+        session['user_email'] = app_login
             
         try:
             # Create the authorization flow

@@ -25,18 +25,18 @@ class UserDataManager(Database):
         return cls.current_user
 
     @classmethod
-    def login(cls, app_user_email):
+    def login(cls, app_login):
         """Log in a user and set the current user."""
-        user = User(app_user_email)
+        user = User(app_login)
         login_user(user, remember=True)
-        cls.current_user = app_user_email
-        logger.info(f"User {app_user_email} logged in.")
+        cls.current_user = app_login
+        logger.info(f"User {app_login} logged in.")
 
     @classmethod
     def logout(cls):
         """Log out the current user."""
         if current_user.is_authenticated:
-            logger.info(f"Logging out user {current_user.app_user_email}")
+            logger.info(f"Logging out user {current_user.app_login}")
             logout_user()
             cls.current_user = None
 
@@ -62,7 +62,7 @@ class UserDataManager(Database):
             raise ValueError("Current user not set. Please log in first.")
         calendar_accounts = (
             db.session.query(CalendarAccount)
-            .filter_by(app_user_email=cls.current_user)
+            .filter_by(app_login=cls.current_user)
             .all()
         )
         cls.user_calendar_accounts = {
@@ -92,7 +92,7 @@ class UserDataManager(Database):
         if not cls.current_user:
             raise ValueError("Current user not set. Please log in first.")
         calendar_account = CalendarAccount(
-            app_user_email=cls.current_user,
+            app_login=cls.current_user,
             calendar_email=calendar_email,
             provider=provider,
             token=credentials.token,
@@ -124,7 +124,7 @@ class UserDataManager(Database):
         # Find the calendar account for this user and calendar email
         calendar_account = (
             db.session.query(CalendarAccount)
-            .filter_by(app_user_email=cls.current_user, calendar_email=calendar_email)
+            .filter_by(app_login=cls.current_user, calendar_email=calendar_email)
             .first()
         )
         
@@ -145,9 +145,9 @@ class UserDataManager(Database):
             return None
 
     @staticmethod
-    def create_user(app_user_email):
+    def create_user(app_login):
         """Create a new user in the database."""
-        user = User(app_user_email=app_user_email)
+        user = User(app_login=app_login)
         db.session.add(user)
         db.session.commit()
         return user

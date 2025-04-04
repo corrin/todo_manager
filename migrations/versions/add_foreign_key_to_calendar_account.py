@@ -17,17 +17,17 @@ depends_on = None
 
 
 def upgrade():
-    # Add foreign key constraint to app_user_email in calendar_account
+    # Add foreign key constraint to app_login in calendar_account
     with op.batch_alter_table('calendar_account') as batch_op:
         batch_op.create_foreign_key(
-            'fk_calendar_account_app_user_email',
+            'fk_calendar_account_app_login',
             'user',
-            ['app_user_email'],
-            ['app_user_email']
+            ['app_login'],
+            ['app_login']
         )
 
 
 def downgrade():
     # Remove foreign key constraint
     with op.batch_alter_table('calendar_account') as batch_op:
-        batch_op.drop_constraint('fk_calendar_account_app_user_email', type_='foreignkey')
+        batch_op.drop_constraint('fk_calendar_account_app_login', type_='foreignkey')

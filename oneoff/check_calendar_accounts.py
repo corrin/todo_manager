@@ -24,7 +24,7 @@ def main():
         print('Current calendar accounts:')
         accounts = CalendarAccount.query.all()
         for account in accounts:
-            print(f'- {account.calendar_email} ({account.provider}) for user {account.app_user_email}')
+            print(f'- {account.calendar_email} ({account.provider}) for user {account.app_login}')
 
 if __name__ == '__main__':
     main()

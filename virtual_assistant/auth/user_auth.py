@@ -14,13 +14,13 @@ def setup_login_manager(app):
 
 # Define the user loader function directly in the module scope
 @login_manager.user_loader
-def load_user(app_user_email):
+def load_user(app_login):
     # Check if the user exists in the database
-    user = User.query.filter_by(app_user_email=app_user_email).first()
+    user = User.query.filter_by(app_login=app_login).first()
     
     # If the user doesn't exist, create it
     if not user:
-        user = User(app_user_email)
+        user = User(app_login)
         db.session.add(user)
         db.session.commit()
     return user

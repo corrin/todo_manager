@@ -12,7 +12,7 @@ class CalendarAccount(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     calendar_email = db.Column(db.String(255), nullable=False)  # The specific calendar account email (e.g. google account email)
-    app_user_email = db.Column(db.String(255), db.ForeignKey('user.app_user_email'), nullable=False)  # The app user's email (foreign key to User)
+    app_login = db.Column(db.String(255), db.ForeignKey('user.app_login'), nullable=False)  # The app user's email (foreign key to User)
     provider = db.Column(db.String(50), nullable=False)  # 'google' or 'o365'
     token = db.Column(db.Text, nullable=False)
     refresh_token = db.Column(db.Text)
@@ -26,7 +26,7 @@ class CalendarAccount(db.Model):
     needs_reauth = db.Column(db.Boolean, nullable=False, default=False)
     
     __table_args__ = (
-        db.UniqueConstraint('app_user_email', 'calendar_email', 'provider',
+        db.UniqueConstraint('app_login', 'calendar_email', 'provider',
                           name='uq_calendar_account_user_email_provider'),
     )
 
@@ -45,18 +45,18 @@ class CalendarAccount(db.Model):
         return cls.query.filter_by(calendar_email=calendar_email, provider=provider).first()
         
     @classmethod
-    def get_by_email_provider_and_user(cls, calendar_email, provider, app_user_email):
+    def get_by_email_provider_and_user(cls, calendar_email, provider, app_login):
         """Get calendar account by calendar email, provider, and app user email."""
         return cls.query.filter_by(
             calendar_email=calendar_email,
             provider=provider,
-            app_user_email=app_user_email
+            app_login=app_login
         ).first()
 
     @classmethod
-    def get_accounts_for_user(cls, app_user_email):
+    def get_accounts_for_user(cls, app_login):
         """Get all calendar accounts for a specific app user."""
-        return cls.query.filter_by(app_user_email=app_user_email).all()
+        return cls.query.filter_by(app_login=app_login).all()
 
     def save(self):
         """Save the calendar account to the database."""
@@ -64,11 +64,11 @@ class CalendarAccount(db.Model):
         db.session.commit()
 
     @classmethod
-    def delete_by_email_and_provider(cls, calendar_email, provider, app_user_email):
+    def delete_by_email_and_provider(cls, calendar_email, provider, app_login):
         """Delete calendar account by calendar email, provider, and app user email."""
-        account = cls.get_by_email_provider_and_user(calendar_email, provider, app_user_email)
+        account = cls.get_by_email_provider_and_user(calendar_email, provider, app_login)
         if not account:
-            raise ValueError(f"No calendar account found for {calendar_email} ({provider}) for user {app_user_email}")
+            raise ValueError(f"No calendar account found for {calendar_email} ({provider}) for user {app_login}")
         
         db.session.delete(account)
         db.session.commit()
@@ -79,7 +79,7 @@ class CalendarAccount(db.Model):
         db.session.commit()
         
     @classmethod
-    def set_as_primary(cls, calendar_email, provider, app_user_email):
+    def set_as_primary(cls, calendar_email, provider, app_login):
         """Set a calendar account as the primary account for a user.
         
         This will unset any other account that was previously set as primary.
@@ -87,7 +87,7 @@ class CalendarAccount(db.Model):
         Args:
             calendar_email: The email of the calendar account to set as primary
             provider: The provider of the calendar account
-            app_user_email: The email of the app user
+            app_login: The email of the app user
             
         Returns:
             bool: True if successful, False otherwise
@@ -96,21 +96,21 @@ class CalendarAccount(db.Model):
             # First, unset any existing primary account for this user
             db.session.execute(
                 update(cls)
-                .where(cls.app_user_email == app_user_email)
+                .where(cls.app_login == app_login)
                 .values(is_primary=False)
             )
             
             # Then set the specified account as primary
             account = cls.get_by_email_provider_and_user(
-                calendar_email, provider, app_user_email
+                calendar_email, provider, app_login
             )
             if account:
                 account.is_primary = True
                 db.session.commit()
-                logger.info(f"Set {calendar_email} ({provider}) as primary calendar for {app_user_email}")
+                logger.info(f"Set {calendar_email} ({provider}) as primary calendar for {app_login}")
                 return True
             else:
-                logger.error(f"Account not found: {calendar_email} ({provider}) for {app_user_email}")
+                logger.error(f"Account not found: {calendar_email} ({provider}) for {app_login}")
                 return False
         except Exception as e:
             logger.error(f"Error setting primary calendar account: {e}")
@@ -118,20 +118,20 @@ class CalendarAccount(db.Model):
             return False
             
     @classmethod
-    def get_primary_account(cls, app_user_email):
+    def get_primary_account(cls, app_login):
         """Get the primary calendar account for a user.
         
         If no account is explicitly set as primary, returns the first account found.
         
         Args:
-            app_user_email: The email of the app user
+            app_login: The email of the app user
             
         Returns:
             CalendarAccount: The primary calendar account, or None if no accounts exist
         """
         # First try to find an account explicitly set as primary
         primary = cls.query.filter_by(
-            app_user_email=app_user_email,
+            app_login=app_login,
             is_primary=True
         ).first()
         
@@ -139,7 +139,7 @@ class CalendarAccount(db.Model):
             return primary
             
         # If no account is explicitly set as primary, return the first account
-        return cls.query.filter_by(app_user_email=app_user_email).first()
+        return cls.query.filter_by(app_login=app_login).first()
         
     @classmethod
     def get_accounts_by_last_sync(cls, older_than=None):

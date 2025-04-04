@@ -321,7 +321,7 @@ class Task:
 #### Task Synchronization
 
 ```python
-def sync_tasks(app_user_email):
+def sync_tasks(app_login):
     """Sync tasks from all connected task providers."""
     results = {
         'success': [],
@@ -332,7 +332,7 @@ def sync_tasks(app_user_email):
     }
     
     # Get all task accounts for the user
-    accounts = get_task_accounts(app_user_email)
+    accounts = get_task_accounts(app_login)
     
     for account in accounts:
         provider_name = account['provider']

@@ -19,11 +19,11 @@ def init_task_routes():
     bp = Blueprint('tasks', __name__, url_prefix='/tasks')
     task_manager = TaskManager()
 
-    def get_task_accounts(app_user_email):
+    def get_task_accounts(app_login):
         """Get all task accounts for a user.
         
         Args:
-            app_user_email: The email the user uses to access the app
+            app_login: The email the user uses to access the app
             
         Returns:
             List of dicts with provider and task_user_email
@@ -41,7 +41,7 @@ def init_task_routes():
         
         # For calendar-based task providers (Outlook, Google Tasks)
         # Get all calendar accounts for this user
-        calendar_accounts = CalendarAccount.get_accounts_for_user(app_user_email)
+        calendar_accounts = CalendarAccount.get_accounts_for_user(app_login)
         
         for calendar_account in calendar_accounts:
             calendar_provider = calendar_account.provider
@@ -58,18 +58,18 @@ def init_task_routes():
         # For Todoist, there's typically just one account per user
         if 'todoist' in available_providers:
             provider = task_manager.get_provider('todoist')
-            credentials = provider.get_credentials(app_user_email)
+            credentials = provider.get_credentials(app_login)
             if credentials:
                 accounts.append({
                     'provider': 'todoist',
-                    'task_user_email': app_user_email  # Todoist uses the app user's email
+                    'task_user_email': app_login  # Todoist uses the app user's email
                 })
                 
         # For SQLite, there's typically just one account per user
         if 'sqlite' in available_providers:
             accounts.append({
                 'provider': 'sqlite',
-                'task_user_email': app_user_email  # SQLite uses the app user's email
+                'task_user_email': app_login  # SQLite uses the app user's email
             })
         
         return accounts
@@ -138,7 +138,7 @@ def init_task_routes():
     @bp.route('/sync')
     def sync_tasks():
         """Sync tasks from all connected task providers."""
-        app_user_email = session.get('user_email')
+        app_login = session.get('user_email')
         
         results = {
             'success': [],
@@ -149,7 +149,7 @@ def init_task_routes():
         }
         
         # Get all task accounts for the user
-        accounts = get_task_accounts(app_user_email)
+        accounts = get_task_accounts(app_login)
         
         if not accounts:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -239,7 +239,7 @@ def init_task_routes():
     @bp.route('/update_order', methods=['POST'])
     def update_task_order():
         """Update task order based on drag-and-drop reordering."""
-        app_user_email = session.get('user_email')
+        app_login = session.get('user_email')
         
         try:
             # Get the new task order from the request
@@ -256,9 +256,9 @@ def init_task_routes():
             task_positions = {item['id']: item['position'] for item in task_order}
             
             # Update the task order in the database
-            Task.update_task_order(app_user_email, list_type, task_positions)
+            Task.update_task_order(app_login, list_type, task_positions)
             
-            logger.info(f"Updated {list_type} task order for {app_user_email}, {len(task_order)} tasks")
+            logger.info(f"Updated {list_type} task order for {app_login}, {len(task_order)} tasks")
             
             return jsonify({
                 'success': True,
@@ -273,7 +273,7 @@ def init_task_routes():
     @bp.route('/move_task', methods=['POST'])
     def move_task_between_lists():
         """Move a task between prioritized and unprioritized lists."""
-        app_user_email = session.get('user_email')
+        app_login = session.get('user_email')
         
         try:
             # Get task ID and destination list
@@ -290,7 +290,7 @@ def init_task_routes():
                 
             # Find the task in our database
             task = Task.query.filter_by(
-                user_email=app_user_email, 
+                user_email=app_login, 
                 provider_task_id=task_id
             ).first()
             
@@ -300,7 +300,7 @@ def init_task_routes():
             # Move the task in the database
             Task.move_task(task.id, destination, position)
             
-            logger.info(f"Moved task {task_id} to {destination} list for {app_user_email}")
+            logger.info(f"Moved task {task_id} to {destination} list for {app_login}")
             
             return jsonify({
                 'success': True,
@@ -315,10 +315,10 @@ def init_task_routes():
     @bp.route('/get_task_lists', methods=['GET'])
     def get_task_lists():
         """Get the prioritized and unprioritized task lists."""
-        app_user_email = session.get('user_email')
+        app_login = session.get('user_email')
         
         # Get tasks from database
-        prioritized, unprioritized = Task.get_user_tasks_by_list(app_user_email)
+        prioritized, unprioritized = Task.get_user_tasks_by_list(app_login)
         
         # Convert to dictionaries
         result = {
@@ -331,11 +331,11 @@ def init_task_routes():
     @bp.route('/<task_id>/details', methods=['GET'])
     def get_task_details(task_id):
         """Get detailed information for a specific task."""
-        app_user_email = session.get('user_email')
+        app_login = session.get('user_email')
         
         # Try to find the task in our database
         task = Task.query.filter_by(
-            user_email=app_user_email,
+            user_email=app_login,
             provider_task_id=task_id
         ).first()
         
@@ -344,7 +344,7 @@ def init_task_routes():
             return jsonify(task.to_dict())
             
         # If not found in our database, fallback to searching providers
-        accounts = get_task_accounts(app_user_email)
+        accounts = get_task_accounts(app_login)
         
         if not accounts:
             return jsonify({'error': 'No task accounts found'}), 404
@@ -387,7 +387,7 @@ def init_task_routes():
                         
                         # Create or update this task in our database for future requests
                         db_task, _ = Task.create_or_update_from_provider_task(
-                            app_user_email, 
+                            app_login, 
                             provider_name, 
                             provider_task
                         )

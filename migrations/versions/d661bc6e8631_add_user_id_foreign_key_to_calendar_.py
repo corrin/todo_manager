@@ -1,7 +1,7 @@
 """add_user_id_foreign_key_to_calendar_account
 
 Revision ID: d661bc6e8631
-Revises: add_app_user_email_column
+Revises: add_app_login_column
 Create Date: 2025-02-28 21:44:57.945018
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'd661bc6e8631'
-down_revision = 'add_app_user_email_column'
+down_revision = 'add_app_login_column'
 branch_labels = None
 depends_on = None
 
