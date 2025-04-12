@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import os # Needed for path operations
 import json # Needed for credential file handling
 from virtual_assistant.database.user_manager import UserDataManager # Needed for user context (folder path)

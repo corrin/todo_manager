@@ -2,7 +2,8 @@ from todoist_api_python.api import TodoistAPI
 from flask import redirect, url_for
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from .task_provider import TaskProvider, Task 
+from .task_provider import TaskProvider, Task
+from virtual_assistant.database.task import TaskAccount
 from virtual_assistant.utils.logger import logger
 
 
@@ -18,48 +19,44 @@ class TodoistProvider(TaskProvider):
     def _get_provider_name(self) -> str:
         return "todoist"
 
-    # HACK/TODO: This provider currently inherits file-based credential storage from TaskProvider.
-    # This is temporary and should be replaced with a proper database solution
-    # (e.g., a new ProviderCredential model) that doesn't misuse CalendarAccount.
-
     # --- API Initialization ---
 
     def _initialize_api(self, app_login, task_user_email):
-        """Initialize or refresh the Todoist API client using credentials from file."""
+        """Initialize the Todoist API client using credentials from the database."""
         if self.api is None:
-            # HACK/TODO: Uses inherited file-based get_credentials. Replace with DB solution.
-            credentials = self.get_credentials(app_login, task_user_email)
-            if credentials:
-                api_key = credentials.get("api_key")
-                if api_key:
-                    self.api = TodoistAPI(api_key)
-                    logger.debug(f"Initialized Todoist API for app_login='{app_login}', task_user_email='{task_user_email}'")
-                else:
-                    logger.error(f"API key not found in retrieved credentials for app_login='{app_login}', task_user_email='{task_user_email}'")
+            logger.debug(f"Attempting to initialize Todoist API for app_login='{app_login}'")
+            account = TaskAccount.get_account(user_app_login=app_login, provider_name=self.provider_name)
+            
+            if account and account.api_key:
+                try:
+                    self.api = TodoistAPI(account.api_key)
+                    logger.debug(f"Successfully initialized Todoist API for app_login='{app_login}'")
+                except Exception as e:
+                    logger.error(f"Failed to initialize Todoist API for app_login='{app_login}' with stored key: {e}")
+                    self.api = None
             else:
-                 logger.warning(f"Could not initialize Todoist API: Credentials not found for app_login='{app_login}', task_user_email='{task_user_email}'")
+                 logger.warning(f"Could not initialize Todoist API: TaskAccount or API key not found in DB for app_login='{app_login}', provider='{self.provider_name}'")
 
     # --- Provider Methods ---
 
     # Signature matches abstract method in TaskProvider
     def authenticate(self, app_login, task_user_email):
-        """Check if we have valid credentials and return auth URL if needed."""
-        # HACK/TODO: Uses inherited file-based get_credentials. Replace with DB solution.
-        credentials = self.get_credentials(app_login, task_user_email)
+        """Check if we have valid credentials in the database and return auth URL if needed."""
+        logger.debug(f"Authenticating Todoist for app_login='{app_login}'")
+        account = TaskAccount.get_account(user_app_login=app_login, provider_name=self.provider_name)
 
-        if not credentials or not credentials.get("api_key"):
-            logger.info(f"No valid Todoist credentials found for app_login='{app_login}', task_user_email='{task_user_email}'")
-            # Redirect to setup page where user can enter API key
+        if not account or not account.api_key:
+            logger.info(f"No valid Todoist credentials found in DB for app_login='{app_login}'. Redirecting to setup.")
             return self.provider_name, redirect(url_for('todoist_auth.setup_credentials'))
 
-        # Test the credentials
+        # Test the stored credentials to ensure the API key is still valid
         try:
-            api = TodoistAPI(credentials.get("api_key"))
-            api.get_projects()  # Simple API call to test credentials
-            logger.debug(f"Todoist credentials valid for app_login='{app_login}', task_user_email='{task_user_email}'")
+            api = TodoistAPI(account.api_key)
+            api.get_projects() # Simple API call to test credentials
+            logger.debug(f"Todoist credentials valid for app_login='{app_login}'")
             return None # Already authenticated
         except Exception as e:
-            logger.error(f"Todoist credentials invalid for app_login='{app_login}', task_user_email='{task_user_email}': {e}")
+            logger.error(f"Todoist credentials invalid for app_login='{app_login}': {e}. Redirecting to setup.")
             # Redirect to setup page if credentials are bad
             return self.provider_name, redirect(url_for('todoist_auth.setup_credentials'))
 
@@ -148,9 +145,9 @@ class TodoistProvider(TaskProvider):
             raise
 
     # Signature matches abstract method in TaskProvider
-    def get_ai_instructions(self, app_login, task_user_email) -> Optional[str]: # Add task_user_email
+    def get_ai_instructions(self, app_login, task_user_email) -> Optional[str]:
         """Get the AI instruction task content."""
-        self._initialize_api(app_login, task_user_email) # Pass both args
+        self._initialize_api(app_login, task_user_email) 
         if not self.api:
             raise Exception(f"Todoist API not initialized for app_login='{app_login}', task_user_email='{task_user_email}'. Check credentials.")
 
