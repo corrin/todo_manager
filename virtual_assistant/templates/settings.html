@@ -4,79 +4,156 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+    /* Optional: Style for disabled email field in edit modal */
+    .form-control:disabled, .form-control[readonly] {
+        background-color: #e9ecef;
+        opacity: 1;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
 <div class="container">
     <h1>Settings</h1>
     
-    <!-- General Settings -->
+    <!-- Basic Settings -->
     <div class="card mb-4">
         <div class="card-header">
-            <h2 class="h5 mb-0">General Settings</h2>
+            <h2 class="h5 mb-0">Basic Settings</h2>
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ url_for('save_settings') }}">
+            <form method="POST" action="{{ url_for('save_general_settings') }}"> {# Changed action #}
                 <div class="form-group mb-3">
-                    <label>Task Provider:</label>
-                    <select class="form-control" name="task_provider">
-                        <option value="todoist" {% if config.task_provider == 'todoist' %}selected{% endif %}>Todoist</option>
-                        <option value="outlook" {% if config.task_provider == 'outlook' %}selected{% endif %}>Outlook (O365)</option>
-                        <option value="google_tasks" {% if config.task_provider == 'google_tasks' %}selected{% endif %}>Google Tasks</option>
-                        <option value="sqlite" {% if config.task_provider == 'sqlite' %}selected{% endif %}>Local DB</option>
-                    </select>
-                </div>
+                    {# Removed Primary Task Provider dropdown - Now handled via radio buttons in the Task Provider Accounts section #}
                 <div class="form-group mb-3">
                     <label>AI Provider:</label>
                     <select class="form-control" name="ai_provider">
-                        <option value="openai" {% if config.ai_provider == 'openai' %}selected{% endif %}>OpenAI</option>
-                        <option value="grok" {% if config.ai_provider == 'grok' %}selected{% endif %}>Grok</option>
+                         <option value="">-- Select --</option> {# Add a default option #}
+                        <option value="openai" {% if user.ai_provider == 'openai' %}selected{% endif %}>OpenAI</option>
+                        <option value="grok" {% if user.ai_provider == 'grok' %}selected{% endif %}>Grok</option>
                     </select>
-                </div>
-                <div class="form-group mb-3">
-                    <label>Todoist API Key:</label>
-                    <div class="input-group">
-                        <input type="password" name="api_key" id="todoist_api_key" class="form-control"
-                               placeholder="{% if todoist_api_key_exists %}••••••••••••••••••••••{% else %}Enter Todoist API Token{% endif %}">
-                        <button type="button" id="test_todoist" class="btn btn-outline-secondary">Test</button>
-                    </div>
-                    <small class="form-text text-muted">
-                        {% if todoist_api_key_exists %}API key saved. Enter a new key to update.{% else %}
-                        Find your API token in <a href="https://todoist.com/app/settings/integrations" target="_blank">Todoist Settings > Integrations</a>
-                        {% endif %}
-                    </small>
-                    <div id="todoist_test_result" class="mt-2"></div>
                 </div>
                 <div class="form-group mb-3">
                     <label>OpenAI API Key:</label>
                     <input type="password" name="openai_key" class="form-control"
-                           placeholder="{% if config.openai_key %}••••••••••••••••••••••{% else %}Enter API Key{% endif %}">
-                    {% if config.openai_key %}<small class="form-text text-muted">API key saved. Enter a new key to update.</small>{% endif %}
+                           placeholder="{% if user.openai_key %}••••••••••••••••••••••{% else %}Enter API Key{% endif %}">
+                    {% if user.openai_key %}<small class="form-text text-muted">API key saved. Enter a new key to update.</small>{% endif %}
                 </div>
                 <div class="form-group mb-3">
                     <label>Grok API Key:</label>
                     <input type="password" name="grok_key" class="form-control"
-                           placeholder="{% if config.grok_key %}••••••••••••••••••••••{% else %}Enter API Key{% endif %}">
-                    {% if config.grok_key %}<small class="form-text text-muted">API key saved. Enter a new key to update.</small>{% endif %}
+                           placeholder="{% if user.grok_key %}••••••••••••••••••••••{% else %}Enter API Key{% endif %}">
+                    {% if user.grok_key %}<small class="form-text text-muted">API key saved. Enter a new key to update.</small>{% endif %}
                 </div>
                 <div class="form-group">
-                    <button type="submit" name="action" value="save" class="btn btn-primary">Save</button>
+                    <button type="submit" class="btn btn-primary">Save Basic Settings</button> {# Updated button text #}
                     <a href="{{ url_for('index') }}" class="btn btn-secondary">Close</a>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Calendar Accounts Section -->
+    <!-- Task Settings -->
     <div class="card mb-4">
-        <div class="card-header">
-            <h2 class="h5 mb-0">Connected Calendar & Task Accounts</h2>
+        <div class="card-header"> {# Removed d-flex and button #}
+            <h2 class="h5 mb-0">Task Settings</h2> {# Renamed section #}
+        </div>
+        <div class="card-body">
+            {% if task_accounts %} {# Changed variable name #}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>New Tasks Go Here</th> {# New column #}
+                        <th>Provider</th>
+                        <th>Email</th>
+                        <th>Status</th> {# Combined API Key / Token Status #}
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for account in task_accounts %} {# Changed variable name #}
+                    <tr>
+                        <td>
+                            {# Primary TASK Provider Selection Form #}
+                            <form action="{{ url_for('tasks.set_primary_task_provider') }}" method="POST" style="display: inline;" class="primary-task-form">
+                                {# Use a unique ID combining provider and account ID #}
+                                <input type="hidden" name="provider_id" value="{{ account.provider_name }}_{{ account.id }}">
+                                <input type="radio" name="primary_task_account" value="{{ account.provider_name }}_{{ account.id }}"
+                                       {% if account.is_primary %}checked{% endif %}
+                                       onchange="setPrimaryTaskProvider(this)">
+                            </form>
+                        </td>
+                        <td>
+                            {# Display Provider Name Nicely #}
+                            {% if account.provider_name == 'todoist' %}Todoist
+                            {% elif account.provider_name == 'google_tasks' %}Google Tasks
+                            {% elif account.provider_name == 'outlook' %}O365 Tasks
+                            {% else %}{{ account.provider_name }}{% endif %}
+                        </td>
+                        <td>{{ account.task_user_email }}</td>
+                        <td>
+                            {# Status Badge - More comprehensive #}
+                            {% if account.provider_name == 'todoist' %}
+                                {% if account.api_key %}
+                                    <span class="badge bg-success">API Key Set</span>
+                                {% else %}
+                                    <span class="badge bg-danger">API Key Missing</span> {# Should not happen #}
+                                {% endif %}
+                            {% else %} {# Google / O365 #}
+                                {% if account.needs_reauth %}
+                                    <span class="badge bg-warning">Needs Reauth</span>
+                                {% elif account.token %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactive</span> {# No token #}
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {# Actions - TODO: Refine actions based on provider #}
+                            {% if account.provider_name == 'todoist' %}
+                                <button type="button" class="btn btn-sm btn-primary"
+                                        data-bs-toggle="modal" data-bs-target="#editTodoistModal"
+                                        data-email="{{ account.task_user_email }}"
+                                        data-account-id="{{ account.id }}" {# Pass ID for editing #}
+                                        data-key-set="{{ 'true' if account.api_key else 'false' }}">
+                                    <i class="fas fa-edit"></i> Edit Key
+                                </button>
+                            {% else %}
+                                {# Reauth might be needed for Google/O365 tasks - link to calendar reauth? #}
+                                {# Consider adding a reauth button here if task scopes differ #}
+                                <span class="text-muted"></span> {# Placeholder #}
+                            {% endif %}
+                            {# Delete Action - Needs careful consideration for OAuth accounts #}
+                             <button type="button" class="btn btn-sm btn-danger"
+                                     data-bs-toggle="modal" data-bs-target="#deleteTaskAccountModal"
+                                     data-provider="{{ account.provider_name }}"
+                                     data-email="{{ account.task_user_email }}"
+                                     data-account-id="{{ account.id }}">
+                                 <i class="fas fa-trash"></i> Delete
+                             </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-center">No Task Provider accounts connected yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Calendar Settings -->
+    <div class="card mb-4">
+        <div class="card-header"> {# Removed d-flex #}
+             <h2 class="h5 mb-0">Calendar Settings</h2> {# Renamed section #}
         </div>
         <div class="card-body">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Primary</th>
+                        <th>Generated Events Go Here</th> {# Renamed #}
                         <th>Provider</th>
                         <th>Email</th>
                         <th>Last Sync</th>
@@ -88,15 +165,18 @@
                     {% for account in calendar_accounts %}
                     <tr>
                         <td>
-                            <form action="{{ url_for('meetings.set_primary_account') }}" method="POST" style="display: inline;" class="primary-form">
+                            {# Primary Account Selection Form #}
+                            {# This form ONLY sets the primary CALENDAR #}
+                            <form action="{{ url_for('meetings.set_primary_account') }}" method="POST" style="display: inline;" class="primary-calendar-form">
                                 <input type="hidden" name="provider" value="{{ account.provider }}">
-                                <input type="hidden" name="email" value="{{ account.email }}">
-                                <input type="radio" name="primary_account" value="{{ account.provider }}_{{ account.email }}"
-                                       {% if account.is_primary %}checked{% endif %}
-                                       onchange="setPrimaryAccount(this)">
+                                <input type="hidden" name="email" value="{{ account.calendar_email }}"> {# Use calendar_email #}
+                                <input type="radio" name="primary_calendar_account" value="{{ account.provider }}_{{ account.calendar_email }}"
+                                       {% if account.is_primary %}checked{% endif %} {# Checks CalendarAccount.is_primary #}
+                                       onchange="setPrimaryCalendarAccount(this)">
                             </form>
                         </td>
                         <td>
+                            {# Provider Icon/Name #}
                             {% if account.provider == 'google' %}
                             <i class="fab fa-google"></i> Google
                             {% elif account.provider == 'o365' %}
@@ -106,6 +186,7 @@
                         <td>{{ account.email }}</td>
                         <td>{{ account.last_sync|default('Never', true) }}</td>
                         <td>
+                            {# Status Badge #}
                             {% if not account.needs_reauth %}
                             <span class="badge bg-success">Active</span>
                             {% else %}
@@ -113,21 +194,20 @@
                             {% endif %}
                         </td>
                         <td>
+                            {# Reauth Button #}
                             <a href="{{ url_for('meetings.reauth_calendar_account', provider=account.provider, email=account.email) }}" 
                                class="btn btn-sm {% if account.needs_reauth %}btn-warning{% else %}btn-outline-secondary{% endif %}">
                                 <i class="fas fa-sync"></i>
                             </a>
                         </td>
                         <td>
-                            <button type="button"
-                                    class="btn btn-sm btn-danger"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#deleteModal{{ loop.index }}">
+                            {# Delete Button & Modal Trigger #}
+                            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteCalendarModal_{{ account.provider }}_{{ account.email|replace('@','_')|replace('.','_') }}">
                                 <i class="fas fa-trash"></i>
                             </button>
                             
-                            <!-- Delete Confirmation Modal -->
-                            <div class="modal fade" id="deleteModal{{ loop.index }}" tabindex="-1">
+                            <!-- Calendar Delete Confirmation Modal -->
+                            <div class="modal fade" id="deleteCalendarModal_{{ account.provider }}_{{ account.email|replace('@','_')|replace('.','_') }}" tabindex="-1">
                                 <div class="modal-dialog">
                                     <div class="modal-content">
                                         <div class="modal-header">
@@ -153,7 +233,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="text-center">No calendar accounts connected</td>
+                        <td colspan="7" class="text-center">No calendar accounts connected</td> {# Back to 7 columns #}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -161,134 +241,360 @@
         </div>
     </div>
 
-    <!-- Add New Calendar Account Section -->
+    <!-- Add New Account -->
     <div class="card">
         <div class="card-header">
-            <h2 class="h5 mb-0">Add New Calendar & Task Account</h2>
+            <h2 class="h5 mb-0">Add New Account</h2> {# Renamed section #}
         </div>
         <div class="card-body">
             <div class="row g-3">
-                <div class="col-md-6">
+                 {# Added Todoist Button #}
+                 <div class="col-md-4">
+                    <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#addTodoistModal">
+                        <i class="fas fa-check-circle me-2"></i> Connect Todoist
+                    </button>
+                </div>
+                <div class="col-md-4"> {# Adjusted grid column #}
                     <a href="{{ url_for('meetings.authenticate_google_calendar') }}" class="btn btn-outline-primary w-100">
-                        <i class="fab fa-google me-2"></i> Connect Google Calendar & Tasks
+                        <i class="fab fa-google me-2"></i> Connect Google Account
                     </a>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4"> {# Adjusted grid column #}
                     <a href="{{ url_for('meetings.authenticate_o365_calendar') }}" class="btn btn-outline-primary w-100">
-                        <i class="fab fa-microsoft me-2"></i> Connect Office 365 Calendar & Tasks
+                        <i class="fab fa-microsoft me-2"></i> Connect Office 365 Account
                     </a>
                 </div>
             </div>
+             <small class="form-text text-muted mt-3">
+                Connecting Google or Office 365 enables both Calendar and Task features. Connecting Todoist enables Task features only.
+             </small>
         </div>
     </div>
 </div>
 
+<!-- Modals for Todoist -->
+
+<!-- Add Todoist Account Modal -->
+<div class="modal fade" id="addTodoistModal" tabindex="-1" aria-labelledby="addTodoistModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('todoist_auth.add_account') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addTodoistModalLabel">Add Todoist Account</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="add_todoist_email" class="form-label">Todoist Account Email</label>
+                        <input type="email" class="form-control" id="add_todoist_email" name="todoist_email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="add_todoist_api_key" class="form-label">Todoist API Key</label>
+                        <input type="password" class="form-control" id="add_todoist_api_key" name="api_key" required>
+                         <small class="form-text text-muted">Find your API token in <a href="https://todoist.com/app/settings/integrations" target="_blank">Todoist Settings > Integrations</a>.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Todoist API Key Modal -->
+<div class="modal fade" id="editTodoistModal" tabindex="-1" aria-labelledby="editTodoistModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('todoist_auth.update_key') }}" class="edit-todoist-form"> {# Added class #}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editTodoistModalLabel">Edit Todoist API Key</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_todoist_email" class="form-label">Todoist Account Email</label>
+                        <input type="email" class="form-control" id="edit_todoist_email" name="todoist_email" readonly>
+                        <input type="hidden" id="edit_todoist_account_id" name="account_id"> {# Added hidden ID field #}
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_todoist_api_key" class="form-label">New Todoist API Key</label>
+                        <input type="password" class="form-control" id="edit_todoist_api_key" name="api_key" 
+                               placeholder="Enter new API key to update">
+                        <small class="form-text text-muted">Leave blank to keep the current key (if set), or enter a new key.</small>
+                        <div id="edit_todoist_test_result" class="mt-2"></div> {# Optional: Add test button here too #}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Key</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Todoist Account Modal -->
+<div class="modal fade" id="deleteTodoistModal" tabindex="-1" aria-labelledby="deleteTodoistModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('todoist_auth.delete_account') }}" class="delete-todoist-form"> {# Added class #}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteTodoistModalLabel">Delete Todoist Account</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="delete_todoist_email" name="todoist_email">
+                    <input type="hidden" id="delete_todoist_account_id" name="account_id"> {# Added hidden ID field #}
+                    <p>Are you sure you want to delete the Todoist account associated with <strong id="delete_email_display"></strong>?</p>
+                    <p class="text-danger"><strong>This will remove the stored API key and cannot be undone.</strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Task Account Modal -->
+<div class="modal fade" id="deleteTaskAccountModal" tabindex="-1" aria-labelledby="deleteTaskAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            {# Point this form to the new task account deletion route #}
+            <form method="POST" action="{{ url_for('tasks.delete_task_account') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteTaskAccountModalLabel">Delete Task Provider Account</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="delete_task_account_id" name="account_id">
+                    <input type="hidden" id="delete_task_provider_name" name="provider_name"> {# Pass provider name if needed by backend #}
+                    <p>Are you sure you want to delete the <strong id="delete_task_provider_display"></strong> task provider account associated with <strong id="delete_task_email_display"></strong>?</p>
+                    <p class="text-danger"><strong>This will remove stored credentials and stop task syncing for this account. It cannot be undone.</strong></p>
+                    {# Add warning if deleting Google/O365 task account #}
+                    <p id="delete_task_warning_oauth" class="text-warning" style="display: none;"><strong>Note:</strong> This will only remove the task provider connection. The associated Calendar account (if any) will remain connected.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete Task Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
 <!-- Flash Messages -->
-<div id="flash-messages">
+<div id="flash-messages" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1055">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
             {% endfor %}
         {% endif %}
     {% endwith %}
 </div>
 
 <script>
-function setPrimaryAccount(radioButton) {
-    // Store the selected radio button's provider and email
-    const form = radioButton.closest('form');
+// --- Calendar Primary Account Logic ---
+function setPrimaryCalendarAccount(radioButton) {
+    const form = radioButton.closest('.primary-calendar-form');
+    if (!form) { console.error("Calendar form not found"); return false; }
     const provider = form.querySelector('input[name="provider"]').value;
     const email = form.querySelector('input[name="email"]').value;
+    showFlashMessage('info', 'Updating primary calendar account...');
     
-    // Show loading indicator
-    const flashDiv = document.getElementById('flash-messages');
-    flashDiv.innerHTML = '<div class="alert alert-info">Updating primary account...</div>';
-    
-    // Submit the form asynchronously
     fetch(form.action, {
         method: 'POST',
         body: new FormData(form),
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
-    .then(response => {
-        if (response.ok) {
-            // Add success message
-            flashDiv.innerHTML = '<div class="alert alert-success">Primary account updated successfully.</div>';
-            
-            // Update all radio buttons
-            document.querySelectorAll('.primary-form input[type="radio"]').forEach(radio => {
-                const radioProvider = radio.closest('form').querySelector('input[name="provider"]').value;
-                const radioEmail = radio.closest('form').querySelector('input[name="email"]').value;
-                
-                // Check the radio button if it matches the one we just set as primary
-                radio.checked = (radioProvider === provider && radioEmail === email);
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showFlashMessage('success', data.message || 'Primary calendar account updated successfully.');
+            // Update ONLY calendar radio buttons visually
+            document.querySelectorAll('.primary-calendar-form input[type="radio"]').forEach(radio => {
+                const radioForm = radio.closest('.primary-calendar-form');
+                if (radioForm) {
+                     radio.checked = (radioForm.querySelector('input[name="provider"]').value === provider &&
+                                      radioForm.querySelector('input[name="email"]').value === email);
+                }
             });
-            
-            // Fade out the flash message after 3 seconds
-            setTimeout(() => {
-                const alerts = flashDiv.querySelectorAll('.alert');
-                alerts.forEach(alert => {
-                    alert.style.opacity = '0';
-                    alert.style.transition = 'opacity 1s';
-                    setTimeout(() => alert.remove(), 1000);
-                });
-            }, 3000);
         } else {
-            // Show error message
-            flashDiv.innerHTML = '<div class="alert alert-danger">Failed to update primary account.</div>';
+            showFlashMessage('danger', data.message || 'Failed to update primary calendar account.');
+            // Revert radio button on failure? Maybe not necessary if page reloads or user retries.
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        // Show error message
-        flashDiv.innerHTML = '<div class="alert alert-danger">An error occurred while updating primary account.</div>';
+        console.error('Error setting primary calendar account:', error);
+        showFlashMessage('danger', 'An error occurred while updating primary calendar account.');
     });
-    
-    // Prevent the form from submitting normally
     return false;
 }
 
-// Add event listener for Todoist API key test button
-document.addEventListener('DOMContentLoaded', function() {
-    const testButton = document.getElementById('test_todoist');
-    if (testButton) {
-        testButton.addEventListener('click', function() {
-            const apiKey = document.getElementById('todoist_api_key').value;
-            const resultDiv = document.getElementById('todoist_test_result');
-            
-            if (!apiKey) {
-                resultDiv.innerHTML = '<div class="alert alert-warning">Please enter an API key to test</div>';
-                return;
-            }
-            
-            resultDiv.innerHTML = '<div class="alert alert-info">Testing connection...</div>';
-            
-            // Create form data
-            const formData = new FormData();
-            formData.append('api_key', apiKey);
-            
-            // Send test request
-            fetch('{{ url_for("todoist_auth.test_connection") }}', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    resultDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
-                } else {
-                    resultDiv.innerHTML = '<div class="alert alert-danger">' + data.message + '</div>';
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                resultDiv.innerHTML = '<div class="alert alert-danger">An error occurred while testing the connection</div>';
+// --- Primary Task Provider Logic ---
+function setPrimaryTaskProvider(radioButton) {
+    const form = radioButton.closest('.primary-task-form');
+    if (!form) { console.error("Task form not found"); return false; }
+    const providerId = form.querySelector('input[name="provider_id"]').value; // e.g., "todoist_1", "google_tasks_5"
+    
+    showFlashMessage('info', 'Updating primary task provider...');
+
+    // Assume new endpoint '/set_primary_task_provider' exists
+    fetch("{{ url_for('tasks.set_primary_task_provider') }}", {
+        method: 'POST',
+        body: new FormData(form), // Sends provider_id
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showFlashMessage('success', data.message || 'Primary task provider updated successfully.');
+            // Update ALL task radio buttons visually
+            document.querySelectorAll('.primary-task-form input[type="radio"]').forEach(radio => {
+                 const radioForm = radio.closest('.primary-task-form');
+                 if (radioForm) {
+                     radio.checked = (radioForm.querySelector('input[name="provider_id"]').value === providerId);
+                 }
             });
+        } else {
+            showFlashMessage('danger', data.message || 'Failed to update primary task provider.');
+        }
+    })
+    .catch(error => {
+        console.error('Error setting primary task provider:', error);
+        showFlashMessage('danger', 'An error occurred while updating primary task provider.');
+    });
+    return false;
+}
+
+
+// --- Task Account Modal Logic ---
+document.addEventListener('DOMContentLoaded', function() {
+    // Edit Modal: Populate email when shown
+    var editModal = document.getElementById('editTodoistModal');
+    if (editModal) {
+        editModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget; // Button that triggered the modal
+            var email = button.getAttribute('data-email'); // Extract info from data-* attributes
+            var accountId = button.getAttribute('data-account-id');
+            var modalBodyInputEmail = editModal.querySelector('.modal-body input#edit_todoist_email');
+            var modalBodyInputId = editModal.querySelector('.modal-body input#edit_todoist_account_id');
+            modalBodyInputEmail.value = email;
+            modalBodyInputId.value = accountId;
+            // Clear the API key field when opening
+            editModal.querySelector('.modal-body input#edit_todoist_api_key').value = ''; 
         });
     }
+
+    // Delete Modal: Populate email when shown
+    // Delete Todoist Modal Logic (Specific to Todoist delete form)
+    var deleteTodoistModal = document.getElementById('deleteTodoistModal');
+    if (deleteTodoistModal) {
+        deleteTodoistModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var email = button.getAttribute('data-email');
+            var accountId = button.getAttribute('data-account-id');
+            var modal = deleteTodoistModal; // Use specific modal variable
+            var modalBodyInputEmail = modal.querySelector('.modal-body input#delete_todoist_email');
+            var modalBodyInputId = modal.querySelector('.modal-body input#delete_todoist_account_id');
+            var modalBodyDisplayEmail = modal.querySelector('.modal-body strong#delete_email_display');
+            
+            if(modalBodyInputEmail) modalBodyInputEmail.value = email;
+            if(modalBodyInputId) modalBodyInputId.value = accountId;
+            if(modalBodyDisplayEmail) modalBodyDisplayEmail.textContent = email;
+        });
+    }
+
+    // Delete Task Account Modal Logic (Generic for all task accounts)
+    var deleteTaskModal = document.getElementById('deleteTaskAccountModal');
+    if (deleteTaskModal) {
+        deleteTaskModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var email = button.getAttribute('data-email');
+            var accountId = button.getAttribute('data-account-id');
+            var provider = button.getAttribute('data-provider'); // e.g., 'todoist', 'google_tasks', 'outlook'
+            var modal = deleteTaskModal; // Use specific modal variable
+
+            var modalInputId = modal.querySelector('.modal-body input#delete_task_account_id');
+            var modalInputProvider = modal.querySelector('.modal-body input#delete_task_provider_name');
+            var modalDisplayEmail = modal.querySelector('.modal-body strong#delete_task_email_display');
+            var modalDisplayProvider = modal.querySelector('.modal-body strong#delete_task_provider_display');
+            var modalWarningOAuth = modal.querySelector('.modal-body p#delete_task_warning_oauth');
+
+            if(modalInputId) modalInputId.value = accountId;
+            if(modalInputProvider) modalInputProvider.value = provider;
+            if(modalDisplayEmail) modalDisplayEmail.textContent = email;
+            
+            // Display provider name nicely
+            let providerText = provider;
+            if (provider === 'google_tasks') providerText = 'Google Tasks';
+            if (provider === 'outlook') providerText = 'O365 Tasks';
+            if(modalDisplayProvider) modalDisplayProvider.textContent = providerText;
+
+            // Show warning only for Google/O365 task accounts
+            if(modalWarningOAuth) {
+                if (provider === 'google_tasks' || provider === 'outlook') {
+                    modalWarningOAuth.style.display = 'block';
+                } else {
+                    modalWarningOAuth.style.display = 'none';
+                }
+            }
+        });
+    }
+    
+    // Optional: Add Todoist Test Button Logic (if needed inside modals)
+    // Similar to the original test button logic, but target elements within the modal
 });
+
+
+// --- Flash Message Handling ---
+function showFlashMessage(category, message) {
+    const flashContainer = document.getElementById('flash-messages');
+    if (!flashContainer) return;
+
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${category} alert-dismissible fade show`;
+    alertDiv.setAttribute('role', 'alert');
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    flashContainer.appendChild(alertDiv);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        var alertInstance = bootstrap.Alert.getOrCreateInstance(alertDiv);
+        if (alertInstance) {
+            alertInstance.close();
+        } else if (alertDiv.parentNode) {
+             // Fallback if instance not found but element exists
+             alertDiv.parentNode.removeChild(alertDiv);
+        }
+    }, 5000);
+}
+
+// Clear flash messages added by Flask on initial load after a delay
+document.addEventListener('DOMContentLoaded', function() {
+     setTimeout(() => {
+        const initialAlerts = document.querySelectorAll('#flash-messages .alert');
+        initialAlerts.forEach(alertDiv => {
+             var alertInstance = bootstrap.Alert.getOrCreateInstance(alertDiv);
+             if (alertInstance) {
+                 alertInstance.close();
+             } else if (alertDiv.parentNode) {
+                 alertDiv.parentNode.removeChild(alertDiv);
+             }
+        });
+    }, 5000); // Match auto-dismiss time
+});
+
 </script>
 {% endblock %}

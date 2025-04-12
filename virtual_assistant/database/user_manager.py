@@ -39,22 +39,6 @@ class UserDataManager(Database):
             logger.info(f"Logging out user {current_user.app_login}")
             logout_user()
             cls.current_user = None
-
-    @classmethod
-    def get_user_folder(cls):
-        """Get the user's folder path."""
-        if not cls.current_user:
-            raise ValueError("Current user not set. Please log in first.")
-        user_folder = os.path.join(Settings.USERS_FOLDER, cls.current_user)
-        os.makedirs(user_folder, exist_ok=True)
-        return user_folder
-
-    @classmethod
-    def get_calendar_accounts_file(cls):
-        """Get the calendar accounts file path (legacy)."""
-        user_folder = cls.get_user_folder()
-        return os.path.join(user_folder, "email_addresses.json")
-
     @classmethod
     def load_calendar_accounts(cls):
         """Load calendar accounts from the database."""

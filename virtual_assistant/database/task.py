@@ -12,7 +12,7 @@ class Task(db.Model):
 
     # Primary identification
     id = db.Column(db.Integer, primary_key=True)
-    app_login = db.Column(db.String(255), nullable=False, index=True) # The login identifier for the app user
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True) # Foreign key to the User
 
     # Provider identification (composite unique constraint)
     task_user_email = db.Column(db.String(255), nullable=True, index=True) # Email associated with the task provider account (e.g., Google account email for Google Tasks)
@@ -45,15 +45,15 @@ class Task(db.Model):
     # Composite unique constraint
     __table_args__ = (
         # Ensure a task from a specific provider account for a specific app user is unique
-        db.UniqueConstraint('app_login', 'task_user_email', 'provider', 'provider_task_id', name='uq_app_login_task_user_provider_task'),
+        db.UniqueConstraint('user_id', 'task_user_email', 'provider', 'provider_task_id', name='uq_user_id_task_user_provider_task'),
     )
 
     @classmethod
-    def create_or_update_from_provider_task(cls, app_login, task_user_email, provider, provider_task):
+    def create_or_update_from_provider_task(cls, user_id, task_user_email, provider, provider_task):
         """Create or update a task from provider data.
 
         Args:
-            app_login: The user's login identifier for this application
+            user_id: The user's database ID
             task_user_email: The email associated with the task provider account
             provider: Provider name ('todoist', 'google_tasks', etc.)
             provider_task: Task object from the provider
@@ -80,13 +80,13 @@ class Task(db.Model):
 
         # Look for existing task with same provider/provider_task_id
         existing_task = cls.query.filter_by(
-            app_login=app_login,
+            user_id=user_id,
             provider=provider,
             provider_task_id=provider_task.id
         ).first()
-        # TODO: Decide if we should also filter by task_user_email here if it's provided and not null?
+        # TODO: Decide if we should also filter by task_user_email here if it's provided and not null? (Note: app_login changed to user_id)
         # existing_task = cls.query.filter_by(
-        #     app_login=app_login,
+        #     user_id=user_id,
         #     task_user_email=task_user_email,
         #     provider=provider,
         #     provider_task_id=provider_task.id
@@ -146,7 +146,7 @@ class Task(db.Model):
         else:
             # Create new task
             new_task = cls(
-                app_login=app_login,
+                user_id=user_id,
                 task_user_email=task_user_email,
                 provider=provider,
                 provider_task_id=provider_task.id,
@@ -172,17 +172,17 @@ class Task(db.Model):
             return new_task, True
 
     @classmethod
-    def sync_task_deletions(cls, app_login, provider, current_provider_task_ids):
+    def sync_task_deletions(cls, user_id, provider, current_provider_task_ids):
         """Remove tasks that no longer exist in the provider.
 
         Args:
-            app_login: The user's login identifier
+            user_id: The user's database ID
             provider: Provider name
             current_provider_task_ids: List of current task IDs from the provider
         """
         # Find tasks in our database that aren't in the current provider list
         deleted_tasks = cls.query.filter(
-            cls.app_login == app_login,
+            cls.user_id == user_id,
             cls.provider == provider,
             ~cls.provider_task_id.in_(current_provider_task_ids)
         ).all()
@@ -194,22 +194,22 @@ class Task(db.Model):
         db.session.commit()
 
     @classmethod
-    def get_user_tasks_by_list(cls, app_login):
+    def get_user_tasks_by_list(cls, user_id):
         """Get prioritized and unprioritized task lists for a user.
 
         Args:
-            app_login: The user's login identifier
+            user_id: The user's database ID
 
         Returns:
             tuple: (prioritized_tasks, unprioritized_tasks)
         """
         prioritized = cls.query.filter_by(
-            app_login=app_login,
+            user_id=user_id,
             list_type='prioritized'
         ).order_by(cls.position).all()
 
         unprioritized = cls.query.filter_by(
-            app_login=app_login,
+            user_id=user_id,
             list_type='unprioritized'
         ).order_by(cls.position).all()
 
@@ -239,14 +239,14 @@ class Task(db.Model):
             if position is None:
                 # Find the highest position in the destination list
                 max_position_result = db.session.query(db.func.max(cls.position))\
-                    .filter_by(app_login=task.app_login, list_type=destination).first()
+                    .filter_by(user_id=task.user_id, list_type=destination).first()
                 max_position = max_position_result[0] if max_position_result[0] is not None else -1
                 position = max_position + 1
 
             # Update positions of other tasks in the destination list
             if not same_list or position < task.position:
                 cls.query.filter(
-                    cls.app_login == task.app_login,
+                    cls.user_id == task.user_id,
                     cls.list_type == destination,
                     cls.id != task_id,
                     cls.position >= position
@@ -260,7 +260,7 @@ class Task(db.Model):
             elif same_list and position > task.position:
                 # When moving later in same list, account for the shift
                 tasks_between = cls.query.filter(
-                    cls.app_login == task.app_login,
+                    cls.user_id == task.user_id,
                     cls.list_type == destination,
                     cls.position > task.position,
                     cls.position <= position
@@ -292,11 +292,11 @@ class Task(db.Model):
         return cls.move_task(task_id, list_type)
 
     @classmethod
-    def update_task_order(cls, app_login, list_type, task_positions):
+    def update_task_order(cls, user_id, list_type, task_positions):
         """Update the order of multiple tasks in a list.
 
         Args:
-            app_login: The user's login identifier
+            user_id: The user's database ID
             list_type: 'prioritized' or 'unprioritized'
             task_positions: Dict mapping task IDs to positions
         """
@@ -305,7 +305,7 @@ class Task(db.Model):
 
         try:
             for task_id, position in task_positions.items():
-                cls.query.filter_by(id=task_id, app_login=app_login).update({
+                cls.query.filter_by(id=task_id, user_id=user_id).update({
                     'list_type': list_type,
                     'position': position
                 })
@@ -322,7 +322,7 @@ class Task(db.Model):
         """Convert task to dictionary representation."""
         return {
             'id': self.id, # This is the internal DB id, maybe rename to db_id?
-            'app_login': self.app_login,
+            'user_id': self.user_id,
             'task_user_email': self.task_user_email,
             'provider': self.provider,
             'provider_task_id': self.provider_task_id,
@@ -343,52 +343,82 @@ class Task(db.Model):
 # --- TaskAccount Model ---
 
 class TaskAccount(db.Model):
-    """Stores API key credentials for Task providers linked to a user."""
-    __tablename__ = 'task_accounts' # Table name
+    """Stores credentials (API key or OAuth tokens) for Task providers linked to a user."""
+    __tablename__ = 'task_accounts'
 
     id = Column(Integer, primary_key=True)
-    app_login = Column(String(120), ForeignKey('user.app_login'), nullable=False)
-    provider_name = Column(String(50), nullable=False) # e.g., 'todoist', 'sqlite'
-    # Store the API key directly
-    api_key = Column(Text, nullable=False)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False, index=True)
+    provider_name = Column(String(50), nullable=False, index=True) # e.g., 'todoist', 'google_tasks', 'outlook'
+    # Email associated with the provider account (e.g., Google account email).
+    # For providers like Todoist using API key, this stores the user's app_login.
+    task_user_email = Column(String(255), nullable=False, index=True)
+
+    # Credentials - store one type based on provider needs
+    api_key = Column(Text, nullable=True) # For simple API key auth (e.g., Todoist)
+    token = Column(Text, nullable=True) # OAuth access token
+    refresh_token = Column(Text, nullable=True) # OAuth refresh token
+    expires_at = Column(DateTime, nullable=True) # OAuth token expiry timestamp
+    scopes = Column(Text, nullable=True) # OAuth scopes granted
+
+    # Timestamps & Status
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    needs_reauth = Column(db.Boolean, nullable=False, default=False) # Flag if re-authentication is needed
+    is_primary = Column(db.Boolean, default=False, nullable=False) # Whether this is the user's primary task account for this provider type
 
     # Define the relationship to the User model using back_populates
-    # Ensure User model has back_populates="task_accounts"
     user = relationship("User", back_populates="task_accounts")
 
-    __table_args__ = (UniqueConstraint('app_login', 'provider_name', name='uq_user_task_provider'),)
+    # Unique constraint: A user can link one account per provider/email combination.
+    __table_args__ = (UniqueConstraint('user_id', 'provider_name', 'task_user_email', name='uq_user_provider_email'),)
 
     def __repr__(self):
-        return f"<TaskAccount(user='{self.app_login}', provider='{self.provider_name}')>"
+        return f"<TaskAccount(user_id='{self.user_id}', provider='{self.provider_name}', email='{self.task_user_email}')>"
 
     @classmethod
-    def get_account(cls, app_login: str, provider_name: str):
-        """Retrieve the task account for a specific user and provider."""
+    @classmethod
+    def get_account(cls, user_id: int, provider_name: str, task_user_email: str):
+        """Retrieve the task account for a specific user, provider, and provider email."""
         return cls.query.filter_by(
-            app_login=app_login,
-            provider_name=provider_name
+            user_id=user_id,
+            provider_name=provider_name,
+            task_user_email=task_user_email
         ).first()
 
     @classmethod
-    def set_account(cls, app_login: str, provider_name: str, api_key: str):
-        """Create or update the task account (API key) for a user and provider."""
-        account = cls.get_account(app_login, provider_name)
-        if account:
-            account.api_key = api_key
-        else:
+    @classmethod
+    def set_account(cls, user_id: int, provider_name: str, task_user_email: str, credentials: dict):
+        """Create or update the task account credentials for a user, provider, and email.
+           The `credentials` dict should contain the relevant keys ('api_key', 'token', etc.).
+        """
+        account = cls.get_account(user_id, provider_name, task_user_email)
+
+        if not account:
             account = cls(
-                app_login=app_login,
+                user_id=user_id,
                 provider_name=provider_name,
-                api_key=api_key
+                task_user_email=task_user_email
             )
             db.session.add(account)
-        return account
+
+        # Update fields based on provided credentials dictionary
+        # Use .get() with the current value as default to avoid overwriting with None if key is missing
+        account.api_key = credentials.get('api_key', account.api_key)
+        account.token = credentials.get('token', account.token)
+        account.refresh_token = credentials.get('refresh_token', account.refresh_token)
+        account.expires_at = credentials.get('expires_at', account.expires_at)
+        account.scopes = credentials.get('scopes', account.scopes)
+        # Reset reauth flag when credentials are updated, default to False if not specified
+        account.needs_reauth = credentials.get('needs_reauth', False)
+
+        return account # Return the account instance, caller should commit session
 
     @classmethod
-    def delete_account(cls, app_login: str, provider_name: str):
-        """Delete the task account for a specific user and provider."""
-        account = cls.get_account(app_login, provider_name)
+    @classmethod
+    def delete_account(cls, user_id: int, provider_name: str, task_user_email: str):
+        """Delete the task account for a specific user, provider, and email."""
+        account = cls.get_account(user_id, provider_name, task_user_email)
         if account:
             db.session.delete(account)
-            return True
+            return True # Return True if deleted, caller should commit session
         return False

@@ -42,74 +42,67 @@ class TaskProvider(ABC):
     # Implement file-based credential storage in the base class
     # Suitable for providers using simple keys (like Todoist API key)
     # OAuth providers (Google, O365) should override these methods.
-    def get_credentials(self, app_login, task_user_email) -> Optional[Dict[str, Any]]:
-        """Get task provider credentials from a user-specific file."""
-        current_app_login = UserDataManager.get_current_user()
-        if current_app_login != app_login:
-             logger.warning(f"get_credentials called with app_login '{app_login}' which differs from current user context '{current_app_login}'")
+    def get_credentials(self, app_login: str, task_user_email: str) -> Optional[Dict[str, Any]]:
+        """Get task provider credentials from the TaskAccount database model."""
+        logger.debug(f"Retrieving {self.provider_name} credentials from DB for app_login='{app_login}', task_user_email='{task_user_email}'")
 
-        logger.debug(f"Retrieving {self.provider_name} credentials using context for '{current_app_login}', targeting file for task_user_email='{task_user_email}'")
-        try:
-            user_folder = UserDataManager.get_user_folder() # Uses current logged-in user context
-        except ValueError as e:
-             logger.error(f"Cannot get user folder for credentials: {e}")
-             return None
+        user = User.query.filter_by(app_login=app_login).first()
+        if not user:
+            logger.error(f"User not found for app_login '{app_login}' when retrieving credentials.")
+            return None
 
-        provider_folder = os.path.join(user_folder, self.provider_name)
-        # Use a filename incorporating both identifiers for uniqueness
-        # TODO: Improve filename sanitization if emails can contain unusual characters.
-        safe_app_login = app_login.replace('@', '_at_').replace('.', '_dot_')
-        safe_task_user_email = task_user_email.replace('@', '_at_').replace('.', '_dot_')
-        filename = f"{safe_app_login}_{safe_task_user_email}_credentials.json"
-        credentials_file = os.path.join(provider_folder, filename)
+        # Use the provided task_user_email to find the specific account
+        account = TaskAccount.get_account(user.id, self.provider_name, task_user_email)
 
-        if os.path.exists(credentials_file):
-            try:
-                with open(credentials_file, "r", encoding='utf-8') as file:
-                    credentials = json.load(file)
-                    logger.debug(f"{self.provider_name} credentials loaded for app_login='{app_login}', task_user_email='{task_user_email}' from {filename}")
-                    return credentials
-            except (json.JSONDecodeError, IOError) as e:
-                 logger.error(f"Error reading credentials file {credentials_file}: {e}")
-                 return None
-        logger.warning(f"{self.provider_name} credentials file not found: {credentials_file}")
-        return None
+        if account:
+            # Construct credentials dictionary from model attributes
+            credentials = {
+                'api_key': account.api_key,
+                'token': account.token,
+                'refresh_token': account.refresh_token,
+                'expires_at': account.expires_at,
+                'scopes': account.scopes,
+                'needs_reauth': account.needs_reauth,
+                # Include identifiers for context if needed by caller
+                'app_login': app_login,
+                'task_user_email': task_user_email,
+                'provider_name': self.provider_name
+            }
+            # Filter out None values to return only stored credentials
+            credentials = {k: v for k, v in credentials.items() if v is not None}
+            
+            logger.debug(f"{self.provider_name} credentials retrieved from DB for app_login='{app_login}', task_user_email='{task_user_email}'")
+            return credentials
+        else:
+            logger.warning(f"{self.provider_name} TaskAccount not found in DB for app_login='{app_login}', task_user_email='{task_user_email}'")
+            return None
 
-    def store_credentials(self, app_login, task_user_email, credentials):
-        """Store task provider credentials in a user-specific file."""
-        current_app_login = UserDataManager.get_current_user()
-        if current_app_login != app_login:
-             logger.warning(f"store_credentials called with app_login '{app_login}' which differs from current user context '{current_app_login}'")
+    def store_credentials(self, app_login: str, task_user_email: str, credentials: Dict[str, Any]):
+        """Store task provider credentials in the TaskAccount database model."""
+        logger.debug(f"Storing {self.provider_name} credentials to DB for app_login='{app_login}', task_user_email='{task_user_email}'")
 
-        logger.debug(f"Storing {self.provider_name} credentials using context for '{current_app_login}', targeting file for task_user_email='{task_user_email}'")
-        try:
-            user_folder = UserDataManager.get_user_folder() # Uses current logged-in user context
-        except ValueError as e:
-             logger.error(f"Cannot get user folder for storing credentials: {e}")
-             raise IOError(f"Cannot get user folder: {e}") from e
-
-        provider_folder = os.path.join(user_folder, self.provider_name)
+        user = User.query.filter_by(app_login=app_login).first()
+        if not user:
+            logger.error(f"User not found for app_login '{app_login}' when storing credentials.")
+            # Decide on error handling: raise exception or return failure?
+            raise ValueError(f"User not found: {app_login}")
 
         try:
-            os.makedirs(provider_folder, exist_ok=True)
-        except OSError as e:
-             logger.error(f"Cannot create provider folder {provider_folder}: {e}")
-             raise IOError(f"Cannot create provider folder: {e}") from e
-
-        # Use a filename incorporating both identifiers for uniqueness
-        # TODO: Improve filename sanitization if emails can contain unusual characters.
-        safe_app_login = app_login.replace('@', '_at_').replace('.', '_dot_')
-        safe_task_user_email = task_user_email.replace('@', '_at_').replace('.', '_dot_')
-        filename = f"{safe_app_login}_{safe_task_user_email}_credentials.json"
-        credentials_file = os.path.join(provider_folder, filename)
-
-        try:
-            with open(credentials_file, "w", encoding='utf-8') as file:
-                json.dump(credentials, file, indent=4)
-            logger.debug(f"{self.provider_name} credentials stored for app_login='{app_login}', task_user_email='{task_user_email}' in {filename}")
-        except IOError as e:
-             logger.error(f"Error writing credentials file {credentials_file}: {e}")
-             raise
+            # set_account handles both creation and update
+            account = TaskAccount.set_account(
+                user_id=user.id,
+                provider_name=self.provider_name,
+                task_user_email=task_user_email,
+                credentials=credentials # Pass the dictionary directly
+            )
+            db.session.add(account) # Add to session (needed if new or updated)
+            db.session.commit() # Commit the changes
+            logger.debug(f"{self.provider_name} credentials stored in DB for app_login='{app_login}', task_user_email='{task_user_email}'")
+        except Exception as e:
+            db.session.rollback() # Rollback on error
+            logger.error(f"Error storing {self.provider_name} credentials to DB for app_login='{app_login}', task_user_email='{task_user_email}': {e}")
+            # Re-raise the exception to signal failure
+            raise Exception(f"Database error storing credentials: {e}") from e
 
     # --- Abstract methods for core provider functionality ---
     # Signatures updated to use app_login and task_user_email

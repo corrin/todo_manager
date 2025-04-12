@@ -54,9 +54,13 @@ class Database:
         from virtual_assistant.utils.settings import Settings
         import os
         
-        # Ensure the database directory exists
-        db_dir = os.path.dirname(Settings.DATABASE_URI.replace('sqlite:///', ''))
-        os.makedirs(db_dir, exist_ok=True)
+        # Ensure the database directory exists (Only needed for SQLite)
+        # db_uri = Settings.DATABASE_URI
+        # if db_uri and db_uri.startswith('sqlite:///'):
+        #     db_path = db_uri.replace('sqlite:///', '')
+        #     db_dir = os.path.dirname(db_path)
+        #     os.makedirs(db_dir, exist_ok=True)
+        # Removed this block as it causes errors with non-SQLite URIs and is unnecessary
         
         # Configure SQLAlchemy
         app.config['SQLALCHEMY_DATABASE_URI'] = Settings.DATABASE_URI

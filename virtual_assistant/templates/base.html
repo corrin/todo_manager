@@ -49,16 +49,20 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    {% if user_email %}
+                    {# Use Flask-Login's current_user object to check authentication status #}
+                    {% if current_user.is_authenticated %}
+                        {# Display the logged-in user's email (app_login) #}
                         <li class="nav-item">
-                            <span class="nav-link">{{ user_email }}</span>
+                            <span class="nav-link">{{ current_user.app_login }}</span>
                         </li>
+                        {# Link to the logout route #}
                         <li class="nav-item">
-                            <a class="nav-link" href="/logout">Logout</a>
+                            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
                         </li>
                     {% else %}
+                        {# If not authenticated, show a link to the login_view route ('new_user') #}
                         <li class="nav-item">
-                            <a class="nav-link" href="/login">Login</a>
+                            <a class="nav-link" href="{{ url_for('new_user') }}">Login</a>
                         </li>
                     {% endif %}
                 </ul>

@@ -21,6 +21,8 @@ from virtual_assistant.meetings.o365_calendar_provider import O365CalendarProvid
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.task import TaskAccount # Import TaskAccount
+from flask_login import current_user # Import current_user
 from virtual_assistant.utils.settings import Settings
 from virtual_assistant.database.database import db
 from functools import wraps
@@ -310,29 +312,73 @@ def google_authenticate():
         
         logger.info(f"Google Calendar credentials received for account: {calendar_account_email}")
         
-        # Check if this Google account is already connected to this app user
-        existing_account = CalendarAccount.query.filter_by(
-            app_login=app_login,
+        # Check if a CalendarAccount for this Google account already exists for this app user
+        existing_calendar_account = CalendarAccount.query.filter_by(
+            user_id=current_user.id, # Use user_id from current_user
             calendar_email=calendar_account_email,
             provider=provider
         ).first()
         
-        # Store/update credentials
-        google_provider.store_credentials(calendar_account_email, credentials, app_login)
-        
-        # Verify credentials work by attempting to get meetings
-        google_provider.get_meetings_sync(calendar_account_email, app_login)
-        
-        # Update account status
-        if existing_account:
-            existing_account.needs_reauth = False
-            existing_account.last_sync = datetime.now(timezone.utc)
-            db.session.commit()
-            flash(f"Successfully reauthorized Google Calendar for {calendar_account_email}.", "success")
-        else:
-            flash(f"Google Calendar {calendar_account_email} connected successfully.", "success")
-        
-        return redirect(url_for("meetings.sync_single_calendar", provider=provider, calendar_email=calendar_account_email))
+        # Store/update CALENDAR credentials using the provider's method
+        # This method should handle creation or update internally and return the CalendarAccount object
+        calendar_account = google_provider.store_credentials(calendar_account_email, credentials, current_user.id) # Pass user_id
+
+        # Verify credentials work by attempting to get meetings (optional but recommended)
+        verification_failed = False
+        try:
+            google_provider.get_meetings_sync(calendar_account_email, current_user.id) # Pass user_id
+            # Mark calendar account as active if verification succeeds
+            if calendar_account:
+                 calendar_account.needs_reauth = False
+                 calendar_account.last_sync = datetime.now(timezone.utc)
+                 # Don't commit yet, do it after task account update
+        except Exception as verify_error:
+             verification_failed = True
+             logger.error(f"Failed to verify Google Calendar credentials for {calendar_account_email} (User ID: {current_user.id}): {verify_error}")
+             if calendar_account:
+                 calendar_account.needs_reauth = True # Mark as needing reauth if verification fails
+             # Don't commit yet
+
+        # --- Also Create/Update TaskAccount ---
+        task_provider_name = 'google_tasks'
+        # Prepare credentials dictionary for TaskAccount
+        task_credentials = {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            # Attempt to get expiry, handle potential AttributeError if not present
+            'expires_at': getattr(credentials, 'expiry', None),
+            'scopes': " ".join(credentials.scopes) if credentials.scopes else None,
+            # Set reauth based on calendar verification result
+            'needs_reauth': verification_failed
+        }
+        # Use TaskAccount's class method to handle creation or update
+        task_account = TaskAccount.set_account(
+            user_id=current_user.id,
+            provider_name=task_provider_name,
+            task_user_email=calendar_account_email, # Use the same email
+            credentials=task_credentials
+        )
+        # Stage the task account changes if an object was returned (created/updated)
+        if task_account:
+             db.session.add(task_account)
+
+        # --- Commit all changes and Flash message ---
+        try:
+            db.session.commit() # Commit both CalendarAccount and TaskAccount changes
+            # Flash message should only mention Calendar context, as per user requirement
+            if existing_calendar_account: # Check if the *calendar* account existed before
+                flash(f"Successfully reauthorized Google Calendar for {calendar_account_email}.", "success")
+            else:
+                flash(f"Google Calendar for {calendar_account_email} connected successfully.", "success")
+        except Exception as commit_error:
+             db.session.rollback()
+             logger.error(f"Error committing account updates for Google user {current_user.id} ({calendar_account_email}): {commit_error}")
+             flash(f"Error saving account details for {calendar_account_email}.", "danger")
+             # Redirect to settings on error saving
+             return redirect(url_for("settings"))
+
+        # Redirect to settings page after successful connection/reauth
+        return redirect(url_for("settings"))
         
     except Exception as e:
         logger.error(f"❌ AUTH ERROR: Error in google_authenticate: {e}")
@@ -346,31 +392,79 @@ def o365_authenticate():
     
     o365_provider = O365CalendarProvider()
     
-    app_login = session.get("app_login")
+    # app_login = session.get("app_login") # Use current_user instead
     
     try:
-        # Handle the callback synchronously by wrapping the async call
-        calendar_email = async_to_sync(o365_provider.handle_oauth_callback)(request.url, app_login)
-        if not calendar_email:
-            logger.error("Failed to complete O365 authentication - no email returned")
-            flash("Failed to connect Office 365 Calendar.", "error")
-            return redirect(url_for("meetings.sync_meetings"))
+        # Handle the callback synchronously, expecting email and credentials dict
+        result = async_to_sync(o365_provider.handle_oauth_callback)(request.url, current_user.id) # Pass user_id
+        
+        if not result or 'email' not in result or 'credentials' not in result:
+            logger.error(f"Failed to complete O365 authentication for user {current_user.id} - invalid result from callback handler: {result}")
+            flash("Failed to connect Office 365 Calendar (invalid callback data).", "error")
+            return redirect(url_for("settings")) # Redirect to settings
 
-        # Check if this account already exists
-        existing_account = CalendarAccount.query.filter_by(
-            app_login=app_login,
+        calendar_email = result['email']
+        credentials = result['credentials'] # Expecting dict like {'token': ..., 'refresh_token': ..., 'expires_at': ...}
+
+        # Check if a CalendarAccount for this O365 account already exists
+        existing_calendar_account = CalendarAccount.query.filter_by(
+            user_id=current_user.id,
             calendar_email=calendar_email,
             provider='o365'
         ).first()
+
+        # --- Create/Update CalendarAccount ---
+        calendar_account = existing_calendar_account
+        if not calendar_account:
+             calendar_account = CalendarAccount(
+                 user_id=current_user.id,
+                 calendar_email=calendar_email,
+                 provider='o365'
+             )
+             db.session.add(calendar_account)
         
-        # Update account status
-        if existing_account:
-            existing_account.needs_reauth = False
-            existing_account.last_sync = datetime.now(timezone.utc)
+        # Update CalendarAccount fields from credentials dict
+        calendar_account.token = credentials.get('token')
+        calendar_account.refresh_token = credentials.get('refresh_token')
+        # Assuming O365 provider handles client_id/secret internally if needed
+        # calendar_account.scopes = Settings.O365_SCOPES # Store scopes if needed
+        calendar_account.needs_reauth = False # Assume success for now
+        calendar_account.last_sync = datetime.now(timezone.utc)
+        # Verification step could be added here if O365 provider has a sync check method
+
+        # --- Also Create/Update TaskAccount ---
+        task_provider_name = 'outlook' # Map 'o365' calendar to 'outlook' task provider
+        task_credentials = {
+            'token': credentials.get('token'),
+            'refresh_token': credentials.get('refresh_token'),
+            'expires_at': credentials.get('expires_at'), # Pass expiry if available
+            'scopes': credentials.get('scopes'), # Pass scopes if available
+            'needs_reauth': False # Assume success
+        }
+        task_account = TaskAccount.set_account(
+            user_id=current_user.id,
+            provider_name=task_provider_name,
+            task_user_email=calendar_email,
+            credentials=task_credentials
+        )
+        if task_account:
+             db.session.add(task_account)
+
+        # --- Commit all changes and Flash message ---
+        try:
             db.session.commit()
-            flash(f"Successfully reauthorized Office 365 Calendar for {calendar_email}.", "success")
-        else:
-            flash("Office 365 Calendar connected successfully.", "success")
+            # Flash message only mentions Calendar context
+            if existing_calendar_account:
+                flash(f"Successfully reauthorized Office 365 Calendar for {calendar_email}.", "success")
+            else:
+                flash(f"Office 365 Calendar for {calendar_email} connected successfully.", "success")
+        except Exception as commit_error:
+             db.session.rollback()
+             logger.error(f"Error committing account updates for O365 user {current_user.id} ({calendar_email}): {commit_error}")
+             flash(f"Error saving account details for {calendar_email}.", "danger")
+             return redirect(url_for("settings"))
+        # Redirect to settings page after successful connection/reauth
+        return redirect(url_for("settings"))
         
         return redirect(url_for("meetings.sync_single_calendar", provider='o365', calendar_email=calendar_email))
         

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Task Master</title>
+    <!-- Basic styling, assuming Bootstrap or similar might be used elsewhere -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body { padding: 2rem; font-family: sans-serif; }
+        .container { max-width: 700px; margin: auto; text-align: left; } /* Adjusted width and alignment */
+        h1 { text-align: center; margin-bottom: 1.5rem; } /* Center heading */
+        p { margin-bottom: 1rem; line-height: 1.6; } /* Add spacing between paragraphs */
+        .login-button-container { text-align: center; margin-top: 2rem; } /* Center button */
+        .login-button {
+            display: inline-block;
+            padding: 12px 25px; /* Slightly larger button */
+            background-color: #4285F4; /* Google Blue */
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        .philosophy { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #eee; } /* Section for philosophy */
+        .philosophy h3 { text-align: center; margin-bottom: 1rem; } /* Center philosophy heading */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Task Master</h1>
+        <p>This app allows you to turn your todo list into meetings, using AI to help keep you on track.</p>
+        <p>If you want to use the app, you'll need to log in with any Google account.</p>
+
+        <hr style="margin: 2rem 0;"> <!-- Add a visual separator -->
+
+        <p><strong>How it works:</strong> Once you're signed into your Google account, you can add as many calendar accounts (like Google Calendar) and task accounts (e.g., Todoist) as you like. The app will intelligently break your tasks down into 30 or 60 minute chunks and schedule them according to any guidelines you provide. You need to tell the app when you finish a task, or it will keep trying to schedule it.</p>
+
+        <p><strong>Pricing:</strong> Anybody with a Google account can currently use the app for free. No credit card or billing info is collected at this time. When we start charging, we will contact all users well in advance to ask them to add billing information if they wish to continue.</p>
+
+        <div class="philosophy">
+            <h3>Our Approach to Task Management</h3>
+            <p>We find this approach works much better than deadlines for a bunch of reasons. Two of the main ones are:</p>
+            <ul>
+                <li>If you start missing deadlines due to something urgent coming up, traditional to-do managers often struggle to reprioritize, simply marking everything as overdue.</li>
+                <li>Most deadlines are pretty arbitrary. We believe Kanban-style priorities, focusing on what's next, work better for most people's workflows.</li>
+            </ul>
+        </div>
+
+        <div class="login-button-container">
+            <a href="{{ url_for('login') }}" class="login-button">Login with Google</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -570,7 +570,7 @@ class GoogleCalendarProvider(CalendarProvider):
         logger.info(f"Meeting created for {calendar_email}: {event.get('htmlLink')}")
         return event.get("id")
 
-    def store_credentials(self, calendar_email, credentials, app_login):
+    def store_credentials(self, calendar_email, credentials, user_id):
         """
         Store credentials for the given Google Calendar account.
         
@@ -581,7 +581,7 @@ class GoogleCalendarProvider(CalendarProvider):
             calendar_email (str): The email address of the Google Calendar account.
                                  This is obtained from get_google_email().
             credentials: OAuth credentials object to store.
-            app_login (str): The login identifier used to log into this app.
+            user_id (int): The ID of the user this account belongs to. # Corrected docstring
             
         Returns:
             bool: True if credentials were stored successfully.
@@ -589,9 +589,10 @@ class GoogleCalendarProvider(CalendarProvider):
         Raises:
             Exception: If provided parameters are invalid.
         """
-        if not app_login:
-            logger.error("No app login provided when storing credentials")
-            raise Exception("app_login is required")
+        # Check if user_id is provided
+        if not user_id:
+            logger.error("No user ID provided when storing credentials")
+            raise Exception("user_id is required")
 
         credentials_data = {
             'token': credentials.token,
@@ -603,25 +604,28 @@ class GoogleCalendarProvider(CalendarProvider):
         }
         
         # Get existing account or create new one
+        # Use user_id to find the account
         account = CalendarAccount.get_by_email_provider_and_user(
-            calendar_email, self.provider_name, app_login
+            calendar_email, self.provider_name, user_id
         )
         
         # Check if this is the first calendar account for this user
-        existing_accounts = CalendarAccount.get_accounts_for_user(app_login)
-        is_first_account = len(existing_accounts) == 0
+        # Check if this user already has a primary account using user_id
+        has_primary = CalendarAccount.query.filter_by(user_id=user_id, is_primary=True).first() is not None
+        is_first_account = not has_primary # Simplified logic: set primary if no primary exists
         
         if not account:
-            logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user {app_login}")
+            logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}") # Corrected logging
             account = CalendarAccount(
+                user_id=user_id, # Pass user_id to constructor
                 calendar_email=calendar_email,
-                app_login=app_login,
                 provider=self.provider_name,
-                is_primary=is_first_account,  # Set as primary if it's the first account
+                is_primary=is_first_account, # Set primary based on whether user already has one
+                created_at=datetime.now(timezone.utc), # Add created_at timestamp
                 **credentials_data
             )
         else:
-            logger.info(f"Updating existing calendar account for {calendar_email} ({self.provider_name}) for user {app_login}")
+            logger.info(f"Updating existing calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}") # Corrected logging
             # Update account with new credentials
             for key, value in credentials_data.items():
                 setattr(account, key, value)

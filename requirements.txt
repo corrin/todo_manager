@@ -11,3 +11,4 @@ jinja2
 flask_sqlalchemy
 Authlib
 msal
+PyMySQL

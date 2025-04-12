@@ -12,8 +12,9 @@ class Settings:
     # Project settings
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     USERS_FOLDER = os.path.join(PROJECT_ROOT, "users")
-    DATABASE_PATH = os.path.join(PROJECT_ROOT, "data", "virtual_assistant.db")
-    DATABASE_URI = f"sqlite:///{DATABASE_PATH}"
+    # DATABASE_PATH = os.path.join(PROJECT_ROOT, "data", "virtual_assistant.db") # Old SQLite path
+    # DATABASE_URI = f"sqlite:///{DATABASE_PATH}" # Old SQLite URI
+    DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI") # Read from environment
 
     # Ensure users folder exists
     os.makedirs(USERS_FOLDER, exist_ok=True)
@@ -45,7 +46,8 @@ class Settings:
             'O365_CLIENT_SECRET': 'Office 365 client secret',
             'O365_REDIRECT_URI': 'Office 365 redirect URI',
             'FLASK_SECRET_KEY': 'Flask secret key',
-            'SERVER_NAME': 'Server name'
+            'SERVER_NAME': 'Server name',
+            'SQLALCHEMY_DATABASE_URI': 'SQLAlchemy Database URI'
         }
 
         missing_vars = []

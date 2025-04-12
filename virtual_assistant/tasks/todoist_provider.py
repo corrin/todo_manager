@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from .task_provider import TaskProvider, Task
 from virtual_assistant.database.task import TaskAccount
+from virtual_assistant.database.user import User
 from virtual_assistant.utils.logger import logger
 
 
@@ -24,9 +25,14 @@ class TodoistProvider(TaskProvider):
     def _initialize_api(self, app_login, task_user_email):
         """Initialize the Todoist API client using credentials from the database."""
         if self.api is None:
-            logger.debug(f"Attempting to initialize Todoist API for app_login='{app_login}'")
-            account = TaskAccount.get_account(user_app_login=app_login, provider_name=self.provider_name)
-            
+            logger.debug(f"Attempting to initialize Todoist API for app_login='{app_login}', task_user_email='{task_user_email}'")
+            user = User.query.filter_by(app_login=app_login).first()
+            if not user:
+                 logger.error(f"Cannot initialize Todoist API: User not found for app_login '{app_login}'")
+                 self.api = None
+                 return
+            # For Todoist, task_user_email is the app_login
+            account = TaskAccount.get_account(user_id=user.id, provider_name=self.provider_name, task_user_email=app_login)
             if account and account.api_key:
                 try:
                     self.api = TodoistAPI(account.api_key)
@@ -35,15 +41,22 @@ class TodoistProvider(TaskProvider):
                     logger.error(f"Failed to initialize Todoist API for app_login='{app_login}' with stored key: {e}")
                     self.api = None
             else:
-                 logger.warning(f"Could not initialize Todoist API: TaskAccount or API key not found in DB for app_login='{app_login}', provider='{self.provider_name}'")
+                 logger.warning(f"Could not initialize Todoist API: TaskAccount or API key not found in DB for user_id='{user.id}', provider='{self.provider_name}', task_user_email='{app_login}'")
 
     # --- Provider Methods ---
 
     # Signature matches abstract method in TaskProvider
     def authenticate(self, app_login, task_user_email):
         """Check if we have valid credentials in the database and return auth URL if needed."""
-        logger.debug(f"Authenticating Todoist for app_login='{app_login}'")
-        account = TaskAccount.get_account(user_app_login=app_login, provider_name=self.provider_name)
+        logger.debug(f"Authenticating Todoist for app_login='{app_login}', task_user_email='{task_user_email}'")
+        user = User.query.filter_by(app_login=app_login).first()
+        if not user:
+            logger.error(f"Cannot authenticate Todoist: User not found for app_login '{app_login}'")
+            # Decide how to handle - maybe redirect to login or show error?
+            # For now, treat as no credentials found.
+            return self.provider_name, redirect(url_for('todoist_auth.setup_credentials'))
+        # For Todoist, task_user_email is the app_login
+        account = TaskAccount.get_account(user_id=user.id, provider_name=self.provider_name, task_user_email=app_login)
 
         if not account or not account.api_key:
             logger.info(f"No valid Todoist credentials found in DB for app_login='{app_login}'. Redirecting to setup.")
