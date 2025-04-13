@@ -20,6 +20,7 @@ from virtual_assistant.ai.ai_manager import AIManager # Needed for create_ai_man
 from virtual_assistant.ai.auth_routes import init_ai_routes
 from virtual_assistant.tasks.todoist_routes import init_todoist_routes
 from virtual_assistant.tasks.task_routes import init_task_routes
+from virtual_assistant.schedule.schedule_routes import init_schedule_routes
 from virtual_assistant.meetings.meetings_routes import init_app as init_meetings_app # Renamed to avoid conflict
 from virtual_assistant.database.database import Database, db
 from virtual_assistant.database.database_routes import database_bp
@@ -67,8 +68,9 @@ def create_app():
     app.register_blueprint(init_ai_routes(), url_prefix="/ai_auth")
     app.register_blueprint(init_todoist_routes(), url_prefix="/todoist_auth")
     app.register_blueprint(init_task_routes())
+    app.register_blueprint(init_schedule_routes())  # This now registers API endpoints at /api/schedule
     # Pass the factory function to init_app for meetings
-    app.register_blueprint(init_meetings_app(create_calendar_provider), url_prefix="/meetings") 
+    app.register_blueprint(init_meetings_app(create_calendar_provider), url_prefix="/meetings")
     app.register_blueprint(database_bp, url_prefix="/database")
     
     # --- Template and Static Files ---
@@ -180,7 +182,7 @@ def save_general_settings():
     """Saves general application settings (AI provider, API keys, etc.)."""
     app_login = current_user.app_login 
     try:
-        # Update general User model fields from form (AI provider, API keys)
+        # Update general User model fields from form (AI provider, API keys, AI instructions)
         current_user.ai_provider = request.form.get('ai_provider', current_user.ai_provider)
         
         # Only update keys if non-empty value is provided in the form
@@ -192,6 +194,14 @@ def save_general_settings():
              current_user.openai_key = openai_key_form
         if 'grok_key' in request.form and grok_key_form:
              current_user.grok_key = grok_key_form
+             # Always update AI instructions (can be empty to clear)
+             current_user.ai_instructions = request.form.get('ai_instructions', '')
+             
+             # Update schedule slot duration
+             slot_duration = request.form.get('schedule_slot_duration')
+             if slot_duration in ['30', '60', '120']:
+                 current_user.schedule_slot_duration = int(slot_duration)
+             
         
         db.session.add(current_user) # Stage user changes
         db.session.commit() # Commit general settings changes

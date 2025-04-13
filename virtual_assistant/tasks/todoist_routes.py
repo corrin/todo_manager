@@ -62,7 +62,7 @@ def init_todoist_routes():
 - Keep mornings free for focused work
 - Handle urgent tasks within 24 hours"""
                     # Ensure the instruction task is associated with the correct user and specific Todoist account email
-                    todoist_provider.create_instruction_task(app_login, submitted_email, default_instructions)
+                    todoist_provider.create_instruction_task(current_user.id, submitted_email, default_instructions)
                     logger.info(f"Attempted creation of default AI instruction task for new account {submitted_email}")
                 else:
                      logger.warning("Todoist provider not found, cannot create instruction task.")
@@ -123,7 +123,7 @@ def init_todoist_routes():
 - Keep mornings free for focused work
 - Handle urgent tasks within 24 hours"""
                              # Associate with the correct user and specific Todoist account email
-                             todoist_provider.create_instruction_task(app_login, submitted_email, default_instructions)
+                             todoist_provider.create_instruction_task(current_user.id, submitted_email, default_instructions)
                              logger.info(f"Attempted creation of default AI instruction task for updated account {submitted_email}")
                          else:
                               logger.warning("Todoist provider not found, cannot create instruction task.")

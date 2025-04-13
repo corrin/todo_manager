@@ -544,20 +544,105 @@ class GoogleCalendarProvider(CalendarProvider):
 
     def create_meeting(self, meeting_details, user_id):
         """
-        DEPRECATED/UNUSED? - Seems intended to create actual meetings, but uses app_login.
-        Needs review and update to use user_id if still required.
+        Create a meeting in the Google Calendar.
+        
+        Parameters:
+            meeting_details (dict): Dictionary containing meeting details.
+                Required keys: 'subject', 'start_time', 'end_time', 'calendar_email'
+                Optional: 'description', 'location', 'attendees'
+            user_id (int): The ID of the app user.
+                
+        Returns:
+            dict: Dictionary with meeting details if successful.
+            
+        Raises:
+            Exception: If required parameters are missing or meeting creation fails.
         """
-        # This method needs updating to use user_id instead of app_login
-        # and likely needs calendar_email as well.
-        # Example structure (needs refinement):
-        # credentials = self.get_credentials(calendar_email, user_id)
-        # if not credentials:
-        #     raise Exception("Cannot create meeting: Authentication required.")
-        # service = build("calendar", "v3", credentials=credentials)
-        # event = { ... construct event body from meeting_details ... }
-        # created_event = service.events().insert(calendarId='primary', body=event).execute()
-        # return created_event.get('id')
-        raise NotImplementedError("create_meeting needs to be updated to use user_id and potentially calendar_email.")
+        # Verify required parameters
+        required_params = ["subject", "start_time", "end_time", "calendar_email"]
+        for param in required_params:
+            if param not in meeting_details:
+                raise Exception(f"Missing required parameter: {param}")
+
+        calendar_email = meeting_details.get("calendar_email")
+        
+        # Get credentials for the calendar
+        credentials = self.get_credentials(calendar_email, user_id)
+        if not credentials:
+            raise Exception(f"No credentials found for calendar: {calendar_email}")
+
+        # Create the Google Calendar service
+        service = build("calendar", "v3", credentials=credentials)
+        
+        # Extract meeting details
+        subject = meeting_details.get("subject")
+        start_time = meeting_details.get("start_time")
+        end_time = meeting_details.get("end_time")
+        description = meeting_details.get("description", "")
+        location = meeting_details.get("location", "")
+        attendees = meeting_details.get("attendees", [])
+        
+        # Validate time data types
+        if start_time is None or end_time is None:
+            raise Exception("Start time and end time must not be None")
+            
+        # Convert times to RFC3339 format if they are datetime objects
+        if isinstance(start_time, datetime):
+            start_time = start_time.isoformat()
+        elif not isinstance(start_time, str):
+            raise Exception(f"Invalid start_time type: expected datetime or str, got {type(start_time).__name__}")
+            
+        if isinstance(end_time, datetime):
+            end_time = end_time.isoformat()
+        elif not isinstance(end_time, str):
+            raise Exception(f"Invalid end_time type: expected datetime or str, got {type(end_time).__name__}")
+        
+        # Create the event body
+        event = {
+            'summary': subject,
+            'location': location,
+            'description': description,
+            'start': {
+                'dateTime': start_time,
+                'timeZone': 'UTC',
+            },
+            'end': {
+                'dateTime': end_time,
+                'timeZone': 'UTC',
+            }
+        }
+        
+        # Add attendees if provided
+        if attendees:
+            event['attendees'] = []
+            for attendee in attendees:
+                attendee_email = attendee.get("email", "")
+                if attendee_email:
+                    event['attendees'].append({'email': attendee_email})
+        
+        try:
+            # Create the event in Google Calendar
+            created_event = service.events().insert(calendarId='primary', body=event).execute()
+            
+            if created_event:
+                logger.info(f"Meeting created successfully in Google Calendar: {created_event.get('id')}")
+                
+                # Format the response
+                response = {
+                    "id": created_event.get('id'),
+                    "subject": created_event.get('summary'),
+                    "start_time": created_event.get('start', {}).get('dateTime'),
+                    "end_time": created_event.get('end', {}).get('dateTime'),
+                    "organizer": calendar_email,
+                    "meeting_link": created_event.get('htmlLink'),
+                    "provider": "google",
+                }
+                return response
+            else:
+                raise Exception("Failed to create event: Empty response from Google Calendar API")
+        except Exception as e:
+            logger.error(f"Error creating meeting in Google Calendar: {str(e)}")
+            raise Exception(f"Error creating meeting in Google Calendar: {str(e)}")
 
 
     def store_credentials(self, calendar_email, credentials, user_id):

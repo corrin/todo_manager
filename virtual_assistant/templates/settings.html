@@ -46,6 +46,20 @@
                            placeholder="{% if user.grok_key %}••••••••••••••••••••••{% else %}Enter API Key{% endif %}">
                     {% if user.grok_key %}<small class="form-text text-muted">API key saved. Enter a new key to update.</small>{% endif %}
                 </div>
+                <div class="form-group mb-3">
+                    <label>AI Instructions:</label>
+                    <textarea name="ai_instructions" class="form-control" rows="5" placeholder="Enter custom instructions for AI interactions">{{ user.ai_instructions or '' }}</textarea>
+                    <small class="form-text text-muted">These instructions will be used to customize AI behavior when interacting with your tasks.</small>
+                </div>
+                <div class="form-group mb-3">
+                    <label>Schedule Slot Duration:</label>
+                    <select name="schedule_slot_duration" class="form-control">
+                        <option value="30" {% if user.schedule_slot_duration == 30 %}selected{% endif %}>30 minutes</option>
+                        <option value="60" {% if user.schedule_slot_duration == 60 %}selected{% endif %}>1 hour</option>
+                        <option value="120" {% if user.schedule_slot_duration == 120 %}selected{% endif %}>2 hours</option>
+                    </select>
+                    <small class="form-text text-muted">This setting determines the default time slot duration for your generated schedules.</small>
+                </div>
                 <div class="form-group">
                     <button type="submit" class="btn btn-primary">Save Basic Settings</button> {# Updated button text #}
                     <a href="{{ url_for('index') }}" class="btn btn-secondary">Close</a>

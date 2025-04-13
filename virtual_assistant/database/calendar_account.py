@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 from sqlalchemy import and_, update
 from sqlalchemy.orm import relationship
+import uuid
 
 from virtual_assistant.database.database import db
+from virtual_assistant.database.user import MySQLUUID
 from virtual_assistant.utils.logger import logger
 
 
@@ -11,9 +13,9 @@ class CalendarAccount(db.Model):
     
     __tablename__ = 'calendar_account'
     
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
     calendar_email = db.Column(db.String(255), nullable=False)  # The specific calendar account email (e.g. google account email)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(MySQLUUID, db.ForeignKey('user.id'), nullable=False)
     provider = db.Column(db.String(50), nullable=False)  # 'google' or 'o365'
     token = db.Column(db.Text, nullable=False)
     refresh_token = db.Column(db.Text)
@@ -50,7 +52,7 @@ class CalendarAccount(db.Model):
         
     @classmethod
     def get_by_email_provider_and_user(cls, calendar_email, provider, user_id):
-        """Get calendar account by calendar email, provider, and app user email."""
+        """Get calendar account by calendar email, provider, and user ID."""
         return cls.query.filter_by(
             calendar_email=calendar_email,
             provider=provider,

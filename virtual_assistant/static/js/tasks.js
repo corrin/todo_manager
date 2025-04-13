@@ -124,7 +124,8 @@ function initializeFilter() {
     // Insert filter at the top of both task list containers
     const containers = [
         document.getElementById('prioritized-container'),
-        document.getElementById('unprioritized-container')
+        document.getElementById('unprioritized-container'),
+        document.getElementById('completed-container')
     ];
     
     containers.forEach(container => {
@@ -186,12 +187,24 @@ function initializeSortableLists() {
 /**
  * Create Sortable instances for both task lists
  */
+/**
+ * Create Sortable instances for all task lists
+ */
 function createSortableLists() {
     const prioritizedList = document.getElementById('prioritized-tasks');
     const unprioritizedList = document.getElementById('unprioritized-tasks');
+    const completedList = document.getElementById('completed-tasks');
     
-    if (!prioritizedList || !unprioritizedList) {
+    if (!prioritizedList || !unprioritizedList || !completedList) {
         return;
+    }
+    
+    // Helper function to determine destination list type
+    function getDestinationFromId(id) {
+        if (id === 'prioritized-tasks') return 'prioritized';
+        if (id === 'unprioritized-tasks') return 'unprioritized';
+        if (id === 'completed-tasks') return 'completed';
+        return 'unprioritized'; // default
     }
     
     // Create sortable for prioritized tasks
@@ -205,7 +218,7 @@ function createSortableLists() {
             // Check if the task was moved to a different list
             if (evt.from !== evt.to) {
                 const taskId = evt.item.getAttribute('data-task-id');
-                const destination = evt.to.id === 'prioritized-tasks' ? 'prioritized' : 'unprioritized';
+                const destination = getDestinationFromId(evt.to.id);
                 
                 // Move task between lists
                 moveTaskBetweenLists(taskId, destination, evt.newIndex);
@@ -227,7 +240,7 @@ function createSortableLists() {
             // Check if the task was moved to a different list
             if (evt.from !== evt.to) {
                 const taskId = evt.item.getAttribute('data-task-id');
-                const destination = evt.to.id === 'prioritized-tasks' ? 'prioritized' : 'unprioritized';
+                const destination = getDestinationFromId(evt.to.id);
                 
                 // Move task between lists
                 moveTaskBetweenLists(taskId, destination, evt.newIndex);
@@ -237,10 +250,32 @@ function createSortableLists() {
             }
         }
     });
+    
+    // Create sortable for completed tasks
+    Sortable.create(completedList, {
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+        group: 'tasks', // Shared group allows dragging between lists
+        onEnd: function(evt) {
+            // Check if the task was moved to a different list
+            if (evt.from !== evt.to) {
+                const taskId = evt.item.getAttribute('data-task-id');
+                const destination = getDestinationFromId(evt.to.id);
+                
+                // Move task between lists
+                moveTaskBetweenLists(taskId, destination, evt.newIndex);
+            } else {
+                // Task was reordered within the same list
+                updateTaskOrder(completedList, 'completed');
+            }
+        }
+    });
 }
 
 /**
- * Move a task between prioritized and unprioritized lists
+ * Move a task between prioritized, unprioritized, and completed lists
  */
 function moveTaskBetweenLists(taskId, destination, position) {
     // Create a FormData object to send the task movement data
@@ -351,8 +386,8 @@ function initializeTaskDetails() {
     // Add modal to the document
     document.body.appendChild(modalElement);
     
-    // Add click event listeners to task items in both lists
-    const taskItems = document.querySelectorAll('#prioritized-tasks .list-group-item, #unprioritized-tasks .list-group-item');
+    // Add click event listeners to task items in all lists
+    const taskItems = document.querySelectorAll('#prioritized-tasks .list-group-item, #unprioritized-tasks .list-group-item, #completed-tasks .list-group-item');
     taskItems.forEach(item => {
         // Add click event listener
         item.addEventListener('click', function(event) {

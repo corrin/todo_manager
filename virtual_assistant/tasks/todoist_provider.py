@@ -22,67 +22,67 @@ class TodoistProvider(TaskProvider):
 
     # --- API Initialization ---
 
-    def _initialize_api(self, app_login, task_user_email):
+    def _initialize_api(self, user_id, task_user_email):
         """Initialize the Todoist API client using credentials from the database."""
         if self.api is None:
-            logger.debug(f"Attempting to initialize Todoist API for app_login='{app_login}', task_user_email='{task_user_email}'")
-            user = User.query.filter_by(app_login=app_login).first()
+            logger.debug(f"Attempting to initialize Todoist API for user_id='{user_id}', task_user_email='{task_user_email}'")
+            user = User.query.filter_by(id=user_id).first()
             if not user:
-                 logger.error(f"Cannot initialize Todoist API: User not found for app_login '{app_login}'")
+                 logger.error(f"Cannot initialize Todoist API: User not found for user_id '{user_id}'")
                  self.api = None
                  return
-            # For Todoist, task_user_email is the app_login
-            account = TaskAccount.get_account(user_id=user.id, provider_name=self.provider_name, task_user_email=app_login)
+            # For Todoist, task_user_email is the user's email
+            account = TaskAccount.get_account(user_id=user_id, provider_name=self.provider_name, task_user_email=task_user_email)
             if account and account.api_key:
                 try:
                     self.api = TodoistAPI(account.api_key)
-                    logger.debug(f"Successfully initialized Todoist API for app_login='{app_login}'")
+                    logger.debug(f"Successfully initialized Todoist API for user_id='{user_id}'")
                 except Exception as e:
-                    logger.error(f"Failed to initialize Todoist API for app_login='{app_login}' with stored key: {e}")
+                    logger.error(f"Failed to initialize Todoist API for user_id='{user_id}' with stored key: {e}")
                     self.api = None
             else:
-                 logger.warning(f"Could not initialize Todoist API: TaskAccount or API key not found in DB for user_id='{user.id}', provider='{self.provider_name}', task_user_email='{app_login}'")
+                 logger.warning(f"Could not initialize Todoist API: TaskAccount or API key not found in DB for user_id='{user_id}', provider='{self.provider_name}', task_user_email='{task_user_email}'")
 
     # --- Provider Methods ---
 
     # Signature matches abstract method in TaskProvider
-    def authenticate(self, app_login, task_user_email):
+    def authenticate(self, user_id, task_user_email):
         """Check if we have valid credentials in the database and return auth URL if needed."""
-        logger.debug(f"Authenticating Todoist for app_login='{app_login}', task_user_email='{task_user_email}'")
-        user = User.query.filter_by(app_login=app_login).first()
+        logger.debug(f"Authenticating Todoist for user_id='{user_id}', task_user_email='{task_user_email}'")
+        user = User.query.filter_by(id=user_id).first()
         if not user:
-            logger.error(f"Cannot authenticate Todoist: User not found for app_login '{app_login}'")
+            logger.error(f"Cannot authenticate Todoist: User not found for user_id '{user_id}'")
             # Decide how to handle - maybe redirect to login or show error?
             # For now, treat as no credentials found.
             return self.provider_name, redirect(url_for('todoist_auth.setup_credentials'))
-        # For Todoist, task_user_email is the app_login
-        account = TaskAccount.get_account(user_id=user.id, provider_name=self.provider_name, task_user_email=app_login)
+        # Get the account using the provided task_user_email
+        account = TaskAccount.get_account(user_id=user_id, provider_name=self.provider_name, task_user_email=task_user_email)
 
         if not account or not account.api_key:
-            logger.info(f"No valid Todoist credentials found in DB for app_login='{app_login}'. Redirecting to setup.")
+            logger.info(f"No valid Todoist credentials found in DB for user_id='{user_id}'. Redirecting to setup.")
             return self.provider_name, redirect(url_for('todoist_auth.setup_credentials'))
 
         # Test the stored credentials to ensure the API key is still valid
         try:
             api = TodoistAPI(account.api_key)
             api.get_projects() # Simple API call to test credentials
-            logger.debug(f"Todoist credentials valid for app_login='{app_login}'")
+            logger.debug(f"Todoist credentials valid for user_id='{user_id}'")
             return None # Already authenticated
         except Exception as e:
-            logger.error(f"Todoist credentials invalid for app_login='{app_login}': {e}. Redirecting to setup.")
+            logger.error(f"Todoist credentials invalid for user_id='{user_id}': {e}. Redirecting to setup.")
             # Redirect to setup page if credentials are bad
             return self.provider_name, redirect(url_for('todoist_auth.setup_credentials'))
 
     # Signature matches abstract method in TaskProvider
-    def get_tasks(self, app_login, task_user_email) -> List[Task]:
+    def get_tasks(self, user_id, task_user_email) -> List[Task]:
         """Get all tasks from Todoist."""
-        self._initialize_api(app_login, task_user_email)
+        self._initialize_api(user_id, task_user_email)
         if not self.api:
-            raise Exception(f"Todoist API not initialized for app_login='{app_login}', task_user_email='{task_user_email}'. Check credentials.")
+            raise Exception(f"Todoist API not initialized for user_id='{user_id}', task_user_email='{task_user_email}'. Check credentials.")
 
         try:
             # Log using both identifiers for clarity, even if API calls only use the key derived from them
-            logger.info(f"[TODOIST] Retrieving tasks for app_login='{app_login}', task_user_email='{task_user_email}'")
+            logger.info(f"[TODOIST] Retrieving tasks for user_id='{user_id}', task_user_email='{task_user_email}'")
 
             # Get projects first to map project IDs to names
             projects = {}
@@ -90,9 +90,11 @@ class TodoistProvider(TaskProvider):
                 todoist_projects = self.api.get_projects()
                 for p in todoist_projects:
                     projects[p.id] = p.name
-                logger.debug(f"[TODOIST] Retrieved {len(projects)} projects for app_login='{app_login}'")
+                logger.debug(f"[TODOIST] Retrieved {len(projects)} projects for user_id='{user_id}'")
             except Exception as e:
-                logger.warning(f"[TODOIST] Error getting Todoist projects: {e}")
+                logger.error(f"[TODOIST] Error getting Todoist projects: {e}")
+                # Instead of silently continuing without project data, raise an exception
+                raise Exception(f"Could not retrieve your Todoist projects: {e}")
 
             # Get tasks
             todoist_tasks = self.api.get_tasks()
@@ -150,19 +152,19 @@ class TodoistProvider(TaskProvider):
                 )
                 tasks.append(task)
 
-            logger.info(f"[TODOIST] Task summary for app_login='{app_login}': {len(tasks)} total tasks ({completed_count} completed, {active_count} active)")
+            logger.info(f"[TODOIST] Task summary for user_id='{user_id}': {len(tasks)} total tasks ({completed_count} completed, {active_count} active)")
 
             return tasks
         except Exception as e:
-            logger.error(f"[TODOIST] Error getting Todoist tasks for app_login='{app_login}': {e}")
+            logger.error(f"[TODOIST] Error getting Todoist tasks for user_id='{user_id}': {e}")
             raise
 
     # Signature matches abstract method in TaskProvider
-    def get_ai_instructions(self, app_login, task_user_email) -> Optional[str]:
+    def get_ai_instructions(self, user_id, task_user_email) -> Optional[str]:
         """Get the AI instruction task content."""
-        self._initialize_api(app_login, task_user_email) 
+        self._initialize_api(user_id, task_user_email)
         if not self.api:
-            raise Exception(f"Todoist API not initialized for app_login='{app_login}', task_user_email='{task_user_email}'. Check credentials.")
+            raise Exception(f"Todoist API not initialized for user_id='{user_id}', task_user_email='{task_user_email}'. Check credentials.")
 
         try:
             # Search for the instruction task
@@ -170,62 +172,71 @@ class TodoistProvider(TaskProvider):
             instruction_task = next((t for t in tasks if t.content == self.INSTRUCTION_TASK_TITLE), None)
 
             if instruction_task:
-                logger.debug(f"Found AI instruction task for app_login='{app_login}', task_user_email='{task_user_email}'")
+                logger.debug(f"Found AI instruction task for user_id='{user_id}', task_user_email='{task_user_email}'")
                 # The actual instructions are in the task description
                 return instruction_task.description
             else:
-                logger.warning(f"No AI instruction task found for app_login='{app_login}', task_user_email='{task_user_email}'")
+                logger.warning(f"No AI instruction task found for user_id='{user_id}', task_user_email='{task_user_email}'")
                 return None
         except Exception as e:
-            logger.error(f"Error getting AI instructions for app_login='{app_login}', task_user_email='{task_user_email}': {e}")
+            logger.error(f"Error getting AI instructions for user_id='{user_id}', task_user_email='{task_user_email}': {e}")
             raise
 
     # Signature matches abstract method in TaskProvider
-    def update_task_status(self, app_login, task_user_email, task_id: str, status: str) -> bool: # Add task_user_email
+    def update_task_status(self, user_id, task_id, task_user_email=None, provider_task_id=None, status: str = None) -> bool:
         """Update task completion status."""
-        self._initialize_api(app_login, task_user_email) # Pass both args
+        # Look up the task to get provider_task_id and task_user_email
+        from virtual_assistant.database.task import Task
+        task = Task.query.filter_by(id=task_id, user_id=user_id).first()
+        if not task:
+            raise ValueError(f"Task with ID {task_id} not found")
+            
+        # Get the provider-specific information
+        provider_task_id = task.provider_task_id
+        task_user_email = task.task_user_email
+        self._initialize_api(user_id, task_user_email)
         if not self.api:
-             raise Exception(f"Todoist API not initialized for app_login='{app_login}', task_user_email='{task_user_email}'. Check credentials.")
+             raise Exception(f"Todoist API not initialized for user_id='{user_id}', task_user_email='{task_user_email}'. Check credentials.")
+        logger.info(f"[TODOIST] Attempting to update task (UUID: {task_id}, provider_task_id: {provider_task_id}) status to '{status}' for user_id='{user_id}', task_user_email='{task_user_email}'")
 
-        logger.info(f"[TODOIST] Attempting to update task {task_id} status to '{status}' for app_login='{app_login}', task_user_email='{task_user_email}'")
         
         try:
             # First, check if the task exists by trying to get it
             try:
-                task = self.api.get_task(task_id)
+                task = self.api.get_task(provider_task_id)
                 # Task exists, check if status change is needed
                 current_status = "completed" if task.is_completed else "active"
-                logger.info(f"[TODOIST] Task {task_id} '{task.content}' current status: '{current_status}', requested status: '{status}'")
+                logger.info(f"[TODOIST] Task (UUID: {task_id}, provider_task_id: {provider_task_id}) '{task.content}' current status: '{current_status}', requested status: '{status}'")
                 
                 if current_status == status:
                     # Task is already in requested status, no need to update
-                    logger.info(f"[TODOIST] Task {task_id} already has status '{status}', no update needed")
+                    logger.info(f"[TODOIST] Task (UUID: {task_id}, provider_task_id: {provider_task_id}) already has status '{status}', no update needed")
                     return True
             except Exception as task_error:
                 # If we can't get the task, it might be deleted or invalid
                 error_msg = str(task_error).lower()
                 if "not found" in error_msg or "404" in error_msg:
-                    logger.warning(f"[TODOIST] Task {task_id} not found: {task_error}")
-                    raise Exception(f"Task {task_id} not found in Todoist. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
+                    logger.warning(f"[TODOIST] Task (UUID: {task_id}, provider_task_id: {provider_task_id}) not found: {task_error}")
+                    raise Exception(f"Task with provider_task_id {provider_task_id} not found in Todoist. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
                 # For other errors with task lookup, continue and try to update anyway
-                logger.warning(f"[TODOIST] Could not verify task {task_id} existence: {task_error}. Attempting update anyway.")
+                logger.warning(f"[TODOIST] Could not verify task (UUID: {task_id}, provider_task_id: {provider_task_id}) existence: {task_error}. Attempting update anyway.")
             
             # Try to update the task status
             try:
                 if status == "completed":
-                    logger.info(f"[TODOIST] Marking task {task_id} as completed")
-                    self.api.close_task(task_id)
+                    logger.info(f"[TODOIST] Marking task (UUID: {task_id}, provider_task_id: {provider_task_id}) as completed")
+                    self.api.close_task(provider_task_id)
                 else:
-                    logger.info(f"[TODOIST] Marking task {task_id} as active (reopening)")
-                    self.api.reopen_task(task_id)
-                logger.info(f"[TODOIST] Successfully updated task {task_id} status to '{status}'")
+                    logger.info(f"[TODOIST] Marking task (UUID: {task_id}, provider_task_id: {provider_task_id}) as active (reopening)")
+                    self.api.reopen_task(provider_task_id)
+                logger.info(f"[TODOIST] Successfully updated task (UUID: {task_id}, provider_task_id: {provider_task_id}) status to '{status}'")
                 return True
             except Exception as update_error:
                 error_msg = str(update_error).lower()
                 logger.error(f"[TODOIST] Error updating task status: {update_error}")
                 # Handle common errors with better messages
                 if "not found" in error_msg or "404" in error_msg:
-                    raise Exception(f"Task {task_id} not found in Todoist. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
+                    raise Exception(f"Task {task_id} with provider_task_id {provider_task_id} not found in Todoist. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
                 else:
                     raise update_error
                 
@@ -244,15 +255,15 @@ class TodoistProvider(TaskProvider):
                 raise Exception("Network error when connecting to Todoist. Please check your internet connection.")
             else:
                 # If not a specific known error, log the original error and pass it along
-                logger.error(f"[TODOIST] Error updating task status for app_login='{app_login}', task_user_email='{task_user_email}': {e}")
+                logger.error(f"[TODOIST] Error updating task status for user_id='{user_id}', task_user_email='{task_user_email}': {e}")
                 raise
 
     # Signature matches abstract method in TaskProvider
-    def create_instruction_task(self, app_login, task_user_email, instructions: str) -> bool: # Add task_user_email
+    def create_instruction_task(self, user_id, task_user_email, instructions: str) -> bool:
         """Create or update the AI instruction task."""
-        self._initialize_api(app_login, task_user_email) # Pass both args
+        self._initialize_api(user_id, task_user_email)
         if not self.api:
-            raise Exception(f"Todoist API not initialized for app_login='{app_login}', task_user_email='{task_user_email}'. Check credentials.")
+            raise Exception(f"Todoist API not initialized for user_id='{user_id}', task_user_email='{task_user_email}'. Check credentials.")
 
         try:
             # Check if instruction task exists
@@ -265,16 +276,16 @@ class TodoistProvider(TaskProvider):
                     task_id=instruction_task.id,
                     description=instructions
                 )
-                logger.debug(f"Updated AI instruction task for app_login='{app_login}', task_user_email='{task_user_email}'")
+                logger.debug(f"Updated AI instruction task for user_id='{user_id}', task_user_email='{task_user_email}'")
             else:
                 # Create new task
                 self.api.add_task(
                     content=self.INSTRUCTION_TASK_TITLE,
                     description=instructions
                 )
-                logger.debug(f"Created AI instruction task for app_login='{app_login}', task_user_email='{task_user_email}'")
+                logger.debug(f"Created AI instruction task for user_id='{user_id}', task_user_email='{task_user_email}'")
             
             return True
         except Exception as e:
-            logger.error(f"Error managing instruction task for app_login='{app_login}', task_user_email='{task_user_email}': {e}")
+            logger.error(f"Error managing instruction task for user_id='{user_id}', task_user_email='{task_user_email}': {e}")
             raise

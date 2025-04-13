@@ -6,13 +6,16 @@ import os # Needed for path operations
 import json # Needed for credential file handling
 from virtual_assistant.database.user_manager import UserDataManager # Needed for user context (folder path)
 from virtual_assistant.utils.logger import logger
+from virtual_assistant.database.task import TaskAccount
+from virtual_assistant.database.user import User
+from virtual_assistant.database.database import db
 # Settings is used by UserDataManager internally, no need to import here
 
 
 @dataclass
 class Task:
     """Represents a task from any task provider."""
-    id: str
+    id: str  # Internal UUID
     title: str
     project_id: str
     priority: int
@@ -22,6 +25,7 @@ class Task:
     parent_id: Optional[str] = None
     section_id: Optional[str] = None
     project_name: Optional[str] = None
+    provider_task_id: Optional[str] = None  # Provider's task ID
 
 
 class TaskProvider(ABC):
@@ -42,13 +46,13 @@ class TaskProvider(ABC):
     # Implement file-based credential storage in the base class
     # Suitable for providers using simple keys (like Todoist API key)
     # OAuth providers (Google, O365) should override these methods.
-    def get_credentials(self, app_login: str, task_user_email: str) -> Optional[Dict[str, Any]]:
+    def get_credentials(self, user_id: int, task_user_email: str) -> Optional[Dict[str, Any]]:
         """Get task provider credentials from the TaskAccount database model."""
-        logger.debug(f"Retrieving {self.provider_name} credentials from DB for app_login='{app_login}', task_user_email='{task_user_email}'")
+        logger.debug(f"Retrieving {self.provider_name} credentials from DB for user_id='{user_id}', task_user_email='{task_user_email}'")
 
-        user = User.query.filter_by(app_login=app_login).first()
+        user = User.query.filter_by(id=user_id).first()
         if not user:
-            logger.error(f"User not found for app_login '{app_login}' when retrieving credentials.")
+            logger.error(f"User not found for user_id '{user_id}' when retrieving credentials.")
             return None
 
         # Use the provided task_user_email to find the specific account
@@ -64,55 +68,55 @@ class TaskProvider(ABC):
                 'scopes': account.scopes,
                 'needs_reauth': account.needs_reauth,
                 # Include identifiers for context if needed by caller
-                'app_login': app_login,
+                'user_id': user_id,
                 'task_user_email': task_user_email,
                 'provider_name': self.provider_name
             }
             # Filter out None values to return only stored credentials
             credentials = {k: v for k, v in credentials.items() if v is not None}
             
-            logger.debug(f"{self.provider_name} credentials retrieved from DB for app_login='{app_login}', task_user_email='{task_user_email}'")
+            logger.debug(f"{self.provider_name} credentials retrieved from DB for user_id='{user_id}', task_user_email='{task_user_email}'")
             return credentials
         else:
-            logger.warning(f"{self.provider_name} TaskAccount not found in DB for app_login='{app_login}', task_user_email='{task_user_email}'")
+            logger.warning(f"{self.provider_name} TaskAccount not found in DB for user_id='{user_id}', task_user_email='{task_user_email}'")
             return None
 
-    def store_credentials(self, app_login: str, task_user_email: str, credentials: Dict[str, Any]):
+    def store_credentials(self, user_id: int, task_user_email: str, credentials: Dict[str, Any]):
         """Store task provider credentials in the TaskAccount database model."""
-        logger.debug(f"Storing {self.provider_name} credentials to DB for app_login='{app_login}', task_user_email='{task_user_email}'")
+        logger.debug(f"Storing {self.provider_name} credentials to DB for user_id='{user_id}', task_user_email='{task_user_email}'")
 
-        user = User.query.filter_by(app_login=app_login).first()
+        user = User.query.filter_by(id=user_id).first()
         if not user:
-            logger.error(f"User not found for app_login '{app_login}' when storing credentials.")
+            logger.error(f"User not found for user_id '{user_id}' when storing credentials.")
             # Decide on error handling: raise exception or return failure?
-            raise ValueError(f"User not found: {app_login}")
+            raise ValueError(f"User not found: {user_id}")
 
         try:
             # set_account handles both creation and update
             account = TaskAccount.set_account(
-                user_id=user.id,
+                user_id=user_id,
                 provider_name=self.provider_name,
                 task_user_email=task_user_email,
                 credentials=credentials # Pass the dictionary directly
             )
             db.session.add(account) # Add to session (needed if new or updated)
             db.session.commit() # Commit the changes
-            logger.debug(f"{self.provider_name} credentials stored in DB for app_login='{app_login}', task_user_email='{task_user_email}'")
+            logger.debug(f"{self.provider_name} credentials stored in DB for user_id='{user_id}', task_user_email='{task_user_email}'")
         except Exception as e:
             db.session.rollback() # Rollback on error
-            logger.error(f"Error storing {self.provider_name} credentials to DB for app_login='{app_login}', task_user_email='{task_user_email}': {e}")
+            logger.error(f"Error storing {self.provider_name} credentials to DB for user_id='{user_id}', task_user_email='{task_user_email}': {e}")
             # Re-raise the exception to signal failure
             raise Exception(f"Database error storing credentials: {e}") from e
 
     # --- Abstract methods for core provider functionality ---
-    # Signatures updated to use app_login and task_user_email
+    # Signatures updated to use user_id and task_user_email
 
     @abstractmethod
-    def authenticate(self, app_login, task_user_email):
+    def authenticate(self, user_id, task_user_email):
         """Authenticate with the task provider for the given user/account.
 
         Args:
-            app_login: The application login identifier.
+            user_id: The user's database ID.
             task_user_email: The email associated with the task provider account.
 
         Returns:
@@ -122,11 +126,11 @@ class TaskProvider(ABC):
         pass
 
     @abstractmethod
-    def get_tasks(self, app_login, task_user_email) -> List[Task]:
+    def get_tasks(self, user_id, task_user_email) -> List[Task]:
         """Get all tasks for the user from the specified provider account.
 
         Args:
-            app_login: The application login identifier.
+            user_id: The user's database ID.
             task_user_email: The email associated with the task provider account.
 
         Returns:
@@ -138,11 +142,11 @@ class TaskProvider(ABC):
         pass
 
     @abstractmethod
-    def get_ai_instructions(self, app_login, task_user_email) -> Optional[str]:
+    def get_ai_instructions(self, user_id, task_user_email) -> Optional[str]:
         """Get the AI instruction task content for the specified provider account.
 
         Args:
-            app_login: The application login identifier.
+            user_id: The user's database ID.
             task_user_email: The email associated with the task provider account.
 
         Returns:
@@ -154,15 +158,18 @@ class TaskProvider(ABC):
         pass
 
     @abstractmethod
-    def update_task_status(self, app_login, task_user_email, task_id: str, status: str) -> bool:
+    def update_task_status(self, user_id, task_id, task_user_email, provider_task_id: str, status: str) -> bool:
         """Update task completion status for the specified provider account.
 
         Args:
-            app_login: The application login identifier.
+            user_id: The user's database ID.
+            task_id: the primary key
             task_user_email: The email associated with the task provider account.
-            task_id: The task identifier within the provider.
+            provider_task_id: The task identifier within the provider.
             status: The new status ('active' or 'completed').
 
+            Note that the parameters provider_task_id and task_user_email should never be used. 
+            These should be derived by looking up the task_id.  In particular, provider_task_id isn't even universally unique
         Returns:
             bool: True if update successful.
 

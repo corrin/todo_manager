@@ -103,10 +103,8 @@ def run_migrations_online():
             **conf_args
         )
 
-        # For SQLite, running migrations outside an explicit env.py transaction
-        # is often more reliable due to DDL transaction limitations interfering
-        # with Alembic's batch mode internal transaction handling.
-        context.run_migrations()
+        with context.begin_transaction():
+            context.run_migrations()
 
 
 if context.is_offline_mode():

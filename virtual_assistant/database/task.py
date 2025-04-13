@@ -1,9 +1,11 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint, Text, DateTime
 from sqlalchemy.orm import relationship
 from virtual_assistant.database.database import db
+from virtual_assistant.database.user import MySQLUUID
 from datetime import datetime
 import hashlib
 import json
+import uuid
 from virtual_assistant.utils.logger import logger
 
 class Task(db.Model):
@@ -11,8 +13,8 @@ class Task(db.Model):
     __tablename__ = 'tasks'
 
     # Primary identification
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True) # Foreign key to the User
+    id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(MySQLUUID, db.ForeignKey('user.id'), nullable=False, index=True) # Foreign key to the User
 
     # Provider identification (composite unique constraint)
     task_user_email = db.Column(db.String(255), nullable=True, index=True) # Email associated with the task provider account (e.g., Google account email for Google Tasks)
@@ -195,25 +197,35 @@ class Task(db.Model):
 
     @classmethod
     def get_user_tasks_by_list(cls, user_id):
-        """Get prioritized and unprioritized task lists for a user.
+        """Get prioritized, unprioritized, and completed task lists for a user.
 
         Args:
             user_id: The user's database ID
 
         Returns:
-            tuple: (prioritized_tasks, unprioritized_tasks)
+            tuple: (prioritized_tasks, unprioritized_tasks, completed_tasks)
         """
+        # Get prioritized active tasks
         prioritized = cls.query.filter_by(
             user_id=user_id,
-            list_type='prioritized'
+            list_type='prioritized',
+            status='active'
         ).order_by(cls.position).all()
 
+        # Get unprioritized active tasks
         unprioritized = cls.query.filter_by(
             user_id=user_id,
-            list_type='unprioritized'
+            list_type='unprioritized',
+            status='active'
+        ).order_by(cls.position).all()
+        
+        # Get completed tasks (from both prioritized and unprioritized lists)
+        completed = cls.query.filter_by(
+            user_id=user_id,
+            status='completed'
         ).order_by(cls.position).all()
 
-        return (prioritized, unprioritized)
+        return (prioritized, unprioritized, completed)
 
     @classmethod
     def move_task(cls, task_id, destination, position=None):
@@ -221,10 +233,10 @@ class Task(db.Model):
 
         Args:
             task_id: The task's database ID
-            destination: 'prioritized' or 'unprioritized'
+            destination: 'prioritized', 'unprioritized', or 'completed'
             position: Optional position in the new list
         """
-        task = cls.query.get(task_id)
+        task = cls.query.filter_by(id=task_id).first()
         if not task:
             raise ValueError(f"Task with ID {task_id} not found")
 
@@ -287,7 +299,7 @@ class Task(db.Model):
 
         Args:
             task_id: The task's database ID
-            list_type: 'prioritized' or 'unprioritized'
+            list_type: 'prioritized', 'unprioritized', or 'completed'
         """
         return cls.move_task(task_id, list_type)
 
@@ -297,7 +309,7 @@ class Task(db.Model):
 
         Args:
             user_id: The user's database ID
-            list_type: 'prioritized' or 'unprioritized'
+            list_type: 'prioritized', 'unprioritized', or 'completed'
             task_positions: Dict mapping task IDs to positions
         """
         # Begin a transaction
@@ -345,9 +357,8 @@ class Task(db.Model):
 class TaskAccount(db.Model):
     """Stores credentials (API key or OAuth tokens) for Task providers linked to a user."""
     __tablename__ = 'task_accounts'
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False, index=True)
+    id = Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
+    user_id = Column(MySQLUUID, ForeignKey('user.id'), nullable=False, index=True)
     provider_name = Column(String(50), nullable=False, index=True) # e.g., 'todoist', 'google_tasks', 'outlook'
     # Email associated with the provider account (e.g., Google account email).
     # For providers like Todoist using API key, this stores the user's app_login.
@@ -377,7 +388,7 @@ class TaskAccount(db.Model):
 
     @classmethod
     @classmethod
-    def get_account(cls, user_id: int, provider_name: str, task_user_email: str):
+    def get_account(cls, user_id, provider_name: str, task_user_email: str):
         """Retrieve the task account for a specific user, provider, and provider email."""
         return cls.query.filter_by(
             user_id=user_id,
@@ -386,8 +397,7 @@ class TaskAccount(db.Model):
         ).first()
 
     @classmethod
-    @classmethod
-    def set_account(cls, user_id: int, provider_name: str, task_user_email: str, credentials: dict):
+    def set_account(cls, user_id, provider_name: str, task_user_email: str, credentials: dict):
         """Create or update the task account credentials for a user, provider, and email.
            The `credentials` dict should contain the relevant keys ('api_key', 'token', etc.).
         """
@@ -410,12 +420,23 @@ class TaskAccount(db.Model):
         account.scopes = credentials.get('scopes', account.scopes)
         # Reset reauth flag when credentials are updated, default to False if not specified
         account.needs_reauth = credentials.get('needs_reauth', False)
+        
+        # Check if the user has any primary task accounts
+        has_primary = cls.query.filter_by(
+            user_id=user_id,
+            is_primary=True
+        ).first() is not None
+        
+        # If the user doesn't have any primary task accounts, set this one as primary
+        if not has_primary:
+            account.is_primary = True
+            logger.info(f"Setting {provider_name} account for user {user_id} as primary (no primary account exists)")
 
         return account # Return the account instance, caller should commit session
 
     @classmethod
     @classmethod
-    def delete_account(cls, user_id: int, provider_name: str, task_user_email: str):
+    def delete_account(cls, user_id, provider_name: str, task_user_email: str):
         """Delete the task account for a specific user, provider, and email."""
         account = cls.get_account(user_id, provider_name, task_user_email)
         if account:

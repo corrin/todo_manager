@@ -10,6 +10,7 @@ import os
 from .task_provider import TaskProvider, Task
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.task import Task
 from virtual_assistant.meetings.o365_calendar_provider import AccessTokenCredential
 from msgraph import GraphServiceClient
 
@@ -27,12 +28,12 @@ class OutlookTaskProvider(TaskProvider):
     def _get_provider_name(self) -> str:
         return "outlook"
 
-    def _initialize_client(self, app_login, task_user_email):
+    def _initialize_client(self, user_id, task_user_email):
         """Initialize or refresh the Microsoft Graph client using existing O365 credentials."""
         if self.client is None:
             # Get the O365 account for this specific app_login and task_user_email
             account = CalendarAccount.get_by_email_provider_and_user(
-                calendar_email=task_user_email, provider='o365', app_login=app_login
+                calendar_email=task_user_email, provider='o365', user_id=user_id
             )
             
             if account and account.token:  # Using token instead of access_token
@@ -41,38 +42,38 @@ class OutlookTaskProvider(TaskProvider):
                 
                 # Create a Graph client using the credential
                 self.client = GraphServiceClient(credential)
-                logger.debug(f"Initialized Microsoft Graph client for app_login '{app_login}' / task_user_email '{task_user_email}' using existing O365 credentials")
+                logger.debug(f"Initialized Microsoft Graph client for user_id '{user_id}' / task_user_email '{task_user_email}' using existing O365 credentials")
             else:
-                logger.warning(f"No O365 account found for app_login '{app_login}' / task_user_email '{task_user_email}' or missing token")
+                logger.warning(f"No O365 account found for user_id '{user_id}' / task_user_email '{task_user_email}' or missing token")
 
-    def authenticate(self, app_login, task_user_email):
+    def authenticate(self, user_id, task_user_email):
         """Check if we have valid O365 credentials for the user/account and return auth URL if needed."""
         # Check if the user has an O365 account linked
         account = CalendarAccount.get_by_email_provider_and_user(
-            calendar_email=task_user_email, provider='o365', app_login=app_login
+            calendar_email=task_user_email, provider='o365', user_id=user_id
         )
         
         if not account:
-            logger.info(f"No O365 account found for app_login '{app_login}' / task_user_email '{task_user_email}'")
+            logger.info(f"No O365 account found for user_id '{user_id}' / task_user_email '{task_user_email}'")
             # Redirect to the general O365 auth flow
             return self.provider_name, redirect(url_for('meetings.authenticate_o365_calendar'))
         
         # Check if the account needs reauthorization
         if account.needs_reauth:
-            logger.info(f"O365 account for app_login '{app_login}' / task_user_email '{task_user_email}' needs reauthorization")
+            logger.info(f"O365 account for user_id '{user_id}' / task_user_email '{task_user_email}' needs reauthorization")
             # Redirect to reauth specific account, using 'calendar_email' parameter
             return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='o365', calendar_email=account.calendar_email))
         
         # Test the credentials by initializing the client
         try:
-            self._initialize_client(app_login=app_login, task_user_email=task_user_email)
+            self._initialize_client(user_id=user_id, task_user_email=task_user_email)
             if not self.client:
                 raise Exception("Failed to initialize Microsoft Graph client")
                 
-            logger.debug(f"O365 credentials valid for app_login '{app_login}' / task_user_email '{task_user_email}'")
+            logger.debug(f"O365 credentials valid for user_id '{user_id}' / task_user_email '{task_user_email}'")
             return None
         except Exception as e:
-            logger.error(f"O365 credentials invalid for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
+            logger.error(f"O365 credentials invalid for user_id '{user_id}' / task_user_email '{task_user_email}': {e}")
             
             # Mark the account as needing reauthorization
             if account:
@@ -81,29 +82,24 @@ class OutlookTaskProvider(TaskProvider):
                 
             return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='o365', email=account.calendar_email))
 
-    def get_tasks(self, app_login, task_user_email) -> List[Task]:
+    def get_tasks(self, user_id, task_user_email) -> List[Task]:
         """Get all tasks from Outlook using Microsoft Graph API."""
-        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
+        self._initialize_client(user_id=user_id, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Microsoft Graph client for app_login '{app_login}' / task_user_email '{task_user_email}'")
+            raise Exception(f"No Microsoft Graph client for user_id '{user_id}' / task_user_email '{task_user_email}'")
 
         try:
             # Get all task lists (folders)
-            task_lists = []
+            # Get all task lists (folders)
             try:
-                # In a real implementation, we would use:
-                # task_lists_response = self.client.me.todo.lists.get()
-                # task_lists = task_lists_response.value
-                
-                # For now, use mock data
-                task_lists = [
-                    {"id": "list1", "displayName": "Work"},
-                    {"id": "list2", "displayName": "Personal"}
-                ]
-                logger.debug(f"Retrieved {len(task_lists)} task lists for app_login '{app_login}' / task_user_email '{task_user_email}'")
+                # Correct API path for Microsoft Graph
+                task_lists_response = self.client.me.outlook.tasks.folders.get()
+                task_lists = task_lists_response.value
+                logger.debug(f"Retrieved {len(task_lists)} task lists for user_id '{user_id}' / task_user_email '{task_user_email}'")
             except Exception as e:
-                logger.warning(f"Error getting Outlook task lists: {e}")
-                task_lists = [{"id": "default", "displayName": "Tasks"}]
+                logger.error(f"Error getting Outlook task lists: {e}")
+                # Instead of silently falling back, raise an exception that will be shown to the user
+                raise Exception(f"Could not retrieve your Outlook task lists: {e}")
             
             # Get tasks from each list
             all_tasks = []
@@ -112,48 +108,16 @@ class OutlookTaskProvider(TaskProvider):
                 list_name = task_list["displayName"]
                 
                 try:
-                    # In a real implementation, we would use:
-                    # tasks_response = self.client.me.todo.lists.by_todo_task_list_id(list_id).tasks.get()
-                    # list_tasks = tasks_response.value
-                    
-                    # For now, use mock data
-                    list_tasks = []
-                    if list_id == "list1":
-                        list_tasks = [
-                            {
-                                "id": "task1",
-                                "title": "Complete project proposal",
-                                "importance": "high",
-                                "status": "notStarted",
-                                "dueDateTime": {"dateTime": "2025-04-01T00:00:00Z"},
-                                "parentReferences": None
-                            },
-                            {
-                                "id": "task2",
-                                "title": "Research competitors",
-                                "importance": "normal",
-                                "status": "notStarted",
-                                "dueDateTime": {"dateTime": "2025-03-25T00:00:00Z"},
-                                "parentReferences": {"id": "task1"}
-                            }
-                        ]
-                    elif list_id == "list2":
-                        list_tasks = [
-                            {
-                                "id": "task3",
-                                "title": "Buy groceries",
-                                "importance": "normal",
-                                "status": "notStarted",
-                                "dueDateTime": None,
-                                "parentReferences": None
-                            }
-                        ]
+                    # Get tasks for this list using correct API path
+                    tasks_response = self.client.me.outlook.tasks.folders.by_id(list_id).tasks.get()
+                    list_tasks = tasks_response.value
                     
                     # Add list ID and name to each task
                     for task in list_tasks:
-                        task["listId"] = list_id
-                        task["listName"] = list_name
-                        all_tasks.append(task)
+                        task_dict = task.to_dict()
+                        task_dict["listId"] = list_id
+                        task_dict["listName"] = list_name
+                        all_tasks.append(task_dict)
                         
                 except Exception as e:
                     logger.warning(f"Error getting tasks for list {list_id}: {e}")
@@ -162,7 +126,7 @@ class OutlookTaskProvider(TaskProvider):
             tasks = []
             for t in all_tasks:
                 # Skip the instruction task as it's handled separately
-                if t.get("title") == self.INSTRUCTION_TASK_TITLE:
+                if t.get("subject") == self.INSTRUCTION_TASK_TITLE:
                     continue
                 
                 # Convert due date
@@ -198,7 +162,7 @@ class OutlookTaskProvider(TaskProvider):
 
                 task = Task(
                     id=t["id"],
-                    title=t.get("title", ""),
+                    title=t.get("subject", ""),
                     project_id=t.get("listId", ""),
                     priority=priority,
                     due_date=due_date,
@@ -210,92 +174,88 @@ class OutlookTaskProvider(TaskProvider):
                 )
                 tasks.append(task)
             
-            logger.debug(f"Retrieved {len(tasks)} tasks for app_login '{app_login}' / task_user_email '{task_user_email}'")
+            logger.debug(f"Retrieved {len(tasks)} tasks for user_id '{user_id}' / task_user_email '{task_user_email}'")
             return tasks
         except Exception as e:
-            logger.error(f"Error getting Outlook tasks for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
+            logger.error(f"Error getting Outlook tasks for user_id '{user_id}' / task_user_email '{task_user_email}': {e}")
             raise
 
-    def get_ai_instructions(self, app_login, task_user_email) -> Optional[str]:
+    def get_ai_instructions(self, user_id, task_user_email) -> Optional[str]:
         """Get the AI instruction task content."""
-        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
+        self._initialize_client(user_id=user_id, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Microsoft Graph client for app_login '{app_login}' / task_user_email '{task_user_email}'")
+            raise Exception(f"No Microsoft Graph client for user_id '{user_id}' / task_user_email '{task_user_email}'")
 
         try:
             # Get all task lists
-            task_lists = []
             try:
-                # In a real implementation, we would use:
-                # task_lists_response = self.client.me.todo.lists.get()
-                # task_lists = task_lists_response.value
-                
-                # For now, use mock data
-                task_lists = [{"id": "list1"}, {"id": "list2"}]
+                task_lists_response = self.client.me.outlook.tasks.folders.get()
+                task_lists = task_lists_response.value
             except Exception as e:
                 logger.warning(f"Error getting Outlook task lists: {e}")
-                task_lists = [{"id": "default"}]
+                return None
             
             # Search for the instruction task in each list
             for task_list in task_lists:
-                list_id = task_list["id"]
+                list_id = task_list.id
                 
                 try:
-                    # In a real implementation, we would use:
-                    # filter_query = f"title eq '{self.INSTRUCTION_TASK_TITLE}'"
-                    # tasks_response = self.client.me.todo.lists.by_todo_task_list_id(list_id).tasks.get(filter=filter_query)
-                    # instruction_tasks = tasks_response.value
+                    # Search for the instruction task
+                    filter_query = f"subject eq '{self.INSTRUCTION_TASK_TITLE}'"
+                    tasks_response = self.client.me.outlook.tasks.folders.by_id(list_id).tasks.get(filter=filter_query)
+                    instruction_tasks = tasks_response.value
                     
-                    # For now, return a mock instruction
-                    return """AI Instructions:
-- Schedule friend catchups weekly
-- Work on each project at least twice a week
-- Keep mornings free for focused work
-- Handle urgent tasks within 24 hours"""
+                    # If found, return the content
+                    if instruction_tasks and len(instruction_tasks) > 0:
+                        instruction_task = instruction_tasks[0]
+                        if hasattr(instruction_task, 'body') and instruction_task.body:
+                            return instruction_task.body.content
                     
                 except Exception as e:
                     logger.warning(f"Error searching for instruction task in list {list_id}: {e}")
             
-            logger.warning(f"No AI instruction task found for app_login '{app_login}' / task_user_email '{task_user_email}'")
+            logger.warning(f"No AI instruction task found for user_id '{user_id}' / task_user_email '{task_user_email}'")
             return None
         except Exception as e:
-            logger.error(f"Error getting AI instructions for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
+            logger.error(f"Error getting AI instructions for user_id '{user_id}' / task_user_email '{task_user_email}': {e}")
             raise
 
-    def update_task_status(self, app_login, task_user_email, task_id: str, status: str) -> bool:
+    def update_task_status(self, user_id, task_id, task_user_email=None, provider_task_id=None, status: str = None) -> bool:
         """Update task completion status."""
-        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
+        # Look up the task to get provider_task_id and task_user_email
+        task = Task.query.filter_by(id=task_id, user_id=user_id).first()
+        if not task:
+            raise ValueError(f"Task with ID {task_id} not found")
+            
+        # Get the provider-specific information
+        provider_task_id = task.provider_task_id
+        task_user_email = task.task_user_email
+        
+        self._initialize_client(user_id=user_id, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Microsoft Graph client for app_login '{app_login}' / task_user_email '{task_user_email}'")
+            raise Exception(f"No Microsoft Graph client for user_id '{user_id}' / task_user_email '{task_user_email}'")
 
         try:
             # Map our status to Outlook status
             outlook_status = "completed" if status == "completed" else "notStarted"
             
-            # Try to verify the task exists first
+            # Try to verify the task exists and update it
             try:
-                # In a real implementation, we would get the task to verify it exists
-                # using the Microsoft Graph API
-                # Example: task = self.client.me.todo.tasks.by_todo_task_id(task_id).get()
+                # Get the task to verify it exists
+                outlook_task = self.client.me.outlook.tasks.by_id(provider_task_id).get()
                 
-                # Mock check - in a real implementation, this would be replaced with an API call
-                task_exists = True  # Placeholder - would check if task exists
+                # Update the task status
+                self.client.me.outlook.tasks.by_id(provider_task_id).patch({"status": outlook_status})
                 
-                if task_exists:
-                    # In a real implementation, we would update the task status using:
-                    # self.client.me.todo.tasks.by_todo_task_id(task_id).patch({"status": outlook_status})
-                    
-                    logger.debug(f"Updated task {task_id} status to {status} for app_login '{app_login}' / task_user_email '{task_user_email}'")
-                    return True
-                else:
-                    raise Exception(f"Task {task_id} not found in Outlook Tasks")
+                logger.debug(f"Updated task (UUID: {task_id}, provider: O365, provider_task_id: {provider_task_id}) status to {status} for user_id '{user_id}' / task_user_email '{task_user_email}'")
+                return True
                     
             except Exception as task_error:
                 error_msg = str(task_error).lower()
                 if "not found" in error_msg or "404" in error_msg:
-                    raise Exception(f"Task {task_id} not found in Outlook Tasks. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
+                    raise Exception(f"Task with provider_task_id {provider_task_id} not found in Outlook Tasks. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
                 # For other errors, log and propagate
-                logger.error(f"Error updating Outlook Tasks task status for app_login '{app_login}' / task_user_email '{task_user_email}': {task_error}")
+                logger.error(f"Error updating Outlook Tasks task status for user_id '{user_id}' / task_user_email '{task_user_email}': {task_error}")
                 raise
                 
         except Exception as e:
@@ -310,69 +270,68 @@ class OutlookTaskProvider(TaskProvider):
                 raise Exception("Network error when connecting to Outlook Tasks. Please check your internet connection.")
             else:
                 # If not a specific known error, log the original error and pass it along
-                logger.error(f"Error updating task status for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
+                logger.error(f"Error updating task status for user_id '{user_id}' / task_user_email '{task_user_email}': {e}")
                 raise
 
-    def create_instruction_task(self, app_login, task_user_email, instructions: str) -> bool:
+    def create_instruction_task(self, user_id, task_user_email, instructions: str) -> bool:
         """Create or update the AI instruction task."""
-        self._initialize_client(app_login=app_login, task_user_email=task_user_email)
+        self._initialize_client(user_id=user_id, task_user_email=task_user_email)
         if not self.client:
-            raise Exception(f"No Microsoft Graph client for app_login '{app_login}' / task_user_email '{task_user_email}'")
+            raise Exception(f"No Microsoft Graph client for user_id '{user_id}' / task_user_email '{task_user_email}'")
 
         try:
             # Get the default task list
-            default_list_id = "default"
             try:
-                # In a real implementation, we would use:
-                # task_lists_response = self.client.me.todo.lists.get()
-                # default_list_id = task_lists_response.value[0].id if task_lists_response.value else "default"
-                default_list_id = "list1"  # Mock data
+                task_lists_response = self.client.me.outlook.tasks.folders.get()
+                if not task_lists_response.value:
+                    raise Exception("No task lists found")
+                default_list_id = task_lists_response.value[0].id
             except Exception as e:
-                logger.warning(f"Error getting default task list: {e}")
+                logger.error(f"Error getting default task list: {e}")
+                raise Exception(f"Could not get default task list: {e}")
             
             # Search for existing instruction task
             instruction_task_id = None
             try:
-                # In a real implementation, we would use:
-                # filter_query = f"title eq '{self.INSTRUCTION_TASK_TITLE}'"
-                # tasks_response = self.client.me.todo.lists.by_todo_task_list_id(default_list_id).tasks.get(filter=filter_query)
-                # instruction_tasks = tasks_response.value
-                # instruction_task_id = instruction_tasks[0].id if instruction_tasks else None
-                instruction_task_id = None  # Mock data - assume no existing task
+                filter_query = f"subject eq '{self.INSTRUCTION_TASK_TITLE}'"
+                tasks_response = self.client.me.outlook.tasks.folders.by_id(default_list_id).tasks.get(filter=filter_query)
+                instruction_tasks = tasks_response.value
+                if instruction_tasks and len(instruction_tasks) > 0:
+                    instruction_task_id = instruction_tasks[0].id
             except Exception as e:
                 logger.warning(f"Error searching for instruction task: {e}")
             
             if instruction_task_id:
                 # Update existing task
-                # In a real implementation, we would use:
-                # self.client.me.todo.tasks.by_todo_task_id(instruction_task_id).patch({"body": {"content": instructions}})
-                logger.debug(f"Updated AI instruction task for app_login '{app_login}' / task_user_email '{task_user_email}'")
+                self.client.me.outlook.tasks.by_id(instruction_task_id).patch({
+                    "body": {"content": instructions}
+                })
+                logger.debug(f"Updated AI instruction task for user_id '{user_id}' / task_user_email '{task_user_email}'")
             else:
                 # Create new task
-                # In a real implementation, we would use:
-                # new_task = {
-                #     "title": self.INSTRUCTION_TASK_TITLE,
-                #     "body": {"content": instructions},
-                #     "importance": "high"
-                # }
-                # self.client.me.todo.lists.by_todo_task_list_id(default_list_id).tasks.post(new_task)
-                logger.debug(f"Created AI instruction task for app_login '{app_login}' / task_user_email '{task_user_email}'")
+                new_task = {
+                    "subject": self.INSTRUCTION_TASK_TITLE,
+                    "body": {"content": instructions},
+                    "importance": "high"
+                }
+                self.client.me.outlook.tasks.folders.by_id(default_list_id).tasks.post(new_task)
+                logger.debug(f"Created AI instruction task for user_id '{user_id}' / task_user_email '{task_user_email}'")
             
             return True
         except Exception as e:
-            logger.error(f"Error managing instruction task for app_login '{app_login}' / task_user_email '{task_user_email}': {e}")
+            logger.error(f"Error managing instruction task for user_id '{user_id}' / task_user_email '{task_user_email}': {e}")
             raise
 
     # --- Credential Management (Not Applicable for OAuth Providers) ---
 
-    def get_credentials(self, app_login, task_user_email):
+    def get_credentials(self, user_id, task_user_email):
         """Credentials for Outlook are handled via CalendarAccount (OAuth)."""
         logger.debug("OutlookTaskProvider.get_credentials called but not implemented (uses CalendarAccount)")
         # This method might be called by generic logic but isn't used for OAuth flow.
         # Returning None is safer than raising NotImplementedError if called unexpectedly.
         return None
 
-    def store_credentials(self, app_login, task_user_email, credentials):
+    def store_credentials(self, user_id, task_user_email, credentials):
         """Credentials for Outlook are handled via CalendarAccount (OAuth)."""
         logger.error("OutlookTaskProvider.store_credentials should not be called directly.")
         # Raise error because storing credentials here bypasses the OAuth flow.

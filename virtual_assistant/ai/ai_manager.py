@@ -1,8 +1,7 @@
 from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.utils.logger import logger
 from .openai_provider import OpenAIProvider
-# We'll add GrokProvider later
-# from .grok_provider import GrokProvider
+from .grok_provider import GrokProvider
 
 
 class AIManager:
@@ -12,8 +11,7 @@ class AIManager:
         self.providers = {}
         self.provider_classes = {
             "openai": OpenAIProvider,
-            # Add Grok when implemented
-            # "grok": GrokProvider,
+            "grok": GrokProvider,
         }
         self._initialize_providers()
 

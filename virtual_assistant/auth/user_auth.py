@@ -1,4 +1,5 @@
 from flask_login import LoginManager
+import uuid
 
 from virtual_assistant.database.user import User
 from virtual_assistant.database.database import db
@@ -18,5 +19,7 @@ def setup_login_manager(app):
 # from the user ID stored in the session.
 @login_manager.user_loader
 def load_user(user_id):
-    # Since user_id is just the primary key of our user table, use it directly.
-    return User.query.get(int(user_id))
+    try:
+        return User.query.get(user_id)
+    except:
+        return None

@@ -52,8 +52,24 @@ def init_task_routes():
         app_login = session.get('app_login')
         
         try:
-            # Try to authenticate with task providers (we'll use Todoist as an example)
-            auth_results = task_manager.authenticate(app_login, provider_name='todoist')
+            # Get active task accounts for the user
+            accounts = get_task_accounts(current_user.id)
+            
+            if not accounts:
+                # No active accounts found, show empty task list
+                return render_template('tasks.html', error="No active task provider accounts found. Please add an account in Settings.")
+            
+            # Use the first account for authentication
+            account = accounts[0]
+            provider_name = account.provider_name
+            task_user_email = account.task_user_email
+            
+            # Authenticate with the provider
+            auth_results = task_manager.authenticate(
+                user_id=current_user.id,
+                task_user_email=task_user_email,
+                provider_name=provider_name
+            )
             
             # If authentication is needed, redirect to the auth URL
             if 'todoist' in auth_results and auth_results['todoist']:
@@ -63,10 +79,10 @@ def init_task_routes():
             # Get tasks from the database
             
             # Get all tasks for this user
-            prioritized_tasks, unprioritized_tasks = Task.get_user_tasks_by_list(app_login)
+            prioritized_tasks, unprioritized_tasks, completed_tasks = Task.get_user_tasks_by_list(current_user.id)
             
             # If no tasks found in database, sync from providers
-            if not prioritized_tasks and not unprioritized_tasks:
+            if not prioritized_tasks and not unprioritized_tasks and not completed_tasks:
                 # Redirect to the sync endpoint
                 return redirect(url_for('tasks.sync_tasks'))
             
@@ -75,7 +91,7 @@ def init_task_routes():
             def convert_to_flattened_task(db_task):
                 # Convert database task to provider task format
                 provider_task = ProviderTask(
-                    id=db_task.provider_task_id,
+                    id=db_task.id,  # Use internal UUID for id
                     title=db_task.title,
                     project_id=db_task.project_id or "",
                     priority=db_task.priority or 2,
@@ -84,7 +100,8 @@ def init_task_routes():
                     is_instruction=False,
                     parent_id=db_task.parent_id,
                     section_id=db_task.section_id,
-                    project_name=db_task.project_name
+                    project_name=db_task.project_name,
+                    provider_task_id=db_task.provider_task_id  # Store provider's task ID
                 )
                 
                 # Create flattened task dictionary
@@ -98,10 +115,12 @@ def init_task_routes():
             # Convert database tasks to flattened tasks for the template
             prioritized_flattened = [convert_to_flattened_task(task) for task in prioritized_tasks]
             unprioritized_flattened = [convert_to_flattened_task(task) for task in unprioritized_tasks]
+            completed_flattened = [convert_to_flattened_task(task) for task in completed_tasks]
             
-            return render_template('tasks.html', 
+            return render_template('tasks.html',
                                 prioritized_tasks=prioritized_flattened,
-                                unprioritized_tasks=unprioritized_flattened)
+                                unprioritized_tasks=unprioritized_flattened,
+                                completed_tasks=completed_flattened)
         
         except Exception as e:
             logger.error(f"Error getting tasks: {e}")
@@ -144,7 +163,7 @@ def init_task_routes():
             try:
                 # Try to authenticate with the provider
                 auth_results = task_manager.authenticate(
-                    app_login=app_login,
+                    user_id=user_id,
                     task_user_email=task_user_email,
                     provider_name=provider_name
                 )
@@ -163,25 +182,17 @@ def init_task_routes():
                     continue
                 
                 # Get tasks from the provider
-                try:
-                    provider_tasks = task_manager.get_tasks(
-                        app_login=app_login,
-                        task_user_email=task_user_email,
-                        provider_name=provider_name
-                    )
-                except Exception as e: # Catch any error from get_tasks (incl. provider not found or provider API errors)
-                    error_msg = str(e)
-                    logger.error(f"Error getting tasks from provider '{provider_name}' for {task_user_email} during sync: {error_msg}")
-                    # Add error to results list which is shown to the user
-                    results['errors'].append({'task_user_email': task_user_email, 'provider': provider_name, 'error': error_msg}) # Use specific key
-                    results['status'] = 'error'
-                    continue # Skip this provider on error, try the next one
-                
+                provider_tasks = task_manager.get_tasks(
+                    user_id=user_id,
+                    task_user_email=task_user_email,
+                    provider_name=provider_name
+                )
+                                
                 # Store current provider task IDs to detect deletions
                 current_provider_task_ids = [task.id for task in provider_tasks]
                 
                 # Sync each task with our database
-                updated_count = sync_provider_tasks(app_login, task_user_email, provider_name, provider_tasks)
+                updated_count = sync_provider_tasks(user_id, task_user_email, provider_name, provider_tasks)
                 
                 # Log success
                 logger.info(f"Successfully synced {updated_count} tasks from {provider_name} for {task_user_email}")
@@ -203,6 +214,8 @@ def init_task_routes():
                     'error': error_msg
                 })
                 results['status'] = 'error'
+                # Don't continue with other providers - fail early
+                break
         
         # Set overall status message
         if results['needs_reauth']:
@@ -233,7 +246,7 @@ def init_task_routes():
     @bp.route('/update_order', methods=['POST'])
     def update_task_order():
         """Update task order based on drag-and-drop reordering."""
-        app_login = session.get('app_login')
+        user_id = current_user.id
         
         try:
             # Get the new task order from the request
@@ -250,9 +263,9 @@ def init_task_routes():
             task_positions = {item['id']: item['position'] for item in task_order}
             
             # Update the task order in the database
-            Task.update_task_order(app_login, list_type, task_positions)
+            Task.update_task_order(user_id, list_type, task_positions)
             
-            logger.info(f"Updated {list_type} task order for {app_login}, {len(task_order)} tasks")
+            logger.info(f"Updated {list_type} task order for user_id={user_id}, {len(task_order)} tasks")
             
             return jsonify({
                 'success': True,
@@ -267,15 +280,14 @@ def init_task_routes():
     @bp.route('/move_task', methods=['POST'])
     def move_task_between_lists():
         """Move a task between prioritized and unprioritized lists."""
-        app_login = session.get('app_login')
+        user_id = current_user.id
         
         try:
             # Get task ID and destination list
             task_id = request.form.get('task_id')
             destination = request.form.get('destination')
             position = request.form.get('position')
-            
-            if not task_id or not destination or destination not in ['prioritized', 'unprioritized']:
+            if not task_id or not destination or destination not in ['prioritized', 'unprioritized', 'completed']:
                 return jsonify({'error': 'Invalid parameters'}), 400
             
             # Convert position to integer if provided
@@ -284,8 +296,8 @@ def init_task_routes():
                 
             # Find the task in our database
             task = Task.query.filter_by(
-                app_login=app_login,
-                provider_task_id=task_id
+                user_id=user_id,
+                id=task_id
             ).first()
             
             if not task:
@@ -294,7 +306,7 @@ def init_task_routes():
             # Move the task in the database
             Task.move_task(task.id, destination, position)
             
-            logger.info(f"Moved task {task_id} to {destination} list for {app_login}")
+            logger.info(f"Moved task id={task_id} to {destination} list for user_id={user_id}")
             
             return jsonify({
                 'success': True,
@@ -305,19 +317,20 @@ def init_task_routes():
             error_msg = str(e)
             logger.error(f"Error moving task between lists: {error_msg}")
             return jsonify({'error': error_msg}), 500
-
+        
     @bp.route('/get_task_lists', methods=['GET'])
     def get_task_lists():
-        """Get the prioritized and unprioritized task lists."""
-        app_login = session.get('app_login')
+        """Get the prioritized, unprioritized, and completed task lists."""
+        user_id = current_user.id
         
         # Get tasks from database
-        prioritized, unprioritized = Task.get_user_tasks_by_list(app_login)
+        prioritized, unprioritized, completed = Task.get_user_tasks_by_list(user_id)
         
         # Convert to dictionaries
         result = {
-            'prioritized': [{'id': task.provider_task_id, 'position': task.position} for task in prioritized],
-            'unprioritized': [{'id': task.provider_task_id, 'position': task.position} for task in unprioritized]
+            'prioritized': [{'id': task.id, 'position': task.position} for task in prioritized],
+            'unprioritized': [{'id': task.id, 'position': task.position} for task in unprioritized],
+            'completed': [{'id': task.id, 'position': task.position} for task in completed]
         }
         
         return jsonify(result)
@@ -331,7 +344,7 @@ def init_task_routes():
         # Try to find the task in our database
         task = Task.query.filter_by(
             user_id=user_id, # Use user_id
-            provider_task_id=task_id
+            id=task_id
         ).first()
         
         if task:
@@ -339,36 +352,40 @@ def init_task_routes():
             return jsonify(task.to_dict())
         else:
             # If not found in local DB (populated by sync), return 404
-            logger.warning(f"Task details requested but not found locally for task_id {task_id}, user_id {user_id}")
+            logger.warning(f"Task details requested but not found locally for id={task_id}, user_id={user_id}")
             return jsonify({'error': 'Task not found'}), 404
 
     @bp.route('/<task_id>/update_status', methods=['POST'])
     def update_task_status(task_id):
-        """Update a task's status (complete/incomplete)."""
-        app_login = session['app_login']
+        """Update a task's status (complete/incomplete).
         
-        # Get the new status from the form
+        Note: Changing status doesn't automatically move the task to the completed list.
+        """
+        user_id = current_user.id
+        
+        # Get the new status and list_type from the form
         new_status = request.form.get('status', 'active')
-        logger.info(f"Task status update request: task_id={task_id}, new_status='{new_status}', user={app_login}")
+        list_type = request.form.get('list_type', 'unprioritized')
+        logger.info(f"Task status update request: id={task_id}, new_status='{new_status}', list_type='{list_type}', user_id={user_id}")
         
-        # Get the task from the database by provider_task_id
-        task = Task.query.filter_by(provider_task_id=task_id, app_login=app_login).first()
+        # Get the task from the database by id and list_type
+        task = Task.query.filter_by(id=task_id, user_id=user_id, list_type=list_type).first()
         
         if not task:
-            error_message = f"Task not found for task_id={task_id}"
-            logger.warning(f"{error_message} for user={app_login}")
+            error_message = f"Task not found for id={task_id}"
+            logger.warning(f"{error_message} for user_id={user_id}")
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({'error': error_message}), 404
             flash(error_message, 'danger')
             return redirect(url_for('tasks.list_tasks'))
         
         # Log the current task status with both IDs for clarity
-        logger.info(f"Found task in database: task_id={task_id} (maps to database_id={task.id}), provider={task.provider}, status='{task.status}'")
+        logger.info(f"Found task in database: id={task_id}, provider_task_id={task.provider_task_id}, provider={task.provider}, status='{task.status}'")
         
         # Check if the status is already set to the requested value
         if task.status == new_status:
             message = f"Task '{task.title}' is already marked as {new_status}"
-            logger.info(f"{message} (task_id={task_id})")
+            logger.info(f"{message} (id={task_id})")
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({'message': message, 'status': 'unchanged'}), 200
             flash(message, 'info')
@@ -383,7 +400,7 @@ def init_task_routes():
             provider = task_manager.get_provider(task.provider)
             if not provider:
                 error_message = f"Provider '{task.provider}' not available or configured."
-                logger.error(f"{error_message} for task_id={task_id} (db_id={task.id})")
+                logger.error(f"{error_message} for id={task_id}, provider_task_id={task.provider_task_id}")
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     return jsonify({'error': error_message}), 500
                 flash(error_message, 'danger')
@@ -391,7 +408,7 @@ def init_task_routes():
 
             # Determine the correct email identifier for the provider API call.
             # Assumes task.task_user_email is correctly populated for Google/Outlook during sync.
-            task_email_to_use = task.task_user_email if task.provider in ['google_tasks', 'outlook'] else app_login
+            task_email_to_use = task.task_user_email
 
             # If email is missing for a provider that requires it, raise an error.
             if not task_email_to_use and task.provider in ['google_tasks', 'outlook']:
@@ -403,12 +420,12 @@ def init_task_routes():
                 return redirect(url_for('tasks.list_tasks'))
             
             # Update the task status in the provider
-            logger.info(f"Updating task status in provider: task_id={task_id} (provider_id={task.provider_task_id}), provider={task.provider}, task_user_email='{task_email_to_use}', old_status='{task.status}', new_status='{new_status}'")
+            logger.info(f"Updating task status in provider: id={task_id}, provider_task_id={task.provider_task_id}, provider={task.provider}, task_user_email='{task_email_to_use}', old_status='{task.status}', new_status='{new_status}'")
             
-            # Call provider method with the correct email
+            # Call provider method with just the necessary parameters
             provider.update_task_status(
-                task_user_email=task_email_to_use,
-                task_id=task.provider_task_id,
+                user_id=user_id,
+                task_id=task.id,  # Pass the primary key (UUID)
                 status=new_status
             )
             
@@ -418,7 +435,7 @@ def init_task_routes():
             task.last_synced = datetime.datetime.utcnow()
             db.session.commit()
             
-            logger.info(f"Successfully updated task status: task_id={task_id}, provider={task.provider}, status changed from '{old_status}' to '{new_status}'")
+            logger.info(f"Successfully updated task status: id={task_id}, provider_task_id={task.provider_task_id}, provider={task.provider}, status changed from '{old_status}' to '{new_status}'")
             
             # Return success
             success_message = f"Task '{task.title}' marked as {new_status}"
@@ -429,7 +446,7 @@ def init_task_routes():
             
         except Exception as e:
             error_message = f"Error updating task status: {str(e)}"
-            logger.error(f"{error_message} - task_id={task_id}, provider={task.provider}")
+            logger.error(f"{error_message} - id={task_id}, provider={task.provider}")
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({'error': error_message}), 500
             flash(error_message, 'danger')
@@ -448,7 +465,8 @@ def init_task_routes():
             return jsonify({'success': False, 'message': 'No provider account ID received.'}), 400
 
         try:
-            account_id = int(account_id_str)
+            # For UUID, we use the string directly
+            account_id = account_id_str
 
             db.session.begin_nested()
             # Ensure only one primary: Reset flag for all user's task accounts first
@@ -487,7 +505,8 @@ def init_task_routes():
             return redirect(url_for('settings'))
             
         try:
-            account_id = int(account_id_str)
+            # For UUID, we use the string directly
+            account_id = account_id_str
             
             # Find the task account to be deleted
             account_to_delete = TaskAccount.query.filter_by(id=account_id, user_id=user_id).first()
@@ -513,8 +532,9 @@ def init_task_routes():
             if was_primary:
                  logger.info(f"Deleted task account {account_id} was the primary task provider for user {user_id}.")
                  
-        except ValueError:
-            flash('Invalid Account ID format.', 'danger')
+        except Exception as e:
+            logger.error(f"Error deleting task account: {e}")
+            flash('Error deleting task account.', 'danger')
             logger.error(f"User {user_id} - Delete task account: Invalid account ID format '{account_id_str}'")
         except Exception as e:
             db.session.rollback()
@@ -524,11 +544,11 @@ def init_task_routes():
         return redirect(url_for('settings'))
 
     return bp
-def sync_provider_tasks(app_login, task_user_email, provider_name, provider_tasks):
+def sync_provider_tasks(user_id, task_user_email, provider_name, provider_tasks):
     """Sync tasks from a provider to the database.
     
     Args:
-        app_login: The user's login identifier for this application
+        user_id: The user's database ID
         task_user_email: The email associated with the task provider account
         provider_name: The name of the provider (e.g., 'todoist')
         provider_tasks: List of tasks from the provider
@@ -537,7 +557,7 @@ def sync_provider_tasks(app_login, task_user_email, provider_name, provider_task
         int: Number of tasks updated
     """
     
-    logger.info(f"Starting sync of {len(provider_tasks)} tasks from {provider_name} for app_login={app_login}, task_user_email={task_user_email}")
+    logger.info(f"Starting sync of {len(provider_tasks)} tasks from {provider_name} for user_id={user_id}, task_user_email={task_user_email}")
     
     # Log task statuses from provider
     task_statuses = {}
@@ -562,7 +582,7 @@ def sync_provider_tasks(app_login, task_user_email, provider_name, provider_task
         
         # Check if task exists to log status changes
         existing_task = Task.query.filter_by(
-            app_login=app_login,
+            user_id=user_id,
             provider=provider_name,
             provider_task_id=provider_task.id
         ).first()
@@ -573,7 +593,7 @@ def sync_provider_tasks(app_login, task_user_email, provider_name, provider_task
         
         # Create or update the task
         task, created_or_updated = Task.create_or_update_from_provider_task(
-            app_login=app_login,
+            user_id=user_id,
             task_user_email=task_user_email,
             provider=provider_name,
             provider_task=provider_task
@@ -593,7 +613,7 @@ def sync_provider_tasks(app_login, task_user_email, provider_name, provider_task
     
     # Clean up deleted tasks
     current_provider_task_ids = [task.id for task in provider_tasks]
-    deleted_count = Task.sync_task_deletions(app_login, provider_name, current_provider_task_ids)
+    deleted_count = Task.sync_task_deletions(user_id, provider_name, current_provider_task_ids)
     
     # Log summary
     logger.info(f"Sync summary for {provider_name}: Created {created_count}, Updated {updated_count} (Status changes: {status_change_count}), Unchanged {unchanged_count}, Deleted {deleted_count}")
