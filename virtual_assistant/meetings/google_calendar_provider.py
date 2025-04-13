@@ -5,11 +5,11 @@ Module for Google Calendar integration.
 import datetime
 import json
 import os
-from datetime import datetime, timezone  
+from datetime import datetime, timezone
 import asyncio
 
 from flask import render_template, session
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import Request, AuthorizedSession
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -36,31 +36,30 @@ class GoogleCalendarProvider(CalendarProvider):
             'https://www.googleapis.com/auth/userinfo.email'  # Email scope
         ]
         self.provider_name = "google"
-        
+
         # Add this line to allow HTTPS
         os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-        
+
         # Keep these - useful for verifying config
         logger.debug("Google Calendar Provider initialized")
         logger.debug(f"Redirect URI = {self.redirect_uri}")
 
-    def authenticate(self, app_login):
+    def authenticate(self, user_id):
         """
         Initiate authentication to connect a new Google Calendar account.
         Used when the user wants to connect a calendar for the first time.
 
         Parameters:
-            app_login (str): The login identifier used to log into this app. This is needed
-                                  to associate the Google Calendar with the correct app user.
+            user_id (int): The ID of the app user.
 
         Returns:
             tuple: (None, auth_url) - auth_url to redirect user to Google's consent screen
-            
+
         Raises:
             Exception: If authentication cannot be established
         """
         # Always initiate a new OAuth flow - the calendar email will be retrieved after OAuth completes
-        logger.info(f"Initiating Google OAuth flow for user {app_login}")
+        logger.info(f"Initiating Google OAuth flow for user ID {user_id}")
         flow = Flow.from_client_config(
             {
                 "web": {
@@ -78,7 +77,7 @@ class GoogleCalendarProvider(CalendarProvider):
             prompt="consent",     # Force consent screen to ensure refresh token
             access_type="offline" # Get refresh token
         )
-        
+
         # Store only serializable parts of the flow
         session["flow_state"] = {
             "client_id": self.client_id,
@@ -87,46 +86,46 @@ class GoogleCalendarProvider(CalendarProvider):
             "scopes": self.scopes,
             "state": state
         }
-        
-        # Store the app_login in session
-        session["app_login"] = app_login
-        
+
+        # Store the user_id in session
+        session["user_id"] = user_id
+
         return None, authorization_url
-        
-    def reauthenticate(self, calendar_email, app_login):
+
+    def reauthenticate(self, calendar_email, user_id):
         """
         Reauthenticate an existing Google Calendar connection.
-        Used when an existing connection needs to be refreshed.
+        Attempts to refresh the token first; if that fails or no refresh token exists,
+        initiates the full OAuth flow to get new credentials.
 
         Parameters:
             calendar_email (str): The email address of the Google Calendar account to reauthenticate.
-                                 This is the Google account email, not the app login.
-            app_login (str): The login identifier used to log into this app. This is needed
-                                  to associate the Google Calendar with the correct app user.
+            user_id (int): The ID of the app user associated with this calendar account.
 
         Returns:
             tuple: (None, auth_url) - auth_url to redirect user to Google's consent screen
-            
+                   or (credentials, None) if token refresh was successful.
+
         Raises:
-            Exception: If authentication cannot be established
+            Exception: If the OAuth flow setup fails. Token refresh errors are handled internally.
         """
-        logger.info(f"Reauthorizing Google Calendar {calendar_email} for user {app_login}")
-        
+        logger.info(f"Reauthorizing Google Calendar {calendar_email} for user ID {user_id}") # Use user_id in log
+
         # Check if we have credentials that could be refreshed
-        credentials = self.get_credentials(calendar_email, app_login)
-        
+        credentials = self.get_credentials(calendar_email, user_id) # Use user_id
+
         # If we have a refresh token, try to use it instead of doing full reauth
-        if credentials and credentials.refresh_token:
+        if credentials and credentials.refresh_token: # Check if credentials exist and have a refresh token
             try:
                 logger.info(f"Attempting to refresh token for {calendar_email}")
-                credentials.refresh(Request())
-                self.store_credentials(calendar_email, credentials, app_login)
+                credentials.refresh(Request()) # Attempt to refresh the token
+                self.store_credentials(calendar_email, credentials, user_id) # Update stored credentials on success
                 logger.info(f"Successfully refreshed token for {calendar_email}")
-                return credentials, None
+                return credentials, None # Return refreshed credentials, no auth_url needed
             except Exception as e:
                 logger.error(f"Failed to refresh token for {calendar_email}: {e}")
                 # Continue with full reauth
-        
+
         # If we couldn't refresh or no refresh token, do full reauth
         # Set up a new OAuth flow for reauth
         flow = Flow.from_client_config(
@@ -147,7 +146,7 @@ class GoogleCalendarProvider(CalendarProvider):
             access_type="offline", # Get refresh token
             login_hint=calendar_email  # Specify which account to authenticate
         )
-        
+
         # Store flow state and user info in session
         session["flow_state"] = {
             "client_id": self.client_id,
@@ -156,36 +155,36 @@ class GoogleCalendarProvider(CalendarProvider):
             "scopes": self.scopes,
             "state": state
         }
-        
+
         # Store email details in session for the callback
-        session["app_login"] = app_login
+        # session["app_login"] = app_login # No longer needed here, user_id is passed directly
         session["reauth_calendar_email"] = calendar_email
-        
+
         return None, authorization_url
 
-    async def refresh_token(self, calendar_email, app_login):
+    async def refresh_token(self, calendar_email, user_id):
         """
         Try to refresh the token using the refresh token.
-        
+
         Parameters:
             calendar_email (str): The email address of the Google Calendar account.
-            app_login (str): The login identifier used to log into this app.
-            
+            user_id (int): The ID of the app user.
+
         Returns:
             tuple: (credentials, None) if successful, (None, None) if failed
-            
+
         Raises:
             Exception: If token refresh fails and should be handled by caller
         """
         account = CalendarAccount.get_by_email_provider_and_user(
-            calendar_email, self.provider_name, app_login
+            calendar_email, self.provider_name, user_id # Use user_id
         )
-        
+
         if not account or not account.refresh_token:
             raise Exception(f"No refresh token available for {calendar_email}")
-        
+
         logger.info(f"Attempting to refresh token for {calendar_email}")
-        
+
         # Create a credentials object from stored credentials
         credentials = Credentials(
             token=account.token,
@@ -195,13 +194,13 @@ class GoogleCalendarProvider(CalendarProvider):
             client_secret=account.client_secret,
             scopes=account.scopes.split() if account.scopes else []
         )
-        
+
         try:
-            # Note: refresh() is synchronous, but we're wrapping it 
+            # Note: refresh() is synchronous, but we're wrapping it
             # in an async method for API consistency
             credentials.refresh(Request())
-            
-            self.store_credentials(calendar_email, credentials, app_login)
+
+            self.store_credentials(calendar_email, credentials, user_id) # Use user_id
             logger.info(f"Token refreshed for {calendar_email}")
             return credentials, None
         except Exception as e:
@@ -236,8 +235,18 @@ class GoogleCalendarProvider(CalendarProvider):
             "scopes": credentials.scopes,
         }
 
-    def handle_oauth_callback(self, callback_url, app_login):
-        """Handle the OAuth callback from Google."""
+    def handle_oauth_callback(self, callback_url):
+        """
+        Handle the OAuth callback from Google after user consent.
+        Uses the state stored in the session to recreate the OAuth flow
+        and fetch the access and refresh tokens.
+
+        Parameters:
+            callback_url (str): The full callback URL received from Google containing the auth code and state.
+
+        Returns:
+            google.oauth2.credentials.Credentials: The obtained credentials object.
+        """
         try:
             # Get the flow state from session
             flow_state = session.get("flow_state")
@@ -258,19 +267,19 @@ class GoogleCalendarProvider(CalendarProvider):
                 redirect_uri=flow_state["redirect_uri"],
                 state=flow_state["state"]
             )
-            
+
             # Fetch the token
             flow.fetch_token(authorization_response=callback_url)
             credentials = flow.credentials
-            
+
             # Check if refresh token is missing - this can happen if the user has already
             # authorized this app and didn't revoke access
             if not credentials.refresh_token:
                 logger.warning("❌ MISSING REFRESH TOKEN: Google didn't return a refresh token. This typically happens when the user has already authorized this app. If this is causing issues, have the user revoke access to this app in their Google account and try again.")
-            
+
             # Clean up session
             session.pop("flow_state", None)
-            
+
             return credentials
         except Exception as e:
             logger.error(f"❌ AUTH ERROR: Error handling Google OAuth callback: {e}")
@@ -278,35 +287,35 @@ class GoogleCalendarProvider(CalendarProvider):
 
     # This method is required by the CalendarProvider base class (which uses async methods)
     # but for Google, it's just a wrapper around our synchronous implementation
-    async def get_meetings(self, calendar_email, app_login):
+    async def get_meetings(self, calendar_email, user_id):
         """
         Async wrapper for get_meetings to conform to base class interface.
         This just calls the synchronous implementation in a thread pool.
-        
+
         Parameters:
             calendar_email (str): The email address of the calendar to retrieve meetings from.
-            app_login (str): The login identifier used to log into this app.
+            user_id (int): The ID of the app user.
 
         Returns:
             A list of meeting dictionaries.
-            
+
         Raises:
             Exception: If authentication fails or token is expired
         """
         # Run the synchronous implementation in a thread pool
         return await asyncio.get_event_loop().run_in_executor(
-            None, self.get_meetings_sync, calendar_email, app_login
+            None, self.get_meetings_sync, calendar_email, user_id # Pass user_id
         )
 
-    def get_meetings_sync(self, calendar_email, app_login):
+    def get_meetings_sync(self, calendar_email, user_id):
         """Synchronous implementation of get_meetings."""
         try:
-            credentials = self.get_credentials(calendar_email, app_login)
+            credentials = self.get_credentials(calendar_email, user_id) # Use user_id
             if not credentials:
                 raise Exception("Authentication failed: Missing or invalid credentials")
 
             service = build("calendar", "v3", credentials=credentials)
-            
+
             now = datetime.utcnow().isoformat() + "Z"  # "Z" indicates UTC time
             try:
                 events_result = (
@@ -325,7 +334,7 @@ class GoogleCalendarProvider(CalendarProvider):
                     logger.error(f"❌ AUTH ISSUE: Google token expired for {calendar_email}: {error}")
                     # Mark account as needing reauth
                     account = CalendarAccount.get_by_email_provider_and_user(
-                        calendar_email, self.provider_name, app_login
+                        calendar_email, self.provider_name, user_id # Use user_id
                     )
                     if account:
                         account.needs_reauth = True
@@ -337,25 +346,25 @@ class GoogleCalendarProvider(CalendarProvider):
 
             events = events_result.get("items", [])
             logger.info(f"Retrieved {len(events)} events from Google Calendar for {calendar_email}")
-            
+
             # Track counts for summary logging
             meetings_count = 0
             real_meetings_count = 0
             busy_blocks_count = 0
-            
+
             meetings = []
             for event in events:
                 meeting = self._handle_get_event(event, calendar_email)
                 if meeting:
                     meetings.append(meeting)
                     meetings_count += 1
-                    
+
                     # Count by type for summary
                     if meeting["is_real_meeting"]:
                         real_meetings_count += 1
                     if meeting["is_synced_busy"]:
                         busy_blocks_count += 1
-                        
+
                     # Log a concise, meaningful summary for a few meetings as examples
                     if meetings_count <= 3:
                         meeting_type = "Meeting" if meeting["is_real_meeting"] else "Busy Block"
@@ -369,7 +378,7 @@ class GoogleCalendarProvider(CalendarProvider):
                 logger.info(summary)
             else:
                 logger.info(f"No meetings found for {calendar_email} (empty calendar)")
-                
+
             return meetings
 
         except HttpError as error:
@@ -383,11 +392,11 @@ class GoogleCalendarProvider(CalendarProvider):
     def _handle_get_event(self, event, calendar_email):
         """
         Process a single event from Google Calendar.
-        
+
         Parameters:
             event (dict): The event object from Google Calendar API
             calendar_email (str): The email address of the calendar
-            
+
         Returns:
             dict: A dictionary containing the processed meeting data, or None if event should be skipped
         """
@@ -410,21 +419,26 @@ class GoogleCalendarProvider(CalendarProvider):
         # 1. Have more than one attendee (real meetings)
         # 2. Are synced busy blocks
         is_real_meeting = len(attendees) > 1
-        
+
         # Get meeting details
         location = event.get("location", "No location")
         title = event.get("summary", "Untitled")
-        
+
         # Extract meeting times - will raise ValueError if invalid
-        start_time = self.get_meeting_time(event.get("start", {}))
-        end_time = self.get_meeting_time(event.get("end", {}))
-        
+        try:
+            start_time = self.get_meeting_time(event.get("start", {}))
+            end_time = self.get_meeting_time(event.get("end", {}))
+        except ValueError as e:
+             logger.warning(f"Skipping event '{title}' due to invalid time data: {e}")
+             return None # Skip event if time data is invalid.
+
+
         # Get attendee info for logging
         attendee_info = ""
         if is_real_meeting:
             attendee_count = len(attendees)
             attendee_info = f"{attendee_count} attendees"
-        
+
         if is_real_meeting or is_synced_busy:
             return {
                 "id": event.get("id", ""),
@@ -441,27 +455,27 @@ class GoogleCalendarProvider(CalendarProvider):
             }
         return None
 
-    def get_meeting_time(self, meeting_time):
+    def get_meeting_time(self, meeting_time_data):
         """
         Extract the meeting time from the given event data.
 
         Parameters:
-            meeting_time (dict): The event data containing the meeting time.
+            meeting_time_data (dict): The event data containing the meeting time.
 
         Returns:
             str: The meeting time in ISO format.
-            
+
         Raises:
             ValueError: If the meeting time data is missing or invalid.
         """
-        if not meeting_time:
+        if not meeting_time_data:
             raise ValueError("Meeting time data is missing")
-            
-        if not isinstance(meeting_time, dict):
-            raise ValueError(f"Invalid meeting time format: expected dict, got {type(meeting_time).__name__}")
-            
-        date_time = meeting_time.get("dateTime")
-        date = meeting_time.get("date")
+
+        if not isinstance(meeting_time_data, dict):
+            raise ValueError(f"Invalid meeting time format: expected dict, got {type(meeting_time_data).__name__}")
+
+        date_time = meeting_time_data.get("dateTime")
+        date = meeting_time_data.get("date")
 
         if date_time:
             return date_time
@@ -470,7 +484,7 @@ class GoogleCalendarProvider(CalendarProvider):
         else:
             raise ValueError("Meeting time missing both dateTime and date fields")
 
-    async def create_busy_block(self, calendar_email, meeting_data, original_event_id, app_login):
+    async def create_busy_block(self, calendar_email, meeting_data, original_event_id, user_id):
         """
         Create a busy block in the calendar based on an existing meeting.
 
@@ -478,265 +492,251 @@ class GoogleCalendarProvider(CalendarProvider):
             calendar_email (str): The email address of the calendar to create the block in.
             meeting_data (dict): The original meeting data.
             original_event_id (str): The ID of the original event this busy block is based on.
-            app_login (str): The login identifier used to log into this app.
+            user_id (int): The ID of the app user.
 
         Returns:
             str: The meeting ID if created successfully.
-            
+
         Raises:
             Exception: If credentials are missing or API call fails
         """
         # Run the synchronous API calls in a thread pool
         return await asyncio.get_event_loop().run_in_executor(
-            None, self._create_busy_block_sync, calendar_email, meeting_data, original_event_id, app_login
+            None, self._create_busy_block_sync, calendar_email, meeting_data, original_event_id, user_id # Pass user_id
         )
 
-    def _create_busy_block_sync(self, calendar_email, meeting_data, original_event_id, app_login):
+    def _create_busy_block_sync(self, calendar_email, meeting_data, original_event_id, user_id):
         """Synchronous implementation of create_busy_block."""
-        credentials = self.get_credentials(calendar_email, app_login)
+        credentials = self.get_credentials(calendar_email, user_id) # Use user_id
         if not credentials:
-            raise Exception(f"No credentials found for {calendar_email}")
-            
-        logger.info(f"Creating busy block for {calendar_email}")
+            raise Exception(f"No credentials found for {calendar_email} (User ID: {user_id}) to create busy block.")
+
+        logger.info(f"Creating busy block for '{meeting_data.get('title', 'Untitled')}' on {calendar_email} (User ID: {user_id})")
         service = build("calendar", "v3", credentials=credentials)
 
-        # Create a busy block event
+        # Construct the event body for the busy block.
         busy_event = {
-            "summary": "Busy",
-            "description": "[SYNCED-BUSY] This event was synced from another calendar.",
-            "start": {"dateTime": meeting_data["start"]},
-            "end": {"dateTime": meeting_data["end"]},
-            "transparency": "opaque",  # Show as busy
-            "visibility": "private",
-            "extendedProperties": {
-                "private": {
-                    "original_event_id": original_event_id
+            'summary': f"[BUSY] {meeting_data.get('title', 'Untitled')}",
+            'description': f"[SYNCED-BUSY] Blocking time for event: {original_event_id}",
+            'start': {'dateTime': meeting_data['start'], 'timeZone': 'UTC'}, # Assuming times are UTC ISO strings
+            'end': {'dateTime': meeting_data['end'], 'timeZone': 'UTC'},
+            'transparency': 'opaque', # Makes the block appear as "Busy"
+            'extendedProperties': {
+                'private': {
+                    'original_event_id': original_event_id,
+                    'sync_source': 'virtual_assistant_app' # Identify the source
                 }
             }
         }
 
-        event = (
-            service.events()
-            .insert(calendarId="primary", body=busy_event)
-            .execute()
-        )
-        logger.info(f"Busy block created for {calendar_email}: {event.get('htmlLink')}")
-        return event.get("id")
+        try:
+            # Insert the event into the user's primary calendar.
+            event = (
+                service.events()
+                .insert(calendarId="primary", body=busy_event)
+                .execute()
+            )
+            logger.info(f"Successfully created busy block event with ID: {event.get('id')}")
+            return event.get("id")
+        except HttpError as error:
+            logger.error(f"Failed to create busy block for {calendar_email} (User ID: {user_id}): {error}")
+            raise Exception(f"Google API error creating busy block: {error}")
 
-    def create_meeting(self, meeting_details, app_login):
+    def create_meeting(self, meeting_details, user_id):
         """
-        Create a meeting in the calendar.
-
-        Parameters:
-            meeting_details (dict): Dictionary containing meeting details.
-                Required keys: 'subject', 'start_time', 'end_time', 'calendar_email'
-                Optional: 'description', 'location', 'attendees'
-            app_login (str): The login identifier used to log into this app.
-
-        Returns:
-            str: The meeting ID if created successfully.
-            
-        Raises:
-            Exception: If required parameters are missing or meeting creation fails.
+        DEPRECATED/UNUSED? - Seems intended to create actual meetings, but uses app_login.
+        Needs review and update to use user_id if still required.
         """
-        # Extract required parameters
-        calendar_email = meeting_details.get('calendar_email')
-        if not calendar_email:
-            raise Exception("Missing required parameter: calendar_email")
-            
-        subject = meeting_details.get('subject')
-        if not subject:
-            raise Exception("Missing required parameter: subject")
-            
-        start_time = meeting_details.get('start_time')
-        if not start_time:
-            raise Exception("Missing required parameter: start_time")
-            
-        end_time = meeting_details.get('end_time')
-        if not end_time:
-            raise Exception("Missing required parameter: end_time")
+        # This method needs updating to use user_id instead of app_login
+        # and likely needs calendar_email as well.
+        # Example structure (needs refinement):
+        # credentials = self.get_credentials(calendar_email, user_id)
+        # if not credentials:
+        #     raise Exception("Cannot create meeting: Authentication required.")
+        # service = build("calendar", "v3", credentials=credentials)
+        # event = { ... construct event body from meeting_details ... }
+        # created_event = service.events().insert(calendarId='primary', body=event).execute()
+        # return created_event.get('id')
+        raise NotImplementedError("create_meeting needs to be updated to use user_id and potentially calendar_email.")
 
-        credentials = self.get_credentials(calendar_email, app_login)
-        if not credentials:
-            raise Exception(f"No credentials found for {calendar_email}")
-            
-        logger.info(f"Creating meeting for {calendar_email}")
-        service = build("calendar", "v3", credentials=credentials)
-        event = (
-            service.events()
-            .insert(calendarId="primary", body=meeting_details)
-            .execute()
-        )
-        logger.info(f"Meeting created for {calendar_email}: {event.get('htmlLink')}")
-        return event.get("id")
 
     def store_credentials(self, calendar_email, credentials, user_id):
         """
-        Store credentials for the given Google Calendar account.
-        
-        This associates the OAuth credentials with both the Google Calendar email
-        and the app user's email, creating a link between them in the database.
-        
-        Parameters:
-            calendar_email (str): The email address of the Google Calendar account.
-                                 This is obtained from get_google_email().
-            credentials: OAuth credentials object to store.
-            user_id (int): The ID of the user this account belongs to. # Corrected docstring
-            
-        Returns:
-            bool: True if credentials were stored successfully.
-            
-        Raises:
-            Exception: If provided parameters are invalid.
-        """
-        # Check if user_id is provided
-        if not user_id:
-            logger.error("No user ID provided when storing credentials")
-            raise Exception("user_id is required")
+        Stores or updates Google Calendar credentials (tokens, etc.) in the database,
+        associating them with the specified application user ID.
 
+        Parameters:
+            calendar_email (str): The email address associated with the Google Calendar account.
+            credentials (google.oauth2.credentials.Credentials): The Credentials object containing tokens.
+            user_id (int): The ID of the application user.
+
+        Returns:
+            CalendarAccount: The created or updated CalendarAccount database object.
+
+        Raises:
+            Exception: If there's an error saving the data to the database.
+        """
+        # Retrieve existing account or prepare to create a new one.
+        account = CalendarAccount.get_by_email_provider_and_user(
+            calendar_email, self.provider_name, user_id # Use user_id
+        )
+
+        # Prepare a dictionary with the credential data to be stored.
         credentials_data = {
             'token': credentials.token,
             'refresh_token': credentials.refresh_token,
             'token_uri': credentials.token_uri,
             'client_id': credentials.client_id,
             'client_secret': credentials.client_secret,
-            'scopes': ' '.join(credentials.scopes)
+            'scopes': ' '.join(credentials.scopes) # Store scopes as a space-separated string.
         }
-        
-        # Get existing account or create new one
-        # Use user_id to find the account
-        account = CalendarAccount.get_by_email_provider_and_user(
-            calendar_email, self.provider_name, user_id
-        )
-        
-        # Check if this is the first calendar account for this user
-        # Check if this user already has a primary account using user_id
+
+        # Determine if this should be the primary account.
+        # It becomes primary only if the user doesn't already have a primary account set.
         has_primary = CalendarAccount.query.filter_by(user_id=user_id, is_primary=True).first() is not None
-        is_first_account = not has_primary # Simplified logic: set primary if no primary exists
-        
+        is_first_account = not has_primary # Set as primary if no other primary exists for this user.
+
         if not account:
-            logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}") # Corrected logging
+            # Create a new CalendarAccount record if one doesn't exist.
+            logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}")
             account = CalendarAccount(
-                user_id=user_id, # Pass user_id to constructor
+                user_id=user_id, # Associate with the correct app user ID.
                 calendar_email=calendar_email,
                 provider=self.provider_name,
-                is_primary=is_first_account, # Set primary based on whether user already has one
-                created_at=datetime.now(timezone.utc), # Add created_at timestamp
-                **credentials_data
+                is_primary=is_first_account, # Set primary status based on check above.
+                created_at=datetime.now(timezone.utc),
+                **credentials_data # Populate with token data.
             )
         else:
-            logger.info(f"Updating existing calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}") # Corrected logging
-            # Update account with new credentials
+            # Update the existing account record.
+            logger.info(f"Updating existing calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}")
             for key, value in credentials_data.items():
                 setattr(account, key, value)
-        
-        account.last_sync = datetime.now(timezone.utc)
-        account.save()
-        logger.debug(f"Credentials stored in database for calendar {calendar_email}")
-        return True
+            # Don't change primary status on update unless explicitly requested elsewhere.
 
-    def get_credentials(self, calendar_email, app_login):
+        # Mark as not needing re-authorization since we just stored fresh credentials.
+        account.needs_reauth = False
+        account.last_sync = datetime.now(timezone.utc) # Update sync time (optional here, maybe better after successful API call)
+
+        try:
+            # Save the new or updated record to the database.
+            account.save()
+            logger.debug(f"Credentials stored/updated in database for calendar {calendar_email} (User ID: {user_id})")
+        except Exception as e:
+            logger.error(f"Error saving calendar account to database for {calendar_email} (User ID: {user_id}): {e}")
+            # Consider rolling back the session if using Flask-SQLAlchemy's session management.
+            # db.session.rollback()
+            raise Exception(f"Error saving calendar account: {e}") # Re-raise the exception.
+
+        return account # Return the persisted account object.
+
+    def get_credentials(self, calendar_email, user_id):
         """
-        Retrieve credentials for the given Google Calendar account.
-        
-        This looks up the OAuth credentials associated with a specific Google Calendar
-        account owned by the current app user.
-        
+        Retrieves credentials for a specific Google Calendar account associated with an app user ID.
+        Constructs a google.oauth2.credentials.Credentials object from data stored in the database.
+
         Parameters:
             calendar_email (str): The email address of the Google Calendar account.
-                                 This is NOT the app_login, but the actual 
-                                 Google account email.
-            app_login (str): The login identifier used to log into this app.
-                                 
+            user_id (int): The ID of the application user.
+
         Returns:
-            Credentials object if found and valid.
-            
+            google.oauth2.credentials.Credentials: The constructed Credentials object if found and valid.
+
         Raises:
-            Exception: In all error cases:
-                      - If app_login is missing
-                      - If no account is found for the calendar_email 
-                      - If required credential fields are missing
-                      - If there's an error creating credentials
+            Exception: If no account is found for the user_id and calendar_email,
+                       or if required credential fields (like token or refresh_token) are missing.
         """
-        if not app_login:
-            error_msg = "No app login provided when getting credentials"
-            logger.error(f"❌ AUTH ISSUE: {error_msg}")
-            raise Exception(error_msg)
-            
+        # Retrieve the specific account record from the database.
         account = CalendarAccount.get_by_email_provider_and_user(
-            calendar_email, self.provider_name, app_login
+            calendar_email, self.provider_name, user_id # Use user_id
         )
-        if not account:
-            error_msg = f"No Google credentials found for {calendar_email}"
+
+        if not account: # Check if an account record was found.
+            error_msg = f"No Google credentials found in database for {calendar_email} associated with user ID {user_id}"
             logger.error(f"❌ AUTH ISSUE: {error_msg}")
-            raise Exception(error_msg)
-            
-        # Check if all required fields exist
+            raise Exception(error_msg) # Critical error if account doesn't exist.
+
+        # Verify that essential credential fields are present in the database record.
         required_fields = ['token', 'refresh_token', 'token_uri', 'client_id', 'client_secret', 'scopes']
-        missing_fields = [field for field in required_fields if not getattr(account, field)]
-        
+        missing_fields = [field for field in required_fields if not getattr(account, field, None)]
+
         if missing_fields:
-            error_msg = f"Missing required credential fields for {calendar_email}: {missing_fields}"
+            error_msg = f"Missing required credential fields in database for {calendar_email} (User ID: {user_id}): {missing_fields}"
             logger.error(f"❌ AUTH ISSUE: {error_msg}")
-            # Mark account as needing reauth
+            # Mark for re-authentication as the stored data is incomplete.
             account.needs_reauth = True
             account.save()
-            raise Exception(error_msg)
-            
+            raise Exception(error_msg) # Raise error as credentials cannot be constructed.
+
         try:
+            # Construct the Credentials object using the data retrieved from the database.
             credentials = Credentials(
                 token=account.token,
                 refresh_token=account.refresh_token,
                 token_uri=account.token_uri,
                 client_id=account.client_id,
                 client_secret=account.client_secret,
-                scopes=account.scopes.split()  # Convert string back to list
+                scopes=account.scopes.split() # Convert space-separated string back to list.
             )
-            logger.debug(f"Credentials loaded from database for {calendar_email}")
+            # Optional: Check if the access token is expired and attempt refresh immediately.
+            # if credentials.expired and credentials.refresh_token:
+            #     try:
+            #         logger.info(f"Access token expired for {calendar_email}, attempting refresh within get_credentials.")
+            #         credentials.refresh(Request())
+            #         self.store_credentials(calendar_email, credentials, user_id) # Store refreshed token
+            #     except Exception as refresh_error:
+            #         logger.error(f"Failed to auto-refresh expired token within get_credentials for {calendar_email}: {refresh_error}")
+            #         account.needs_reauth = True
+            #         account.save()
+            #         raise Exception(f"Failed to refresh expired token: {refresh_error}")
+
             return credentials
         except Exception as e:
-            error_msg = f"Error creating credentials for {calendar_email}: {e}"
-            logger.error(f"❌ AUTH ISSUE: {error_msg}")
-            # Mark account as needing reauth
-            account.needs_reauth = True
-            account.save()
-            raise Exception(error_msg)
+            # Catch potential errors during Credentials object creation.
+            logger.error(f"Error creating Credentials object for {calendar_email} (User ID: {user_id}): {e}")
+            raise Exception(f"Could not construct credentials: {e}")
+
 
     def get_google_email(self, credentials):
         """
-        Get the email address of the Google account that was just authorized.
-        
-        This retrieves the email address of the specific Google Calendar account that 
-        the user authorized through OAuth. This email is different from the app_login, 
-        which is used to log into this app.
-        
-        For example, if a user logs into our app with 'lakeland@gmail.com' (app_login)
-        but authorizes their work Google Calendar 'work@company.com', this function will 
-        return 'work@company.com'.
-        
-        Args:
-            credentials: The OAuth credentials returned from the Google authorization flow.
-            
+        Retrieves the user's email address associated with the given Google credentials.
+        Uses the Google People API (or UserInfo endpoint).
+
+        Parameters:
+            credentials (google.oauth2.credentials.Credentials): Valid Google credentials.
+
         Returns:
-            str: The email address of the authorized Google Calendar account.
-            
+            str: The user's primary email address.
+
         Raises:
-            ValueError: If the email address cannot be retrieved
+            Exception: If the email address cannot be retrieved.
         """
-        if not credentials:
-            logger.error("No credentials provided to get_google_email")
-            raise ValueError("No credentials provided")
-        
         try:
-            service = build('oauth2', 'v2', credentials=credentials)
-            user_info = service.userinfo().get().execute()
-            email = user_info.get('email')
-            
-            if not email:
-                logger.error(f"Email not found in Google account response: {user_info}")
-                raise ValueError("Could not find email address in Google account information")
-            
-            return email
+            # 1. Try getting email from the ID token first (most efficient)
+            id_token_claims = credentials.id_token # If id_token is available (common with OpenID scope)
+            if id_token_claims and 'email' in id_token_claims:
+                 logger.debug(f"Retrieved email from ID token: {id_token_claims['email']}")
+                 return id_token_claims['email']
+
+            # 2. If not in ID token, call the standard UserInfo endpoint using google-auth transport
+            logger.info("Email not found in ID token, calling UserInfo endpoint.")
+            authed_session = AuthorizedSession(credentials)
+
+            userinfo_response = authed_session.get(
+                "https://openidconnect.googleapis.com/v1/userinfo"
+            )
+            userinfo_response.raise_for_status() 
+            user_info = userinfo_response.json()
+
+            if user_info and 'email' in user_info:
+                logger.debug(f"Retrieved email from UserInfo endpoint: {user_info['email']}")
+                return user_info['email']
+            else:
+                logger.error(f"Email not found in UserInfo response. Response: {user_info}")
+                raise Exception("Email address not found in Google UserInfo response.")
+
         except Exception as e:
-            logger.error(f"Error getting Google account email from credentials: {e}")
-            raise ValueError(f"Error retrieving Google account email: {e}")
+            logger.error(f"Error retrieving Google email: {e}")
+            # Log the type of exception for better debugging
+            logger.error(f"Exception type: {type(e).__name__}")
+            raise Exception(f"Failed to retrieve Google email address: {e}")

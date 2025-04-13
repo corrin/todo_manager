@@ -23,7 +23,7 @@ from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.database.calendar_account import CalendarAccount
 from virtual_assistant.database.task import TaskAccount # Import TaskAccount
 from flask_login import current_user # Import current_user
-from virtual_assistant.utils.settings import Settings
+from flask_login import login_required # Import login_required
 from virtual_assistant.database.database import db
 from functools import wraps
 from google.auth.credentials import Credentials
@@ -62,21 +62,28 @@ def manage_calendar_accounts():
 
 @meetings_bp.route("/set_primary_account", methods=["POST"])
 def set_primary_account():
-    """Set a calendar account as the primary account."""
+    """Set a calendar account as the primary account using its ID."""
     try:
-        app_login = session.get("app_login")
+        user_id = current_user.id
         
-        provider = request.form.get("provider")
-        calendar_email = request.form.get("email")
+        account_id_str = request.form.get("primary_calendar_account_id")
         
-        if not provider or not calendar_email:
+        if not account_id_str:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({"success": False, "error": "Invalid request"}), 400
-            flash("Invalid request. Provider and email are required.", "error")
-            return render_template("error.html", error="Provider and email are required", title="Invalid Request")
+            flash("Invalid request. Calendar account ID is required.", "error")
+            return render_template("error.html", error="Calendar account ID is required", title="Invalid Request")
         
-        # Set the account as primary
-        success = CalendarAccount.set_as_primary(calendar_email, provider, app_login)
+        try:
+            account_id = int(account_id_str)
+        except ValueError:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "error": "Invalid account ID format"}), 400
+            flash("Invalid account ID format.", "error")
+            return render_template("error.html", error="Invalid account ID format", title="Invalid Request")
+        
+        # Set the account as primary using the new method
+        success = CalendarAccount.set_as_primary_by_id(account_id, user_id)
         
         if success:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -100,7 +107,6 @@ def set_primary_account():
 def remove_calendar_account():
     """Remove a calendar account."""
     try:
-        app_login = session.get("app_login")
         
         provider_name = request.form.get("provider")
         calendar_email = request.form.get("email")
@@ -117,7 +123,7 @@ def remove_calendar_account():
             existing = CalendarAccount.query.filter_by(
                 calendar_email=calendar_email,
                 provider=provider_name,
-                app_login=app_login
+                user_id=current_user.id 
             ).first()
             
             if existing:
@@ -126,14 +132,14 @@ def remove_calendar_account():
                 # Check if this is the primary account
                 was_primary = existing.is_primary
                 
-                CalendarAccount.delete_by_email_and_provider(calendar_email, provider_name, app_login)
+                CalendarAccount.delete_by_email_and_provider(calendar_email, provider_name, current_user.id)
                 logger.info(f"Successfully deleted calendar account from database: {calendar_email} ({provider_name})")
                 
                 # Verify deletion
                 verify = CalendarAccount.query.filter_by(
                     calendar_email=calendar_email,
                     provider=provider_name,
-                    app_login=app_login
+                    user_id=current_user.id
                 ).first()
                 if verify:
                     logger.error(f"Account still exists after deletion attempt: {calendar_email}")
@@ -150,14 +156,14 @@ def remove_calendar_account():
                 
                 # If this was the primary account, set another account as primary if one exists
                 if was_primary:
-                    remaining_accounts = CalendarAccount.get_accounts_for_user(app_login)
+                    remaining_accounts = CalendarAccount.get_accounts_for_user(current_user.id) 
                     if remaining_accounts:
                         # Set the first remaining account as primary
                         first_account = remaining_accounts[0]
                         CalendarAccount.set_as_primary(
                             first_account.calendar_email,
                             first_account.provider,
-                            app_login
+                            current_user.id 
                         )
                         logger.info(f"Set {first_account.calendar_email} as new primary account after deleting primary")
                 
@@ -178,21 +184,21 @@ def remove_calendar_account():
         return render_template("error.html", error=str(e), title="Operation Failed")
 
 @meetings_bp.route("/reauth_calendar_account")
+@login_required # Add decorator for authentication
 def reauth_calendar_account():
     """Reauthorize a calendar account."""
     try:
-        app_login = session.get("app_login")
         
         provider_name = request.args.get("provider")
-        calendar_email = request.args.get("calendar_email") 
+        calendar_email = request.args.get("calendar_email") # Changed from "email"
         
         if provider_name not in providers:
             flash("Invalid calendar provider.", "error")
             return render_template("error.html", error="Invalid calendar provider", title="Invalid Request")
         
         if not calendar_email:
-            flash("Calendar email not provided.", "error")
-            return render_template("error.html", error="Calendar email not provided", title="Invalid Request")
+            flash("Calendar account email not provided.", "error") # Updated flash message
+            return render_template("error.html", error="Calendar account email not provided", title="Invalid Request")
         
         provider = providers[provider_name]()
         
@@ -203,10 +209,10 @@ def reauth_calendar_account():
         
         # Use the appropriate method based on provider - both use reauthenticate now
         if provider_name == "google":
-            credentials, auth_url = provider.reauthenticate(calendar_email=calendar_email, app_login=app_login)
+            credentials, auth_url = provider.reauthenticate(calendar_email=calendar_email, user_id=current_user.id) # Pass user_id
         elif provider_name == "o365":
             # O365 provider's reauthenticate method is async, so we need to use async_to_sync
-            credentials, auth_url = async_to_sync(provider.reauthenticate)(calendar_email=calendar_email, app_login=app_login)
+            credentials, auth_url = async_to_sync(provider.reauthenticate)(calendar_email=calendar_email, user_id=current_user.id) # Pass user_id
         else:
             flash(f"Unsupported calendar provider: {provider_name}", "error")
             return render_template("error.html", error=f"Unsupported calendar provider: {provider_name}", title="Invalid Provider")
@@ -216,7 +222,7 @@ def reauth_calendar_account():
             logger.info(f"Token refreshed for {calendar_email} without needing reauthorization")
             # Mark account as no longer needing reauth
             account = CalendarAccount.get_by_email_provider_and_user(
-                calendar_email, provider_name, app_login
+                calendar_email, provider_name, current_user.id # Use user_id
             )
             if account:
                 account.needs_reauth = False
@@ -243,7 +249,7 @@ def reauth_calendar_account():
 def authenticate_google_calendar():
     """Initiate Google Calendar authentication."""
     try:
-        app_login = session.get("app_login")
+        user_id = current_user.id
         
         # Store referrer URL for later redirect
         referrer = request.referrer
@@ -251,8 +257,8 @@ def authenticate_google_calendar():
             session['calendar_auth_referrer'] = referrer
         
         provider = GoogleCalendarProvider()
-        # Google's authenticate only takes app_login
-        _, auth_url = provider.authenticate(app_login)
+        # Google's authenticate now takes user_id
+        _, auth_url = provider.authenticate(user_id)
         
         if auth_url:
             return redirect(auth_url)
@@ -269,7 +275,7 @@ def authenticate_google_calendar():
 def authenticate_o365_calendar():
     """Initiate O365 Calendar authentication."""
     try:
-        app_login = session.get("app_login")
+        user_id = current_user.id
         
         # Store referrer URL for later redirect
         referrer = request.referrer
@@ -277,7 +283,7 @@ def authenticate_o365_calendar():
             session['calendar_auth_referrer'] = referrer
         
         provider = O365CalendarProvider()
-        _, auth_url = provider.authenticate(app_login)
+        _, auth_url = provider.authenticate(user_id)
         
         if auth_url:
             logger.error(f"REDIRECTING TO MICROSOFT: {auth_url}")
@@ -299,11 +305,11 @@ def google_authenticate():
     
     google_provider = GoogleCalendarProvider()
     provider="google"
+    user_id = current_user.id
     
-    app_login = session.get("app_login")
     
     try:
-        credentials = google_provider.handle_oauth_callback(request.url, app_login)
+        credentials = google_provider.handle_oauth_callback(request.url)
         if not credentials:
             raise ValueError("Failed to get credentials from OAuth callback")
     
@@ -320,23 +326,23 @@ def google_authenticate():
         ).first()
         
         # Store/update CALENDAR credentials using the provider's method
-        # This method should handle creation or update internally and return the CalendarAccount object
-        calendar_account = google_provider.store_credentials(calendar_account_email, credentials, current_user.id) # Pass user_id
+        # store_credentials now returns the CalendarAccount object directly or raises exception
+        calendar_account = google_provider.store_credentials(calendar_account_email, credentials, current_user.id)
 
         # Verify credentials work by attempting to get meetings (optional but recommended)
         verification_failed = False
         try:
             google_provider.get_meetings_sync(calendar_account_email, current_user.id) # Pass user_id
-            # Mark calendar account as active if verification succeeds
-            if calendar_account:
-                 calendar_account.needs_reauth = False
-                 calendar_account.last_sync = datetime.now(timezone.utc)
+            # Mark calendar account as active since verification succeeded
+            # calendar_account is guaranteed to be an object here if store_credentials didn't raise an error
+            calendar_account.needs_reauth = False
+            calendar_account.last_sync = datetime.now(timezone.utc)
                  # Don't commit yet, do it after task account update
         except Exception as verify_error:
              verification_failed = True
              logger.error(f"Failed to verify Google Calendar credentials for {calendar_account_email} (User ID: {current_user.id}): {verify_error}")
-             if calendar_account:
-                 calendar_account.needs_reauth = True # Mark as needing reauth if verification fails
+             # Mark as needing reauth if verification fails
+             calendar_account.needs_reauth = True # Mark as needing reauth if verification fails
              # Don't commit yet
 
         # --- Also Create/Update TaskAccount ---
@@ -476,11 +482,11 @@ def o365_authenticate():
 @meetings_bp.route("/debug/<email>")
 def debug_meetings(email):
     """Debug endpoint to test calendar access."""
-    app_login = session.get('app_login')
+    user_id = current_user.id
     
     google_provider = GoogleCalendarProvider()
     try:
-        meetings = google_provider.get_meetings_sync(email, app_login)
+        meetings = google_provider.get_meetings_sync(email, user_id)
         logger.info("Meetings for %s: %s", email, meetings)
         return render_template("meetings.html", meetings=meetings, email=email)
     except Exception as error:
@@ -490,7 +496,7 @@ def debug_meetings(email):
 @meetings_bp.route("/sync")
 def sync_meetings():
     """Sync meetings from all connected calendars."""
-    app_login = session.get('app_login')
+    user_id = current_user.id
     
     results = {
         'success': [],
@@ -499,8 +505,7 @@ def sync_meetings():
         'status': 'success',
         'message': ''
     }
-    
-    accounts = CalendarAccount.get_accounts_for_user(app_login)
+    accounts = CalendarAccount.get_accounts_for_user(user_id)
     if not accounts:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'error': 'No calendar accounts found'}), 404
@@ -541,10 +546,10 @@ def sync_meetings():
             # Handle O365 and Google providers differently
             if account.provider == 'o365':
                 # O365 needs to use async methods with async_to_sync
-                meetings = async_to_sync(provider.get_meetings)(account.calendar_email, app_login)
+                meetings = async_to_sync(provider.get_meetings)(account.calendar_email, user_id)
             else:
                 # Google can use synchronous methods directly
-                meetings = provider.get_meetings_sync(account.calendar_email, app_login)
+                meetings = provider.get_meetings_sync(account.calendar_email, user_id)
             
             # Log success
             logger.info(f"Successfully synced {len(meetings)} meetings for {account.calendar_email}")
@@ -659,7 +664,7 @@ def test_route():
 def refresh_google_calendar(calendar_email):
     """Refresh Google Calendar token."""
     try:
-        app_login = session.get("app_login")
+        user_id = current_user.id
         
         # Get the account
         account = CalendarAccount.get_by_email_provider_and_user(
@@ -695,7 +700,7 @@ def refresh_google_calendar(calendar_email):
             
         try:
             credentials.refresh(Request())
-            provider.store_credentials(calendar_email, credentials, app_login)
+            provider.store_credentials(calendar_email, credentials, user_id)
             account.needs_reauth = False
             account.save()
             
@@ -725,7 +730,7 @@ def refresh_google_calendar(calendar_email):
 def refresh_o365_calendar(calendar_email):
     """Refresh O365 Calendar token."""
     try:
-        app_login = session.get("app_login")
+        user_id = current_user.id
         
         # Get the account
         account = CalendarAccount.get_by_email_provider_and_user(
@@ -770,7 +775,7 @@ def refresh_o365_calendar(calendar_email):
                     'client_secret': account.client_secret,
                     'scopes': account.scopes
                 }
-                provider.store_credentials(calendar_email, credentials, app_login)
+                provider.store_credentials(calendar_email, credentials, user_id)
                 account.needs_reauth = False
                 account.save()
                 
@@ -808,7 +813,7 @@ def refresh_o365_calendar(calendar_email):
 @meetings_bp.route("/sync_single_calendar/<provider>/<calendar_email>")
 def sync_single_calendar(provider, calendar_email):
     """Sync meetings from a single calendar that was just authenticated."""
-    app_login = session.get('app_login')
+    user_id = current_user.id
     
     # Check for original referrer in session
     original_referrer = session.pop('calendar_auth_referrer', None)
@@ -834,10 +839,10 @@ def sync_single_calendar(provider, calendar_email):
         # Handle O365 and Google differently
         if provider == 'o365':
             # O365 needs to use async methods with async_to_sync
-            meetings = async_to_sync(provider_obj.get_meetings)(calendar_email, app_login)
+            meetings = async_to_sync(provider_obj.get_meetings)(calendar_email, user_id)
         else:
             # Google can use synchronous methods directly
-            meetings = provider_obj.get_meetings_sync(calendar_email, app_login)
+            meetings = provider_obj.get_meetings_sync(calendar_email, user_id)
         
         # Log success
         logger.info(f"Successfully synced {len(meetings)} meetings for {calendar_email}")

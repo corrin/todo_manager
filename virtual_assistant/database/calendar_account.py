@@ -122,6 +122,42 @@ class CalendarAccount(db.Model):
             return False
             
     @classmethod
+    def set_as_primary_by_id(cls, account_id, user_id):
+        """Set a calendar account as the primary account for a user using the account ID.
+        
+        This will unset any other account that was previously set as primary.
+        
+        Args:
+            account_id: The ID of the calendar account to set as primary
+            user_id: The ID of the app user
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # First, unset any existing primary account for this user
+            db.session.execute(
+                update(cls)
+                .where(cls.user_id == user_id)
+                .values(is_primary=False)
+            )
+            
+            # Then set the specified account as primary
+            account = cls.query.filter_by(id=account_id, user_id=user_id).first()
+            if account:
+                account.is_primary = True
+                db.session.commit()
+                logger.info(f"Set calendar account ID {account_id} as primary for user ID {user_id}")
+                return True
+            else:
+                logger.error(f"Calendar account ID {account_id} not found for user ID {user_id}")
+                return False
+        except Exception as e:
+            logger.error(f"Error setting primary calendar account: {e}")
+            db.session.rollback()
+            return False
+            
+    @classmethod
     def get_primary_account(cls, user_id):
         """Get the primary calendar account for a user.
         

@@ -440,15 +440,14 @@ def init_task_routes():
     @login_required
     def set_primary_task_provider():
         """Sets the primary task provider account via AJAX."""
-        selected_provider_id_str = request.form.get('provider_id')
+        account_id_str = request.form.get('primary_task_account_id')
         user_id = current_user.id
 
-        if not selected_provider_id_str:
-            logger.warning(f"User {user_id} - Set primary task provider: No selection made.")
-            return jsonify({'success': False, 'message': 'No provider selected.'}), 400
+        if not account_id_str:
+            logger.warning(f"User {user_id} - Set primary task provider: No account ID received.")
+            return jsonify({'success': False, 'message': 'No provider account ID received.'}), 400
 
         try:
-            provider_type, account_id_str = selected_provider_id_str.split('_', 1)
             account_id = int(account_id_str)
 
             db.session.begin_nested()
@@ -459,7 +458,7 @@ def init_task_routes():
 
             if updated_count == 1:
                 db.session.commit()
-                logger.info(f"User {user_id} - Set primary task provider: {provider_type} account ID {account_id}")
+                logger.info(f"User {user_id} - Set primary task provider: Account ID {account_id}")
                 return jsonify({'success': True, 'message': 'Primary task provider updated.'})
             else:
                 # Account not found for this user
@@ -471,7 +470,7 @@ def init_task_routes():
             # Catch any error during parsing or database operations
             db.session.rollback()
             logger.exception(
-                f"User {user_id} - Set primary task provider: Error processing provider_id '{selected_provider_id_str}': {e}"
+                f"User {user_id} - Set primary task provider: Error processing account_id '{account_id_str}': {e}"
             )
             # Return a generic error message for all failure types
             return jsonify({'success': False, 'message': 'An error occurred while setting the primary task provider.'}), 500

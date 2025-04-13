@@ -37,7 +37,7 @@ async def refresh_tokens_for_account(account: CalendarAccount) -> bool:
         
     # Attempt to refresh the token
     logger.info(f"Refreshing token for {account.calendar_email} ({account.provider})")
-    await provider.refresh_token(account.calendar_email, account.app_login)
+    await provider.refresh_token(account.calendar_email, account.user_id)
     
     logger.info(f"✅ Successfully refreshed token for {account.calendar_email}")
     return True

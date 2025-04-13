@@ -78,9 +78,8 @@
                             {# Primary TASK Provider Selection Form #}
                             <form action="{{ url_for('tasks.set_primary_task_provider') }}" method="POST" style="display: inline;" class="primary-task-form">
                                 {# Use a unique ID combining provider and account ID #}
-                                <input type="hidden" name="provider_id" value="{{ account.provider_name }}_{{ account.id }}">
-                                <input type="radio" name="primary_task_account" value="{{ account.provider_name }}_{{ account.id }}"
-                                       {% if account.is_primary %}checked{% endif %}
+                                <input type="radio" name="primary_task_account_id" value="{{ account.id }}"
+                                       {% if account.task_is_primary %}checked{% endif %}
                                        onchange="setPrimaryTaskProvider(this)">
                             </form>
                         </td>
@@ -168,10 +167,8 @@
                             {# Primary Account Selection Form #}
                             {# This form ONLY sets the primary CALENDAR #}
                             <form action="{{ url_for('meetings.set_primary_account') }}" method="POST" style="display: inline;" class="primary-calendar-form">
-                                <input type="hidden" name="provider" value="{{ account.provider }}">
-                                <input type="hidden" name="email" value="{{ account.calendar_email }}"> {# Use calendar_email #}
-                                <input type="radio" name="primary_calendar_account" value="{{ account.provider }}_{{ account.calendar_email }}"
-                                       {% if account.is_primary %}checked{% endif %} {# Checks CalendarAccount.is_primary #}
+                                <input type="radio" name="primary_calendar_account_id" value="{{ account.id }}"
+                                       {% if account.calendar_is_primary %}checked{% endif %}
                                        onchange="setPrimaryCalendarAccount(this)">
                             </form>
                         </td>
@@ -195,7 +192,7 @@
                         </td>
                         <td>
                             {# Reauth Button #}
-                            <a href="{{ url_for('meetings.reauth_calendar_account', provider=account.provider, email=account.email) }}" 
+                            <a href="{{ url_for('meetings.reauth_calendar_account', provider=account.provider, calendar_email=account.email) }}"
                                class="btn btn-sm {% if account.needs_reauth %}btn-warning{% else %}btn-outline-secondary{% endif %}">
                                 <i class="fas fa-sync"></i>
                             </a>
@@ -405,27 +402,23 @@
 // --- Calendar Primary Account Logic ---
 function setPrimaryCalendarAccount(radioButton) {
     const form = radioButton.closest('.primary-calendar-form');
-    if (!form) { console.error("Calendar form not found"); return false; }
-    const provider = form.querySelector('input[name="provider"]').value;
-    const email = form.querySelector('input[name="email"]').value;
-    showFlashMessage('info', 'Updating primary calendar account...');
-    
+    const accountId = radioButton.value;
+    if (!accountId) { console.error("Calendar account ID not found in radio button value"); return false; }
+
+    const formData = new FormData();
+    formData.append('primary_calendar_account_id', accountId);
+
     fetch(form.action, {
         method: 'POST',
-        body: new FormData(form),
+        body: formData,
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showFlashMessage('success', data.message || 'Primary calendar account updated successfully.');
             // Update ONLY calendar radio buttons visually
-            document.querySelectorAll('.primary-calendar-form input[type="radio"]').forEach(radio => {
-                const radioForm = radio.closest('.primary-calendar-form');
-                if (radioForm) {
-                     radio.checked = (radioForm.querySelector('input[name="provider"]').value === provider &&
-                                      radioForm.querySelector('input[name="email"]').value === email);
-                }
+            document.querySelectorAll('input[name="primary_calendar_account_id"]').forEach(radio => {
+                radio.checked = (radio.value === accountId);
             });
         } else {
             showFlashMessage('danger', data.message || 'Failed to update primary calendar account.');
@@ -441,28 +434,23 @@ function setPrimaryCalendarAccount(radioButton) {
 
 // --- Primary Task Provider Logic ---
 function setPrimaryTaskProvider(radioButton) {
-    const form = radioButton.closest('.primary-task-form');
-    if (!form) { console.error("Task form not found"); return false; }
-    const providerId = form.querySelector('input[name="provider_id"]').value; // e.g., "todoist_1", "google_tasks_5"
-    
-    showFlashMessage('info', 'Updating primary task provider...');
+    const accountId = radioButton.value;
+    if (!accountId) { console.error("Task account ID not found in radio button value"); return false; }
 
-    // Assume new endpoint '/set_primary_task_provider' exists
+
+    const formData = new FormData();
+    formData.append('primary_task_account_id', accountId);
+
     fetch("{{ url_for('tasks.set_primary_task_provider') }}", {
         method: 'POST',
-        body: new FormData(form), // Sends provider_id
+        body: formData,
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showFlashMessage('success', data.message || 'Primary task provider updated successfully.');
-            // Update ALL task radio buttons visually
-            document.querySelectorAll('.primary-task-form input[type="radio"]').forEach(radio => {
-                 const radioForm = radio.closest('.primary-task-form');
-                 if (radioForm) {
-                     radio.checked = (radioForm.querySelector('input[name="provider_id"]').value === providerId);
-                 }
+            document.querySelectorAll('input[name="primary_task_account_id"]').forEach(radio => {
+                 radio.checked = (radio.value === accountId);
             });
         } else {
             showFlashMessage('danger', data.message || 'Failed to update primary task provider.');
