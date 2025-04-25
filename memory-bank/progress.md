@@ -69,6 +69,7 @@
 - Outlook and Google Tasks providers are placeholders but required eventually
 - Credential management split between file system and database
 - Error handling needs improvement for failed API calls
+- Missing user_id parameter in task_routes.py update_task() call
 
 ### Database System
 - Minimal route implementation

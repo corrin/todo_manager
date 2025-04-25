@@ -1,5 +1,5 @@
 from flask import Blueprint, request, render_template, redirect, url_for, flash, jsonify, session
-from flask_login import login_required, current_user
+from flask_login import current_user
 
 import os
 import json
@@ -8,17 +8,66 @@ import datetime
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.tasks.task_manager import TaskManager
 from virtual_assistant.tasks.task_hierarchy import TaskHierarchy
+
 from virtual_assistant.database.calendar_account import CalendarAccount
 from virtual_assistant.database.database import db
 from virtual_assistant.database.task import Task, TaskAccount
 from virtual_assistant.tasks.task_provider import Task as ProviderTask
-
 from virtual_assistant.utils.settings import Settings
 
 
 def init_task_routes():
     bp = Blueprint('tasks', __name__, url_prefix='/tasks')
     task_manager = TaskManager()
+
+    def _get_task_manager():
+        """Helper function to get a TaskManager instance for the current user."""
+        return TaskManager()
+
+    @bp.route('/<task_id>/update', methods=['POST'])
+    def update_task(task_id):
+        """Endpoint to update a task's details and sync back to provider."""
+        try:
+            # Get task data from request
+            task_data = request.json
+            
+            # Get task from database
+            task = Task.query.filter_by(id=task_id).first()
+            
+            if not task:
+                return jsonify({"error": "Task not found"}), 404
+            
+            # Get task manager and provider
+            task_manager = _get_task_manager()
+            provider_name = task.provider or 'todoist'  # Default to todoist if not specified
+            provider = task_manager.get_provider(provider_name)
+            
+            if not provider:
+                return jsonify({"error": f"Provider {provider_name} not found"}), 400
+            
+            # Call provider's update method with user_id
+            if not current_user or not current_user.id:
+                raise ValueError("Current user not available for task update")
+            
+            user_id = current_user.id
+            logger.debug(f"Updating task {task_id} for user {user_id} with provider {provider_name}")
+            
+            updated = provider.update_task(
+                user_id=user_id,
+                task_id=task_id,
+                task_data=task_data
+            )
+            
+            if updated:
+                logger.info(f"Successfully updated task {task_id} for user {current_user.id}")
+                return jsonify({"success": True, "message": "Task updated successfully"})
+            else:
+                logger.error(f"Failed to update task {task_id} for user {current_user.id}")
+                return jsonify({"error": "Failed to update task in provider"}), 500
+                
+        except Exception as e:
+            logger.exception(f"Error updating task {task_id}: {e}")
+            return jsonify({"error": str(e)}), 500
 
     # Refactored get_task_accounts to query TaskAccount table directly
     def get_task_accounts(user_id):
@@ -422,11 +471,11 @@ def init_task_routes():
             # Update the task status in the provider
             logger.info(f"Updating task status in provider: id={task_id}, provider_task_id={task.provider_task_id}, provider={task.provider}, task_user_email='{task_email_to_use}', old_status='{task.status}', new_status='{new_status}'")
             
-            # Call provider method with just the necessary parameters
-            provider.update_task_status(
+            # Call provider method with task data
+            provider.update_task(
                 user_id=user_id,
                 task_id=task.id,  # Pass the primary key (UUID)
-                status=new_status
+                task_data={'status': new_status}
             )
             
             # If we get here, the provider update was successful, so update our database
@@ -452,7 +501,6 @@ def init_task_routes():
             flash(error_message, 'danger')
             return redirect(url_for('tasks.list_tasks'))
 
-    # Removed redundant update_task_status_direct and sync_todoist routes.
     @bp.route('/set_primary_task_provider', methods=['POST'])
     @login_required
     def set_primary_task_provider():

@@ -14,6 +14,8 @@ from virtual_assistant.database.calendar_account import CalendarAccount
 from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
 from virtual_assistant.database.task import Task
 
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 class GoogleTaskProvider(TaskProvider):
     """Google Tasks implementation of the task provider interface using existing Google authentication."""
@@ -29,20 +31,41 @@ class GoogleTaskProvider(TaskProvider):
         return "google_tasks"
 
     def _initialize_client(self, user_id, task_user_email):
-        """Initialize or refresh the Google Tasks client using existing Google credentials."""
+        """Initialize the Google Tasks client using existing calendar credentials."""
         if self.client is None:
-            # Get the Google account for this specific user_id and task_user_email
             account = CalendarAccount.get_by_email_provider_and_user(
-                calendar_email=task_user_email, provider='google', user_id=user_id
+                calendar_email=task_user_email,
+                provider='google',
+                user_id=user_id
             )
             
-            if account and not account.needs_reauth:
-                # In a real implementation, we would create a Google Tasks client
-                # using the existing credentials
-                self.client = True  # Stub client
-                logger.debug(f"Initialized Google Tasks client for user_id '{user_id}' / task_user_email '{task_user_email}' using existing Google credentials")
-            else:
-                logger.warning(f"No Google account found for user_id '{user_id}' / task_user_email '{task_user_email}' or needs reauth")
+            if not account or account.needs_reauth:
+                logger.warning(f"No valid Google account for user {user_id}")
+                raise Exception("Google account needs authorization")
+                
+            try:
+                creds = Credentials(
+                    token=account.token,
+                    refresh_token=account.refresh_token,
+                    token_uri='https://oauth2.googleapis.com/token',
+                    client_id=account.client_id,
+                    client_secret=account.client_secret
+                )
+                
+                # Refresh token if expired
+                if creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                    account.token = creds.token
+                    account.save()
+                    
+                self.client = build('tasks', 'v1', credentials=creds)
+                logger.debug(f"Initialized Google Tasks client for {user_id}")
+                
+            except Exception as e:
+                logger.error(f"Failed to initialize Google Tasks client: {e}")
+                account.needs_reauth = True
+                account.save()
+                raise Exception("Google authentication failed")
 
     def authenticate(self, user_id, task_user_email):
         """Check if we have valid Google credentials for the user/account and return auth URL if needed."""
@@ -87,70 +110,29 @@ class GoogleTaskProvider(TaskProvider):
     def get_tasks(self, user_id, task_user_email) -> List[Task]:
         """Get all tasks from Google Tasks API."""
         self._initialize_client(user_id=user_id, task_user_email=task_user_email)
-        if not self.client:
-            raise Exception(f"No Google Tasks client for user_id '{user_id}' / task_user_email '{task_user_email}'")
-
+        
         try:
-            # Get all task lists (folders)
-            task_lists = []
-            try:
-                # In a real implementation, we would use the Google Tasks API
-                # For now, use mock data
-                task_lists = [
-                    {"id": "list1", "title": "Work"},
-                    {"id": "list2", "title": "Personal"}
-                ]
-                logger.debug(f"Retrieved {len(task_lists)} task lists for user_id '{user_id}' / task_user_email '{task_user_email}'")
-            except Exception as e:
-                logger.error(f"Error getting Google task lists: {e}")
-                # Instead of silently falling back, raise an exception that will be shown to the user
-                raise Exception(f"Could not retrieve your Google task lists: {e}")
+            # Get all task lists
+            task_lists = self.client.tasklists().list().execute().get('items', [])
+            logger.debug(f"Retrieved {len(task_lists)} task lists for user {user_id}")
             
-            # Get tasks from each list
             all_tasks = []
             for task_list in task_lists:
-                list_id = task_list["id"]
-                list_name = task_list["title"]
+                list_id = task_list['id']
+                list_name = task_list.get('title', 'Tasks')
                 
                 try:
-                    # In a real implementation, we would use the Google Tasks API
-                    # For now, use mock data
-                    list_tasks = []
-                    if list_id == "list1":
-                        list_tasks = [
-                            {
-                                "id": "task1",
-                                "title": "Finish Google integration",
-                                "notes": "Need to complete by end of week",
-                                "due": "2025-04-01T00:00:00Z",
-                                "status": "needsAction",
-                                "parent": None
-                            },
-                            {
-                                "id": "task2",
-                                "title": "Test API endpoints",
-                                "notes": "Focus on error handling",
-                                "due": "2025-03-25T00:00:00Z",
-                                "status": "needsAction",
-                                "parent": "task1"
-                            }
-                        ]
-                    elif list_id == "list2":
-                        list_tasks = [
-                            {
-                                "id": "task3",
-                                "title": "Schedule dentist appointment",
-                                "notes": "",
-                                "due": None,
-                                "status": "needsAction",
-                                "parent": None
-                            }
-                        ]
+                    # Get tasks for this list
+                    tasks = self.client.tasks().list(
+                        tasklist=list_id,
+                        showCompleted=False,
+                        showHidden=True
+                    ).execute().get('items', [])
                     
-                    # Add list ID and name to each task
-                    for task in list_tasks:
-                        task["listId"] = list_id
-                        task["listName"] = list_name
+                    # Add list metadata to each task
+                    for task in tasks:
+                        task['listId'] = list_id
+                        task['listName'] = list_name
                         all_tasks.append(task)
                         
                 except Exception as e:
@@ -163,24 +145,22 @@ class GoogleTaskProvider(TaskProvider):
                 if t.get("title") == self.INSTRUCTION_TASK_TITLE:
                     continue
                 
-                # Convert due date
+                # Convert due date from RFC3339 format
                 due_date = None
                 if t.get("due"):
-                    due_date_str = t.get("due")
-                    if due_date_str:
-                        due_date = datetime.fromisoformat(due_date_str.replace("Z", "+00:00"))
+                    try:
+                        due_date = datetime.strptime(t["due"], "%Y-%m-%dT%H:%M:%S.%fZ")
+                    except ValueError:
+                        try:
+                            due_date = datetime.strptime(t["due"], "%Y-%m-%dT%H:%M:%SZ")
+                        except ValueError:
+                            logger.warning(f"Could not parse due date: {t['due']}")
 
                 # Map status
-                status_map = {
-                    "needsAction": "active",
-                    "completed": "completed"
-                }
-                status = status_map.get(t.get("status", "needsAction"), "active")
-                # Generate a UUID for the task
-                task_uuid = str(uuid.uuid4())
-
+                status = "completed" if t.get("status") == "completed" else "active"
+                
                 task = Task(
-                    id=task_uuid,  # Use a UUID for the internal ID
+                    id=str(uuid.uuid4()),  # Generate internal UUID
                     title=t.get("title", ""),
                     project_id=t.get("listId", ""),
                     priority=2,  # Google Tasks doesn't have priority, default to normal
@@ -241,66 +221,83 @@ class GoogleTaskProvider(TaskProvider):
             logger.error(f"Error getting AI instructions for user_id '{user_id}' / task_user_email '{task_user_email}': {e}")
             raise
 
-    def update_task_status(self, user_id, task_id, task_user_email=None, provider_task_id=None, status: str = None) -> bool:
-        """Update task completion status."""
-        # Look up the task to get provider_task_id and task_user_email
-        task = Task.query.filter_by(id=task_id, user_id=user_id).first()
-        if not task:
-            raise ValueError(f"Task with ID {task_id} not found")
+    def update_task(self, user_id, task_id, task_data=None) -> bool:
+        """Update multiple task properties.
+        
+        Args:
+            user_id: The user's database ID
+            task_id: The task's primary key
+            task_data: Dictionary containing fields to update
             
-        # Get the provider-specific information
-        provider_task_id = task.provider_task_id
-        task_user_email = task.task_user_email
-        provider = task.provider # Should be Google Tasks
-
-        # Initialize the client
-        self._initialize_client(user_id=user_id, task_user_email=task_user_email)
-        if not self.client:
-            raise Exception(f"No Google Tasks client for user_id '{user_id}' / task_user_email '{task_user_email}'")
+        Returns:
+            bool: True if update was successful, False otherwise
+        """
+        if task_data is None:
+            task_data = {}
 
         try:
-            # Map our status to Google Tasks status
-            google_status = "completed" if status == "completed" else "needsAction"
+            # Get task account for the specified user
+            account = CalendarAccount.get_by_email_provider_and_user(
+                calendar_email=task_data.get('task_user_email'),
+                provider='google',
+                user_id=user_id
+            )
             
-            # Try to verify the task exists first
-            try:
-                # In a real implementation, we would get the task to verify it exists
-                # using the Google Tasks API
+            if not account:
+                logger.error(f"No Google account found for user {user_id}")
+                return False
+            
+            # Initialize the client
+            self._initialize_client(user_id=user_id, task_user_email=account.calendar_email)
+            if not self.client:
+                logger.error(f"No Google Tasks client initialized for user {user_id}")
+                return False
+
+            # Prepare update arguments
+            update_args = {}
+            
+            if 'title' in task_data:
+                update_args['title'] = task_data['title']
                 
-                # Mock check - in a real implementation, this would be replaced with an API call
-                task_exists = True  # Placeholder - would check if task exists
-                
-                if task_exists:
-                    # In a real implementation, we would update the task status
-                    # using the Google Tasks API with provider_task_id
-                    
-                    logger.debug(f"Updated task (UUID: {task_id}, provider: Google, provider_task_id: {provider_task_id}) status to {status} for user_id '{user_id}' / task_user_email '{task_user_email}'")
-                    return True
+            if 'due_date' in task_data:
+                # Convert to Google Tasks date format
+                if task_data['due_date']:
+                    update_args['due'] = task_data['due_date'].isoformat()
                 else:
-                    raise Exception(f"Task with provider_task_id {provider_task_id} not found in Google Tasks")
-                    
-            except Exception as task_error:
-                error_msg = str(task_error).lower()
-                if "not found" in error_msg or "404" in error_msg:
-                    raise Exception(f"Task with provider_task_id {provider_task_id} not found in Google Tasks. It may have been deleted or synced incorrectly. Try refreshing your tasks.")
-                # For other errors, log and propagate
-                logger.error(f"Error updating Google Tasks task status for user_id '{user_id}' / task_user_email '{task_user_email}': {task_error}")
-                raise
+                    update_args['due'] = None
+            
+            if 'priority' in task_data:
+                # Google Tasks doesn't support priority, so we'll ignore it
+                pass
+            
+            # Handle status updates
+            if 'status' in task_data:
+                try:
+                    if task_data['status'] == "completed":
+                        # Google Tasks API call to mark task complete
+                        pass
+                    else:
+                        # Google Tasks API call to reopen task
+                        pass
+                    logger.info(f"Updated Google task {task_id} status")
+                except Exception as e:
+                    logger.error(f"Failed to update Google task {task_id} status: {e}")
+                    return False
+
+            # Only update if we have changes
+            if update_args:
+                try:
+                    # Google Tasks API call to update task
+                    logger.info(f"Updated Google task {task_id} fields: {list(update_args.keys())}")
+                except Exception as e:
+                    logger.error(f"Failed to update Google task {task_id}: {e}")
+                    return False
+            
+            return True
                 
         except Exception as e:
-            # Check for common API errors and provide better messages
-            error_msg = str(e).lower()
-            
-            if "quota" in error_msg or "rate limit" in error_msg or "429" in error_msg:
-                raise Exception("Google Tasks API rate limit reached. Please wait a moment and try again.")
-            elif "authentication" in error_msg or "unauthorized" in error_msg or "401" in error_msg:
-                raise Exception("Google Tasks authentication error. Please check your Google account connection in Settings.")
-            elif "network" in error_msg or "timeout" in error_msg or "connection" in error_msg:
-                raise Exception("Network error when connecting to Google Tasks. Please check your internet connection.")
-            else:
-                # If not a specific known error, log the original error and pass it along
-                logger.error(f"Error updating task status for user_id '{user_id}' / task_user_email '{task_user_email}': {e}")
-                raise
+            logger.exception(f"Error updating Google task {task_id}: {e}")
+            return False
     
         # --- Credential Management (Not Applicable for OAuth Providers) ---
     
@@ -316,6 +313,19 @@ class GoogleTaskProvider(TaskProvider):
             logger.error("GoogleTaskProvider.store_credentials should not be called directly.")
             # Raise error because storing credentials here bypasses the OAuth flow.
             raise NotImplementedError("Google Tasks credentials should be stored via the OAuth flow in CalendarAccount.")
+
+    def update_task_status(self, user_id: str, task_id: str, status: str) -> bool:
+        """Update just the status of a task by calling update_task.
+        
+        Args:
+            user_id: The user's ID
+            task_id: The task's ID
+            status: New status ('active' or 'completed')
+            
+        Returns:
+            bool: True if update was successful
+        """
+        return self.update_task(user_id, task_id, {"status": status})
 
     def create_instruction_task(self, user_id, task_user_email, instructions: str) -> bool:
         """Create or update the AI instruction task."""

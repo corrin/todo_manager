@@ -30,7 +30,7 @@ from virtual_assistant.database.task import TaskAccount # Needed for settings GE
 from virtual_assistant.auth.user_auth import setup_login_manager
 from virtual_assistant.tasks.token_refresh import start_token_refresh_scheduler
 from virtual_assistant.meetings.calendar_provider_factory import CalendarProviderFactory
-from flask_login import login_user, logout_user, login_required, current_user
+from flask_login import login_user, logout_user, login_required, current_user, LoginManager
 
 
 # --- Factory Functions ---
@@ -62,12 +62,34 @@ def create_app():
 
     # --- Initialization ---
     Database.init_app(app)
-    setup_login_manager(app)
+    login_manager = setup_login_manager(app)
+    
+    # Global auth check - require login for all routes by default
+    @app.before_request
+    def require_login():
+        # List of endpoints that don't require auth
+        public_endpoints = [
+            'login',
+            'new_user',
+            'static',  # Allow static files
+            'favicon'  # Allow favicon
+        ]
+        
+        # Skip auth check for public endpoints
+        if request.endpoint in public_endpoints:
+            return
+            
+        # Skip auth check if user is already authenticated
+        if current_user.is_authenticated:
+            return
+            
+        # Otherwise redirect to login
+        return redirect(url_for('login', next=request.path))
 
     # --- Blueprints ---
     app.register_blueprint(init_ai_routes(), url_prefix="/ai_auth")
     app.register_blueprint(init_todoist_routes(), url_prefix="/todoist_auth")
-    app.register_blueprint(init_task_routes())
+    app.register_blueprint(init_task_routes())  # Register comprehensive task routes
     app.register_blueprint(init_schedule_routes())  # This now registers API endpoints at /api/schedule
     # Pass the factory function to init_app for meetings
     app.register_blueprint(init_meetings_app(create_calendar_provider), url_prefix="/meetings")

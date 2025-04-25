@@ -158,18 +158,31 @@ class TaskProvider(ABC):
         pass
 
     @abstractmethod
-    def update_task_status(self, user_id, task_id, task_user_email, provider_task_id: str, status: str) -> bool:
-        """Update task completion status for the specified provider account.
+    def update_task(self, user_id, task_id, task_data=None) -> bool:
+        """Update multiple task properties.
 
         Args:
             user_id: The user's database ID.
-            task_id: the primary key
-            task_user_email: The email associated with the task provider account.
-            provider_task_id: The task identifier within the provider.
-            status: The new status ('active' or 'completed').
+            task_id: The task's primary key.
+            task_data: Dictionary containing fields to update (e.g. {'title': 'New title', 'due_date': '2025-01-01'})
 
-            Note that the parameters provider_task_id and task_user_email should never be used. 
-            These should be derived by looking up the task_id.  In particular, provider_task_id isn't even universally unique
+        Returns:
+            bool: True if update successful.
+
+        Raises:
+            Exception: If update fails.
+        """
+        pass
+
+    @abstractmethod
+    def update_task_status(self, user_id, task_id, status: str) -> bool:
+        """Update task completion status.
+
+        Args:
+            user_id: The user's database ID.
+            task_id: The task's primary key.
+            status: The new status ('active' or 'completed')
+
         Returns:
             bool: True if update successful.
 

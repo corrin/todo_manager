@@ -369,3 +369,23 @@ def sync_tasks(app_login):
 - Calendar synchronization processes multiple accounts in sequence
 - Error isolation between accounts (one failure doesn't stop others)
 - Result aggregation for user feedback 
+## Task Update Flow Issue
+
+### Current Implementation
+The task update flow in `task_routes.py` calls `provider.update_task()` without passing the required `user_id` parameter, while the TodoistProvider implementation expects it as the first parameter.
+
+### Expected Behavior
+All TaskProvider methods should consistently receive `user_id` (email) as their first parameter to:
+1. Maintain data isolation between users
+2. Access user-specific credentials
+3. Follow the established provider pattern
+
+### Impact Analysis
+- **Security Risk**: Missing user_id breaks data isolation guarantees
+- **Functionality**: Fails to update tasks due to missing required parameter
+- **Consistency**: Violates provider interface contract
+
+### Solution Approach
+1. Update task_routes.py to pass current_user.id as user_id
+2. Ensure all provider calls follow the same pattern
+3. Add validation to prevent similar issues

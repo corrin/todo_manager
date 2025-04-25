@@ -30,7 +30,38 @@ function initializeTaskCompletionForms() {
             // Submit form via AJAX
             const formData = new FormData(form);
             
-            // Get the task ID from the form action URL
+            // Get the form's action URL directly from the form element
+            const actionUrl = form.getAttribute('action');
+            
+            // Submit the form via AJAX to the exact URL specified in the form
+            fetch(actionUrl, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Update UI to show task completion
+                const taskItem = form.closest('.task-item');
+                if (taskItem) {
+                    taskItem.classList.add('completed');
+                }
+                // Restore button
+                button.innerHTML = originalButtonHtml;
+                button.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error updating task status:', error);
+                // Show error and restore button
+                button.innerHTML = originalButtonHtml;
+                button.disabled = false;
+                showErrorMessage('Failed to update task. Please try again.');
+            });
             const taskId = form.action.split('/').pop().split('?')[0];
             
             // Use the new route instead of the old one
@@ -373,6 +404,7 @@ function initializeTaskDetails() {
                         <p><strong>Project:</strong> <span id="taskProject"></span></p>
                         <p><strong>Status:</strong> <span id="taskStatus"></span></p>
                         <p><strong>Due Date:</strong> <span id="taskDueDate"></span></p>
+                        <p><strong>Description:</strong> <span id="taskDescription"></span></p>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -452,24 +484,38 @@ function showTaskDetails(taskItem) {
         return response.json();
     })
     .then(taskDetails => {
+        // Store task details for editing
+        window.currentTaskDetails = taskDetails;
+        
         // Update modal with detailed information
-        document.getElementById('taskTitle').textContent = taskDetails.title;
+        const titleElement = document.getElementById('taskTitle');
+        titleElement.innerHTML = `<input type="text" class="form-control" id="editTaskTitle" value="${taskDetails.title}">`;
         
         // Update project name if available
+        const projectElement = document.getElementById('taskProject');
         if (taskDetails.project_name) {
-            document.getElementById('taskProject').textContent = taskDetails.project_name;
+            projectElement.textContent = taskDetails.project_name;
         }
         
         // Update status
         document.getElementById('taskStatus').textContent = 
             taskDetails.status === 'completed' ? 'Completed' : 'Active';
         
-        // Update due date
+        // Update due date with editable date picker
+        const dueDateElement = document.getElementById('taskDueDate');
         if (taskDetails.due_date) {
             const dueDate = new Date(taskDetails.due_date);
-            document.getElementById('taskDueDate').textContent = dueDate.toLocaleDateString();
+            const formattedDate = dueDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+            dueDateElement.innerHTML = `<input type="date" class="form-control" id="editTaskDueDate" value="${formattedDate}">`;
         } else {
-            document.getElementById('taskDueDate').textContent = 'None';
+            dueDateElement.innerHTML = `<input type="date" class="form-control" id="editTaskDueDate">`;
+        }
+        
+        // Update description with editable textarea
+        const descriptionElement = document.getElementById('taskDescription');
+        if (descriptionElement) {
+            const descriptionValue = taskDetails.description || '';
+            descriptionElement.innerHTML = `<textarea class="form-control" id="editTaskDescription" rows="3">${descriptionValue}</textarea>`;
         }
         
         // Create or update the additional details section
@@ -480,31 +526,145 @@ function showTaskDetails(taskItem) {
             document.getElementById('taskDetailsContent').appendChild(detailsDiv);
         }
         
-        // Add additional details
+        // Add additional details with editable fields
         let additionalHTML = '';
         
-        // Add priority
+        // Add priority dropdown
+        let priorityValue = 2; // Default to Normal
         if (taskDetails.priority) {
-            // Convert priority number to text
-            let priorityText = 'Normal';
-            switch(taskDetails.priority) {
-                case 1: priorityText = 'Low'; break;
-                case 3: priorityText = 'High'; break;
-                case 4: priorityText = 'Urgent'; break;
-            }
-            additionalHTML += `<p><strong>Priority:</strong> ${priorityText}</p>`;
+            priorityValue = taskDetails.priority;
         }
         
-        // Add provider
+        additionalHTML += `<div class="mb-3">
+            <label for="editTaskPriority"><strong>Priority:</strong></label>
+            <select class="form-select" id="editTaskPriority">
+                <option value="1" ${priorityValue === 1 ? 'selected' : ''}>Low</option>
+                <option value="2" ${priorityValue === 2 ? 'selected' : ''}>Normal</option>
+                <option value="3" ${priorityValue === 3 ? 'selected' : ''}>High</option>
+                <option value="4" ${priorityValue === 4 ? 'selected' : ''}>Urgent</option>
+            </select>
+        </div>`;
+        
+        // Add provider (read-only)
         if (taskDetails.provider) {
             additionalHTML += `<p><strong>Provider:</strong> ${taskDetails.provider}</p>`;
+            // Store provider for use in update
+            window.currentTaskProvider = taskDetails.provider;
         }
+        
+        // Add save button
+        additionalHTML += `<div class="mt-3 text-end">
+            <button class="btn btn-primary" id="saveTaskChanges">Save Changes</button>
+        </div>`;
         
         // Set the HTML
         detailsDiv.innerHTML = additionalHTML;
+        
+        // Add event listener to save button
+        document.getElementById('saveTaskChanges').addEventListener('click', function() {
+            saveTaskChanges(taskId);
+        });
     })
     .catch(error => {
         console.error('Error fetching task details:', error);
         // Don't show error to user, we already have basic information displayed
+    });
+}
+
+/**
+ * Save the edited task changes
+ */
+function saveTaskChanges(taskId) {
+
+
+    // Get values from form fields
+    const title = document.getElementById('editTaskTitle').value;
+    const dueDate = document.getElementById('editTaskDueDate').value;
+    const priority = parseInt(document.getElementById('editTaskPriority').value);
+    const description = document.getElementById('editTaskDescription') ?
+                      document.getElementById('editTaskDescription').value : '';
+    
+    // Create updated task object
+    const updatedTask = {
+        title: title,
+        due_date: dueDate,
+        priority: priority,
+        description: description,
+        provider: window.currentTaskProvider
+    };
+    
+    // Hide any previous errors
+    hideErrorMessage();
+    
+    // Show a loading indicator
+    const saveButton = document.getElementById('saveTaskChanges');
+    const originalButtonText = saveButton.textContent;
+    saveButton.textContent = 'Saving...';
+    saveButton.disabled = true;
+    
+    // Send update to server
+    fetch(`/tasks/${taskId}/update`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(updatedTask)
+    })
+    .then(response => {
+        // Reset button state
+        saveButton.textContent = originalButtonText;
+        saveButton.disabled = false;
+        
+        if (!response.ok) {
+            // For error responses, try to get error details as JSON
+            return response.json()
+                .then(errorData => {
+                    // Use error message from JSON if available
+                    throw new Error(errorData.error || 'Failed to update task');
+                })
+                .catch(jsonError => {
+                    // If JSON parsing fails, use a generic error message
+                    throw new Error('Failed to update task');
+                });
+        }
+        
+        return response.json();
+    })
+    .then(data => {
+        // Show success message
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'alert alert-success';
+        messageDiv.textContent = 'Task updated successfully!';
+        
+        // Insert message at top of modal
+        const modalContent = document.getElementById('taskDetailsContent');
+        modalContent.insertBefore(messageDiv, modalContent.firstChild);
+        
+        // Remove message after 2 seconds
+        setTimeout(() => {
+            messageDiv.remove();
+            
+            // Close modal and refresh task list
+            bootstrap.Modal.getInstance(document.getElementById('taskDetailsModal')).hide();
+            location.reload(); // Refresh the page to show updated task
+        }, 2000);
+    })
+    .catch(error => {
+        console.error('Error updating task:', error);
+        
+        // Show error message
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'alert alert-danger';
+        messageDiv.textContent = error.message || 'Failed to update task. Please try again.';
+        
+        // Insert message at top of modal
+        const modalContent = document.getElementById('taskDetailsContent');
+        modalContent.insertBefore(messageDiv, modalContent.firstChild);
+        
+        // Remove message after 3 seconds
+        setTimeout(() => {
+            messageDiv.remove();
+        }, 3000);
     });
 }

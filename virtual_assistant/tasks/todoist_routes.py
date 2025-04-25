@@ -1,5 +1,5 @@
 from flask import Blueprint, request, redirect, url_for, flash, jsonify
-from flask_login import login_required, current_user
+from flask_login import current_user
 from sqlalchemy.exc import IntegrityError # Keep import in case needed elsewhere
 
 # Import necessary components for handling task accounts and provider logic
@@ -19,7 +19,6 @@ def init_todoist_routes():
     bp = Blueprint('todoist_auth', __name__, url_prefix='/todoist_auth')
 
     @bp.route('/add_account', methods=['POST'])
-    @login_required
     def add_account():
         """Handles the submission from the 'Add Todoist Account' modal."""
         app_login = current_user.app_login # Used for logging context
@@ -82,7 +81,6 @@ def init_todoist_routes():
         return redirect(url_for('settings'))
 
     @bp.route('/update_key', methods=['POST'])
-    @login_required
     def update_key():
         """Handles the submission from the 'Edit Todoist API Key' modal."""
         app_login = current_user.app_login # For logging
@@ -145,7 +143,6 @@ def init_todoist_routes():
         return redirect(url_for('settings'))
 
     @bp.route('/delete_account', methods=['POST'])
-    @login_required
     def delete_account():
         """Handles the submission from the 'Delete Todoist Account' modal."""
         app_login = current_user.app_login # For logging
@@ -181,7 +178,6 @@ def init_todoist_routes():
 
 
     @bp.route('/test', methods=['POST'])
-    @login_required 
     def test_connection():
         """Provides an endpoint to test a Todoist API key without saving it. 
            Used by the 'Test' button in the settings UI (potentially within modals)."""
