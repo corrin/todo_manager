@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "virtual-calendar-assistant"
+name = "virtual_assistant"
 version = "0.1.0"
 description = "Virtual Calendar Assistant"
 authors = ["Corrin Lakeland <lakeland@gmail.com>"]
 license = "PRIVATE"
 readme = "README.md"
 include = ["**/pyproject.toml"]
-package-mode = false
+package-mode = true
 
 
 [tool.poetry.dependencies]

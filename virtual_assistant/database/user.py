@@ -34,6 +34,7 @@ class User(UserMixin, db.Model):
     schedule_slot_duration = db.Column(db.Integer, default=60) # Schedule slot duration in minutes (30, 60, or 120)
 
     # Define relationships using back_populates for bidirectional linking
+    external_accounts = relationship("ExternalAccount", back_populates="user", lazy=True, cascade="all, delete-orphan")
     calendar_accounts = relationship("CalendarAccount", back_populates="user", lazy=True, cascade="all, delete-orphan")
     # Relationship to TaskAccount model for storing API keys etc. for task providers
     task_accounts = relationship("TaskAccount", back_populates="user", lazy=True, cascade="all, delete-orphan")

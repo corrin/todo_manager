@@ -502,7 +502,6 @@ def init_task_routes():
             return redirect(url_for('tasks.list_tasks'))
 
     @bp.route('/set_primary_task_provider', methods=['POST'])
-    @login_required
     def set_primary_task_provider():
         """Sets the primary task provider account via AJAX."""
         account_id_str = request.form.get('primary_task_account_id')
@@ -542,7 +541,6 @@ def init_task_routes():
             return jsonify({'success': False, 'message': 'An error occurred while setting the primary task provider.'}), 500
 
     @bp.route('/delete_task_account', methods=['POST'])
-    @login_required
     def delete_task_account():
         """Deletes a specific task provider account for the user."""
         account_id_str = request.form.get('account_id')

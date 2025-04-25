@@ -9,31 +9,25 @@ from virtual_assistant.utils.logger import logger
 
 
 class CalendarAccount(db.Model):
-    """Model for storing calendar account credentials and metadata."""
+    """Model for storing calendar account metadata (references ExternalAccount for auth)."""
     
     __tablename__ = 'calendar_account'
     
     id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
-    calendar_email = db.Column(db.String(255), nullable=False)  # The specific calendar account email (e.g. google account email)
+    calendar_email = db.Column(db.String(255), nullable=False)  # The specific calendar account email
     user_id = db.Column(MySQLUUID, db.ForeignKey('user.id'), nullable=False)
-    provider = db.Column(db.String(50), nullable=False)  # 'google' or 'o365'
-    token = db.Column(db.Text, nullable=False)
-    refresh_token = db.Column(db.Text)
-    token_uri = db.Column(db.String(255))
-    client_id = db.Column(db.String(255))
-    client_secret = db.Column(db.String(255))
-    scopes = db.Column(db.Text)
+    external_account_id = db.Column(MySQLUUID, db.ForeignKey('external_account.id'), nullable=False)
     is_primary = db.Column(db.Boolean, default=False)  # Whether this is the user's primary calendar account
     last_sync = db.Column(db.DateTime(timezone=True))
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    needs_reauth = db.Column(db.Boolean, nullable=False, default=False)
 
-    # Define the relationship to the User model
+    # Define relationships
     user = relationship("User", back_populates="calendar_accounts")
+    external_account = relationship("ExternalAccount")
 
     __table_args__ = (
-        db.UniqueConstraint('user_id', 'calendar_email', 'provider',
-                          name='uq_calendar_account_user_id_provider'),
+        db.UniqueConstraint('user_id', 'calendar_email',
+                          name='uq_calendar_account_user_id_email'),
     )
 
     def __init__(self, calendar_email, provider, **kwargs):

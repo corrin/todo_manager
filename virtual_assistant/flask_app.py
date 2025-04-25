@@ -4,6 +4,7 @@ import threading
 import asyncio
 from flask import request, make_response, jsonify, flash, send_from_directory
 from flask import Flask, render_template, redirect, url_for
+from flask_migrate import Migrate
 from dotenv import load_dotenv
 from sqlalchemy.exc import IntegrityError # Keep for potential use elsewhere
 
@@ -62,6 +63,7 @@ def create_app():
 
     # --- Initialization ---
     Database.init_app(app)
+    migrate = Migrate(app, db)
     login_manager = setup_login_manager(app)
     
     # Global auth check - require login for all routes by default
@@ -160,15 +162,20 @@ def settings():
     app_login = current_user.app_login 
     
     # --- Get Calendar Accounts ---
-    # Fetch CalendarAccount records directly for the calendar section
-    calendar_accounts = CalendarAccount.query.filter_by(user_id=current_user.id).order_by(CalendarAccount.calendar_email).all()
-    # Prepare data for template display if needed (or pass objects directly if template handles it)
+    # Fetch ExternalAccount records with calendar usage enabled
+    calendar_accounts = ExternalAccount.query.filter_by(
+        user_id=current_user.id,
+        use_for_calendar=True
+    ).order_by(ExternalAccount.account_email).all()
+    
+    # Prepare data for template display
     calendar_accounts_data_for_template = []
     for account in calendar_accounts:
         calendar_accounts_data_for_template.append({
-            'id': account.id, # Pass ID if needed by template logic (e.g., modals)
+            'id': account.id,
             'provider': account.provider,
-            'email': account.calendar_email, # Use the correct email field
+            'email': account.account_email,
+            'calendar_is_primary': account.is_primary_calendar,
             'last_sync': account.last_sync.strftime('%Y-%m-%d %H:%M:%S') if account.last_sync else None,
             'needs_reauth': account.needs_reauth,
             'calendar_is_primary': account.is_primary # This is for the CALENDAR primary

@@ -82,19 +82,13 @@ def set_primary_account():
             flash("Invalid account ID format.", "error")
             return render_template("error.html", error="Invalid account ID format", title="Invalid Request")
         
-        # Set the account as primary using the new method
-        success = CalendarAccount.set_as_primary_by_id(account_id, user_id)
+        # Set the account as primary using ExternalAccount
+        ExternalAccount.set_as_primary(account_id, user_id, 'calendar')
         
-        if success:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({"success": True})
-            flash(f"Set {calendar_email} as your primary calendar account.", "success")
-            return redirect(url_for("settings"))
-        else:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({"success": False, "error": "Failed to set primary account"}), 500
-            flash("Failed to set primary calendar account.", "error")
-            return render_template("error.html", error="Failed to set primary calendar account", title="Operation Failed")
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"success": True})
+        flash(f"Set {calendar_email} as your primary calendar account.", "success")
+        return redirect(url_for("settings"))
             
     except Exception as e:
         logger.error(f"Error setting primary calendar account: {e}")
@@ -103,85 +97,6 @@ def set_primary_account():
         flash("An error occurred while setting the primary calendar account.", "error")
         return render_template("error.html", error=str(e), title="Operation Failed")
 
-@meetings_bp.route("/remove_calendar_account", methods=["POST"])
-def remove_calendar_account():
-    """Remove a calendar account."""
-    try:
-        
-        provider_name = request.form.get("provider")
-        calendar_email = request.form.get("email")
-        
-        if provider_name not in providers:
-            flash("Invalid calendar provider.", "error")
-            return render_template("error.html", error="Invalid calendar provider", title="Invalid Request")
-        
-        # Remove from database first
-        if calendar_email:
-            logger.debug(f"Attempting to delete calendar account: {calendar_email} ({provider_name})")
-            
-            # Verify account exists before deletion
-            existing = CalendarAccount.query.filter_by(
-                calendar_email=calendar_email,
-                provider=provider_name,
-                user_id=current_user.id 
-            ).first()
-            
-            if existing:
-                logger.debug(f"Found existing account to delete: {existing.calendar_email}")
-                
-                # Check if this is the primary account
-                was_primary = existing.is_primary
-                
-                CalendarAccount.delete_by_email_and_provider(calendar_email, provider_name, current_user.id)
-                logger.info(f"Successfully deleted calendar account from database: {calendar_email} ({provider_name})")
-                
-                # Verify deletion
-                verify = CalendarAccount.query.filter_by(
-                    calendar_email=calendar_email,
-                    provider=provider_name,
-                    user_id=current_user.id
-                ).first()
-                if verify:
-                    logger.error(f"Account still exists after deletion attempt: {calendar_email}")
-                    raise Exception("Failed to delete account from database")
-                
-                # Try to remove credentials if possible
-                try:
-                    provider = providers[provider_name]()
-                    if hasattr(provider, 'remove_credentials'):
-                        provider.remove_credentials(calendar_email)
-                except Exception as cred_error:
-                    logger.warning(f"Could not remove credentials: {cred_error}")
-                    # Continue anyway as the database entry is removed
-                
-                # If this was the primary account, set another account as primary if one exists
-                if was_primary:
-                    remaining_accounts = CalendarAccount.get_accounts_for_user(current_user.id) 
-                    if remaining_accounts:
-                        # Set the first remaining account as primary
-                        first_account = remaining_accounts[0]
-                        CalendarAccount.set_as_primary(
-                            first_account.calendar_email,
-                            first_account.provider,
-                            current_user.id 
-                        )
-                        logger.info(f"Set {first_account.calendar_email} as new primary account after deleting primary")
-                
-                flash(f"Successfully removed {provider_name} calendar account.", "success")
-                return redirect(url_for("settings"))
-            else:
-                logger.warning(f"Account not found for deletion: {calendar_email} ({provider_name})")
-                flash("Calendar account not found.", "warning")
-                return render_template("error.html", error="Calendar account not found", title="Account Error")
-        else:
-            flash("Calendar email not provided.", "error")
-            return render_template("error.html", error="Calendar email not provided", title="Invalid Request")
-        
-    except Exception as e:
-        logger.error(f"Error removing calendar account: {e}")
-        flash("An error occurred while removing the calendar account.", "error")
-        db.session.rollback()
-        return render_template("error.html", error=str(e), title="Operation Failed")
 
 @meetings_bp.route("/reauth_calendar_account")
 @login_required # Add decorator for authentication
