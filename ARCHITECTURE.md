@@ -32,7 +32,7 @@ Task Master is built on Flask and follows a provider-based architecture with fiv
 - **User Authentication**: Google Identity Services integration
 - **Provider Authentication**: OAuth for calendar providers, API keys for others
 - **Session Management**: Flask-Login and session-based user state
-- **Credential Storage**: User OAuth tokens and core credentials are stored in the database. API keys for external AI providers (like OpenAI) are managed via file-based storage.
+- **Credential Storage**: User OAuth tokens and core credentials are stored in the database. API keys for external AI providers (like OpenAI and Grok) are stored in the database alongside other user-specific configurations.
 
 ### 5. Database
 - **ORM Integration**: SQLAlchemy with Flask-SQLAlchemy
