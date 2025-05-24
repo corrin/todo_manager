@@ -7,9 +7,9 @@ Task Master is built on Flask and follows a provider-based architecture with fiv
 ### 1. Task Management
 - **Task Providers**: Integrations with task sources
   - **Todoist**: API-based integration using Todoist Python SDK
-  - **SQLite**: Local storage implementation
-  - **Outlook Tasks**: Microsoft Graph API integration (placeholder)
-  - **Google Tasks**: Google Tasks API integration (placeholder)
+  - **SQLite**: Local Database Cache: The system uses a central database (via SQLAlchemy `Task` model) to store, cache, and manage tasks synced from external providers. It does not currently function as a standalone task source provider.
+  - **Outlook Tasks**: Microsoft Graph API integration (partially implemented; core data fetching may be functional, task modification features are largely stubs)
+  - **Google Tasks**: Google Tasks API integration (partially implemented; core data fetching may be functional, task modification features are largely stubs)
 - **Task Representation**: Standardized `Task` dataclass across providers
 - **Task Hierarchy**: Support for projects, sections, and parent-child relationships
 
@@ -32,7 +32,7 @@ Task Master is built on Flask and follows a provider-based architecture with fiv
 - **User Authentication**: Google Identity Services integration
 - **Provider Authentication**: OAuth for calendar providers, API keys for others
 - **Session Management**: Flask-Login and session-based user state
-- **Credential Storage**: Mix of database and file-based credential storage
+- **Credential Storage**: User OAuth tokens and core credentials are stored in the database. API keys for external AI providers (like OpenAI) are managed via file-based storage.
 
 ### 5. Database
 - **ORM Integration**: SQLAlchemy with Flask-SQLAlchemy
@@ -99,7 +99,6 @@ class TaskManager:
         self.providers = {}
         self.provider_classes = {
             "todoist": TodoistProvider,
-            "sqlite": SQLiteTaskProvider,
             "outlook": OutlookTaskProvider,
             "google_tasks": GoogleTaskProvider,
         }
@@ -234,10 +233,7 @@ class Task:
 ## Known Architecture Issues
 
 ### User Management Inconsistency
-- Two competing approaches:
-  - File-based user management in `auth/user_manager.py`
-  - Database-based user management in `database/user_manager.py`
-- Need for consolidation to database-only approach
+- Clarity of UserDataManager's Role: The `UserDataManager` class in `database/user_manager.py` has some methods (e.g., `login`, `logout`) whose roles in the primary Flask-Login authentication flow are unclear and might be vestigial. The core user authentication relies on Flask-Login with the `User` database model.
 
 ### Calendar Integration Challenges
 - Time zone handling issues
@@ -245,8 +241,8 @@ class Task:
 - OAuth error handling improvements needed
 
 ### Task Provider Completeness
-- Todoist and SQLite providers need testing
-- Outlook and Google Tasks providers are placeholders
+- Todoist provider needs comprehensive testing.
+- Outlook and Google Tasks providers: Core authentication and task fetching are partially implemented. However, functionalities for creating, updating, and managing tasks (including AI instructions) within these providers are largely incomplete or stubbed out.
 
 ## UI Architecture
 
@@ -270,7 +266,7 @@ The application maintains a minimalist approach with three primary pages:
 
 ## Future Architectural Considerations
 
-- Complete migration to database-only user management
+- Refine user management: Further clarify the role of `database.UserDataManager` in relation to Flask-Login and the `User` model, and streamline its responsibilities, focusing on managing user-associated data and credentials rather than core authentication state.
 - Development of API endpoints to support user-centric tools (e.g., browser extensions or mobile clients for data input and plan review).
 - Enhanced error handling and user feedback
 - UI component implementation for task management

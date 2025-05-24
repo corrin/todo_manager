@@ -34,17 +34,18 @@ e) Minimizing context switching, for example, by organizing your week into large
 
 Task Master follows a provider-based architecture with clean separation of concerns:
 
-1. **Task Management** - Retrieves and organizes tasks and goals from various sources.
+1. **Task Management** - Retrieves and organizes tasks and goals from external providers (like Todoist, with Google/Outlook Tasks in development) and caches them in a local database.
 2. **AI Processing** - Analyzes goals and feedback, adapts plans, breaks down objectives, and generates schedules.
 3. **Calendar Management** - Outputs the generated plan and tasks to the user's calendar.
-4. **Authentication** - Handles user authentication and service credentials.
-5. **Database** - Manages persistent data with SQLAlchemy ORM.
+4. **Authentication** - Handles user authentication (primarily database-centric with Google Sign-In) and service credentials.
+5. **Database** - Manages persistent data including user accounts, credentials, and a central task cache with SQLAlchemy ORM.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architectural information.
 
 ## Implementation Status
 
-- ⏳ Todoist and SQLite provider implementation (needs testing)
+- ⏳ Todoist provider integration (needs comprehensive testing).
+- ⏳ Core features for Google Tasks and Outlook Tasks integration (task fetching) are in development; full task modification capabilities are planned.
 - ⏳ Ongoing UI development for task and plan management.
 
 See [IMPLEMENTATION.md](IMPLEMENTATION.md) for details on implementation status.
