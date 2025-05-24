@@ -271,6 +271,6 @@ The application maintains a minimalist approach with three primary pages:
 ## Future Architectural Considerations
 
 - Complete migration to database-only user management
-- Expansion of API endpoints for external integration
+- Development of API endpoints to support user-centric tools (e.g., browser extensions or mobile clients for data input and plan review).
 - Enhanced error handling and user feedback
 - UI component implementation for task management
