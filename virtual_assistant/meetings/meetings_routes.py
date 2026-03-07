@@ -2,15 +2,12 @@
 Meetings Blueprint routes and functionality.
 """
 
-import asyncio
-from datetime import UTC, datetime, timezone
-from functools import wraps
+from datetime import datetime, timezone
 
 import requests
 from asgiref.sync import async_to_sync
 from flask import (
     Blueprint,
-    current_app,
     flash,
     jsonify,
     redirect,
@@ -256,8 +253,6 @@ def google_authenticate():
 
     google_provider = GoogleCalendarProvider()
     provider = "google"
-    user_id = current_user.id
-
     try:
         credentials = google_provider.handle_oauth_callback(request.url)
         if not credentials:
@@ -277,15 +272,14 @@ def google_authenticate():
         ext_account = google_provider.store_credentials(external_email, credentials, current_user.id)
 
         # Verify credentials work by attempting to get meetings
-        verification_failed = False
         try:
             google_provider.get_meetings_sync(external_email, current_user.id)
             ext_account.needs_reauth = False
             ext_account.last_sync = datetime.now(timezone.utc)
         except Exception as verify_error:
-            verification_failed = True
             logger.error(
-                f"Failed to verify Google Calendar credentials for {external_email} (User ID: {current_user.id}): {verify_error}"
+                f"Failed to verify Google Calendar credentials for "
+                f"{external_email} (User ID: {current_user.id}): {verify_error}"
             )
             ext_account.needs_reauth = True
 
@@ -336,7 +330,8 @@ def o365_authenticate():
 
         if not result or "email" not in result or "credentials" not in result:
             logger.error(
-                f"Failed to complete O365 authentication for user {current_user.id} - invalid result from callback handler: {result}"
+                f"Failed to complete O365 authentication for user {current_user.id} "
+                f"- invalid result from callback handler: {result}"
             )
             flash(
                 "Failed to connect Office 365 Calendar (invalid callback data).",
@@ -503,7 +498,8 @@ def sync_meetings():
             ):
 
                 logger.warning(
-                    f"⚠️ AUTH ISSUE: Token expired or authentication failed for {ext_account.external_email}: {error_msg}"
+                    f"AUTH ISSUE: Token expired or authentication failed "
+                    f"for {ext_account.external_email}: {error_msg}"
                 )
 
                 ext_account.needs_reauth = True
@@ -552,7 +548,8 @@ def sync_meetings():
                 results["status"] = "needs_reauth"
             else:
                 logger.error(
-                    f"❌ ERROR: Error syncing {ext_account.provider} calendar ({ext_account.external_email}): {error_msg}"
+                    f"❌ ERROR: Error syncing {ext_account.provider} calendar "
+                    f"({ext_account.external_email}): {error_msg}"
                 )
                 results["errors"].append(
                     {
@@ -568,7 +565,7 @@ def sync_meetings():
         reauth_details = [
             f"{a['email']} ({a['provider']}) - {a.get('reason', 'Unknown reason')}" for a in results["needs_reauth"]
         ]
-        results["message"] = f"Some accounts need reauthorization:\n" + "\n".join(reauth_details)
+        results["message"] = "Some accounts need reauthorization:\n" + "\n".join(reauth_details)
 
     elif not results["success"] and results["errors"]:
         results["message"] = "All calendar syncs failed"

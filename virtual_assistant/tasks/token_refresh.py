@@ -5,7 +5,7 @@ This module handles automatic refresh of OAuth tokens before they expire.
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Dict
 
 from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.meetings.calendar_provider_factory import CalendarProviderFactory

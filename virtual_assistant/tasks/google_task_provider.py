@@ -2,19 +2,16 @@
 Google Tasks implementation of the task provider interface.
 """
 
-import json
-import os
 import uuid
 from datetime import datetime
 from typing import List, Optional
 
 from flask import redirect, url_for
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 from virtual_assistant.database.external_account import ExternalAccount
-from virtual_assistant.database.task import Task
-from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
 from virtual_assistant.utils.logger import logger
 
 from .task_provider import Task, TaskProvider
@@ -361,11 +358,11 @@ class GoogleTaskProvider(TaskProvider):
 
         try:
             # Get the default task list
-            default_list_id = "default"
+            default_list_id = "default"  # noqa: F841
             try:
                 # In a real implementation, we would get the default task list
                 # using the Google Tasks API
-                default_list_id = "list1"  # Mock data
+                default_list_id = "list1"  # Mock data  # noqa: F841
             except Exception as e:
                 logger.warning(f"Error getting default task list: {e}")
 

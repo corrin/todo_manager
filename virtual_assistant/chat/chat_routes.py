@@ -303,7 +303,8 @@ def _stream_response(conversation, messages, model, api_key):
                     # Send tool call events
                     any_mutating = False
                     for tr in tool_results:
-                        yield f"data: {json.dumps({'type': 'tool_call', 'name': tr['name'], 'result': tr['result']})}\n\n"
+                        event = json.dumps({"type": "tool_call", "name": tr["name"], "result": tr["result"]})
+                        yield f"data: {event}\n\n"
                         if tr["is_mutating"]:
                             any_mutating = True
 

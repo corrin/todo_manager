@@ -50,9 +50,9 @@ def remove_external_account():
         if was_primary:
             # Find first remaining account of same type
             filter_condition = (
-                (ExternalAccount.use_for_calendar == True)
+                (ExternalAccount.use_for_calendar.is_(True))
                 if account_type == "calendar"
-                else (ExternalAccount.use_for_tasks == True)
+                else (ExternalAccount.use_for_tasks.is_(True))
             )
             new_primary = ExternalAccount.query.filter(
                 ExternalAccount.user_id == current_user.id, filter_condition

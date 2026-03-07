@@ -73,12 +73,14 @@ class Task(db.Model):
             Tuple[Task, bool]: The task object and whether it was created or updated
         """
         logger.debug(
-            f"[SYNC] Processing task from {provider}: id={provider_task.id}, title='{provider_task.title}', status='{provider_task.status}'"
+            f"[SYNC] Processing task from {provider}: id={provider_task.id}, "
+            f"title='{provider_task.title}', status='{provider_task.status}'"
         )
 
         # Log detailed information about the incoming task status
         logger.info(
-            f"[SYNC] Incoming provider task status from {provider}: id={provider_task.id}, status='{provider_task.status}'"
+            f"[SYNC] Incoming provider task status from {provider}: "
+            f"id={provider_task.id}, status='{provider_task.status}'"
         )
 
         # Calculate content hash to detect changes
@@ -97,7 +99,8 @@ class Task(db.Model):
         existing_task = cls.query.filter_by(
             user_id=user_id, provider=provider, provider_task_id=provider_task.id
         ).first()
-        # TODO: Decide if we should also filter by task_user_email here if it's provided and not null? (Note: app_login changed to user_id)
+        # TODO: Decide if we should also filter by task_user_email here
+        # if it's provided and not null? (Note: app_login changed to user_id)
         # existing_task = cls.query.filter_by(
         #     user_id=user_id,
         #     task_user_email=task_user_email,
@@ -116,7 +119,8 @@ class Task(db.Model):
 
             # Log status change and hash change information
             logger.debug(
-                f"[SYNC] Task {provider_task.id} comparison: status_changed={status_changed}, hash_changed={hash_changed}"
+                f"[SYNC] Task {provider_task.id} comparison: "
+                f"status_changed={status_changed}, hash_changed={hash_changed}"
             )
             logger.debug(
                 f"[SYNC] Task {provider_task.id} content hash: db={existing_task.content_hash}, new={content_hash}"
@@ -129,7 +133,8 @@ class Task(db.Model):
             if status_changed:
                 # If only status changed, update just that field
                 logger.info(
-                    f"[SYNC] Status-only change for task {provider_task.id}: old='{existing_task.status}', new='{provider_task.status}'"
+                    f"[SYNC] Status-only change for task {provider_task.id}: "
+                    f"old='{existing_task.status}', new='{provider_task.status}'"
                 )
 
                 existing_task.status = provider_task.status
@@ -144,7 +149,8 @@ class Task(db.Model):
             if existing_task.content_hash != content_hash:
                 # Log hash differences for debugging
                 logger.info(
-                    f"[SYNC] Content hash changed for task {provider_task.id}: old={existing_task.content_hash}, new={content_hash}"
+                    f"[SYNC] Content hash changed for task {provider_task.id}: "
+                    f"old={existing_task.content_hash}, new={content_hash}"
                 )
 
                 # Update task content

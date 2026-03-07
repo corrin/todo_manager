@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from flask import redirect, url_for
 from todoist_api_python.api import TodoistAPI
@@ -55,21 +55,21 @@ class TodoistProvider(TaskProvider):
             # Prepare update arguments
             update_args = {}
 
-            if title is not None:
-                update_args["content"] = title
+            if task_data.get("title") is not None:
+                update_args["content"] = task_data["title"]
 
-            if due_date is not None:
+            if task_data.get("due_date") is not None:
                 # Convert to Todoist date format
-                if due_date:  # Only if not empty string
-                    update_args["due_date"] = due_date
+                if task_data["due_date"]:  # Only if not empty string
+                    update_args["due_date"] = task_data["due_date"]
                 else:
                     # To clear the due date, we need to pass it differently
                     update_args["due_string"] = ""
 
-            if priority is not None:
+            if task_data.get("priority") is not None:
                 # Todoist uses reverse priority (4=p1, 3=p2, 2=p3, 1=p4)
                 # Convert our priority to Todoist's format
-                todoist_priority = 5 - priority  # 1->4, 2->3, 3->2, 4->1
+                todoist_priority = 5 - task_data["priority"]  # 1->4, 2->3, 3->2, 4->1
                 update_args["priority"] = todoist_priority
 
             # Handle status updates separately
@@ -138,7 +138,8 @@ class TodoistProvider(TaskProvider):
                 return None
         else:
             logger.warning(
-                f"No Todoist account found for user_id='{user_id}', provider='{self.provider_name}', external_email='{task_user_email}'"
+                f"No Todoist account found for user_id='{user_id}', "
+                f"provider='{self.provider_name}', external_email='{task_user_email}'"
             )
             return None
 
@@ -182,7 +183,8 @@ class TodoistProvider(TaskProvider):
         self._initialize_api(user_id, task_user_email)
         if not self.api:
             raise Exception(
-                f"Todoist API not initialized for user_id='{user_id}', task_user_email='{task_user_email}'. Check credentials."
+                f"Todoist API not initialized for user_id='{user_id}', "
+                f"task_user_email='{task_user_email}'. Check credentials."
             )
 
         try:
@@ -257,7 +259,8 @@ class TodoistProvider(TaskProvider):
                 tasks.append(task)
 
             logger.info(
-                f"[TODOIST] Task summary for user_id='{user_id}': {len(tasks)} total tasks ({completed_count} completed, {active_count} active)"
+                f"[TODOIST] Task summary for user_id='{user_id}': {len(tasks)} total tasks "
+                f"({completed_count} completed, {active_count} active)"
             )
 
             return tasks
@@ -271,7 +274,8 @@ class TodoistProvider(TaskProvider):
         api = self._get_api(user_id, task_user_email)
         if not api:
             raise Exception(
-                f"Could not get Todoist API for user_id='{user_id}', task_user_email='{task_user_email}'. Check credentials."
+                f"Could not get Todoist API for user_id='{user_id}', "
+                f"task_user_email='{task_user_email}'. Check credentials."
             )
 
         try:
@@ -333,7 +337,8 @@ class TodoistProvider(TaskProvider):
                 if "not found" in error_msg or "404" in error_msg:
                     logger.warning(f"[TODOIST] Task {task_id} not found: {task_error}")
                     raise Exception(
-                        f"Task {task_id} not found in Todoist. It may have been deleted or synced incorrectly. Try refreshing your tasks."
+                        f"Task {task_id} not found in Todoist. It may have been deleted "
+                        "or synced incorrectly. Try refreshing your tasks."
                     )
                 # For other errors with task lookup, continue and try to update anyway
                 logger.warning(
@@ -356,7 +361,8 @@ class TodoistProvider(TaskProvider):
                 # Handle common errors with better messages
                 if "not found" in error_msg or "404" in error_msg:
                     raise Exception(
-                        f"Task {task_id} not found in Todoist. It may have been deleted or synced incorrectly. Try refreshing your tasks."
+                        f"Task {task_id} not found in Todoist. It may have been deleted "
+                        "or synced incorrectly. Try refreshing your tasks."
                     )
                 else:
                     raise update_error
@@ -385,7 +391,8 @@ class TodoistProvider(TaskProvider):
         api = self._get_api(user_id, task_user_email)
         if not api:
             raise Exception(
-                f"Could not get Todoist API for user_id='{user_id}', task_user_email='{task_user_email}'. Check credentials."
+                f"Could not get Todoist API for user_id='{user_id}', "
+                f"task_user_email='{task_user_email}'. Check credentials."
             )
 
         try:

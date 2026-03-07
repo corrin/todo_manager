@@ -1,9 +1,6 @@
 # db_setup.py
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.sql import text
 
 from virtual_assistant.utils.logger import logger
@@ -53,8 +50,6 @@ class Database:
     @classmethod
     def init_app(cls, app):
         """Initialize the database with the Flask app"""
-        import os
-
         from virtual_assistant.utils.settings import Settings
 
         # Ensure the database directory exists (Only needed for SQLite)

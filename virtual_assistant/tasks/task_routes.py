@@ -1,6 +1,5 @@
 import datetime
 import json
-import os
 
 from flask import (
     Blueprint,
@@ -9,7 +8,6 @@ from flask import (
     redirect,
     render_template,
     request,
-    session,
     url_for,
 )
 from flask_login import current_user
@@ -20,11 +18,9 @@ from virtual_assistant.database.external_account import (
     ExternalAccount,
 )
 from virtual_assistant.database.task import Task
-from virtual_assistant.tasks.task_hierarchy import TaskHierarchy
 from virtual_assistant.tasks.task_manager import TaskManager
 from virtual_assistant.tasks.task_provider import Task as ProviderTask
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.utils.settings import Settings
 
 
 def init_task_routes():
@@ -231,9 +227,6 @@ def init_task_routes():
                     provider_name=provider_name,
                 )
 
-                # Store current provider task IDs to detect deletions
-                current_provider_task_ids = [task.id for task in provider_tasks]
-
                 # Sync each task with our database
                 updated_count = sync_provider_tasks(user_id, task_user_email, provider_name, provider_tasks)
 
@@ -265,7 +258,7 @@ def init_task_routes():
         # Set overall status message
         if results["needs_reauth"]:
             reauth_details = [f"{a['provider']} - {a.get('reason', 'Unknown reason')}" for a in results["needs_reauth"]]
-            results["message"] = f"Some providers need authorization:\n" + "\n".join(reauth_details)
+            results["message"] = "Some providers need authorization:\n" + "\n".join(reauth_details)
 
         elif not results["success"] and results["errors"]:
             results["message"] = "All task syncs failed"
@@ -404,7 +397,8 @@ def init_task_routes():
         new_status = request.form.get("status", "active")
         list_type = request.form.get("list_type", "unprioritized")
         logger.info(
-            f"Task status update request: id={task_id}, new_status='{new_status}', list_type='{list_type}', user_id={user_id}"
+            f"Task status update request: id={task_id}, new_status='{new_status}', "
+            f"list_type='{list_type}', user_id={user_id}"
         )
 
         # Get the task from the database by id and list_type
@@ -420,7 +414,8 @@ def init_task_routes():
 
         # Log the current task status with both IDs for clarity
         logger.info(
-            f"Found task in database: id={task_id}, provider_task_id={task.provider_task_id}, provider={task.provider}, status='{task.status}'"
+            f"Found task in database: id={task_id}, provider_task_id={task.provider_task_id}, "
+            f"provider={task.provider}, status='{task.status}'"
         )
 
         # Check if the status is already set to the requested value
@@ -453,7 +448,10 @@ def init_task_routes():
 
             # If email is missing for a provider that requires it, raise an error.
             if not task_email_to_use and task.provider in ["google_tasks", "outlook"]:
-                error_message = f"Cannot update task: Missing identifying email for provider '{task.provider}' and task ID {task_id}. Please re-sync tasks."
+                error_message = (
+                    f"Cannot update task: Missing identifying email for provider "
+                    f"'{task.provider}' and task ID {task_id}. Please re-sync tasks."
+                )
                 logger.error(error_message)
                 if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                     return jsonify({"error": error_message}), 500
@@ -462,7 +460,10 @@ def init_task_routes():
 
             # Update the task status in the provider
             logger.info(
-                f"Updating task status in provider: id={task_id}, provider_task_id={task.provider_task_id}, provider={task.provider}, task_user_email='{task_email_to_use}', old_status='{task.status}', new_status='{new_status}'"
+                f"Updating task status in provider: id={task_id}, "
+                f"provider_task_id={task.provider_task_id}, provider={task.provider}, "
+                f"task_user_email='{task_email_to_use}', "
+                f"old_status='{task.status}', new_status='{new_status}'"
             )
 
             # Call provider method with task data
@@ -479,7 +480,9 @@ def init_task_routes():
             db.session.commit()
 
             logger.info(
-                f"Successfully updated task status: id={task_id}, provider_task_id={task.provider_task_id}, provider={task.provider}, status changed from '{old_status}' to '{new_status}'"
+                f"Successfully updated task status: id={task_id}, "
+                f"provider_task_id={task.provider_task_id}, provider={task.provider}, "
+                f"status changed from '{old_status}' to '{new_status}'"
             )
 
             # Return success
@@ -628,7 +631,8 @@ def sync_provider_tasks(user_id, task_user_email, provider_name, provider_tasks)
     """
 
     logger.info(
-        f"Starting sync of {len(provider_tasks)} tasks from {provider_name} for user_id={user_id}, task_user_email={task_user_email}"
+        f"Starting sync of {len(provider_tasks)} tasks from {provider_name} "
+        f"for user_id={user_id}, task_user_email={task_user_email}"
     )
 
     # Log task statuses from provider
@@ -660,7 +664,8 @@ def sync_provider_tasks(user_id, task_user_email, provider_name, provider_tasks)
         if existing_task:
             before_status = existing_task.status
             logger.debug(
-                f"Before sync: Task {provider_task.id} status in DB: '{before_status}', in provider: '{provider_task.status}'"
+                f"Before sync: Task {provider_task.id} status in DB: '{before_status}', "
+                f"in provider: '{provider_task.status}'"
             )
 
         # Create or update the task
@@ -691,7 +696,9 @@ def sync_provider_tasks(user_id, task_user_email, provider_name, provider_tasks)
 
     # Log summary
     logger.info(
-        f"Sync summary for {provider_name}: Created {created_count}, Updated {updated_count} (Status changes: {status_change_count}), Unchanged {unchanged_count}, Deleted {deleted_count}"
+        f"Sync summary for {provider_name}: Created {created_count}, "
+        f"Updated {updated_count} (Status changes: {status_change_count}), "
+        f"Unchanged {unchanged_count}, Deleted {deleted_count}"
     )
 
     return updated_count + created_count

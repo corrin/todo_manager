@@ -3,12 +3,10 @@ Module for Google Calendar integration.
 """
 
 import asyncio
-import datetime
-import json
 import os
 from datetime import datetime, timezone
 
-from flask import render_template, session
+from flask import session
 from google.auth.transport.requests import AuthorizedSession, Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -279,7 +277,10 @@ class GoogleCalendarProvider(CalendarProvider):
             # authorized this app and didn't revoke access
             if not credentials.refresh_token:
                 logger.warning(
-                    "❌ MISSING REFRESH TOKEN: Google didn't return a refresh token. This typically happens when the user has already authorized this app. If this is causing issues, have the user revoke access to this app in their Google account and try again."
+                    "❌ MISSING REFRESH TOKEN: Google didn't return a refresh token. "
+                    "This typically happens when the user has already authorized this app. "
+                    "If this is causing issues, have the user revoke access to this app "
+                    "in their Google account and try again."
                 )
 
             # Clean up session
@@ -379,7 +380,10 @@ class GoogleCalendarProvider(CalendarProvider):
                         meeting_type = "Meeting" if meeting["is_real_meeting"] else "Busy Block"
                         response_info = f"Response: {meeting['response_status']}" if meeting["is_real_meeting"] else ""
                         logger.info(
-                            f"📅 {meeting_type}: '{meeting['title']}' - {meeting['start']} to {meeting['end']} - {meeting['location']} - {meeting['attendee_info']} {response_info}"
+                            f"📅 {meeting_type}: '{meeting['title']}' "
+                            f"- {meeting['start']} to {meeting['end']} "
+                            f"- {meeting['location']} "
+                            f"- {meeting['attendee_info']} {response_info}"
                         )
 
             # Log a meaningful summary of processed meetings
@@ -526,9 +530,8 @@ class GoogleCalendarProvider(CalendarProvider):
         if not credentials:
             raise Exception(f"No credentials found for {calendar_email} (User ID: {user_id}) to create busy block.")
 
-        logger.info(
-            f"Creating busy block for '{meeting_data.get('title', 'Untitled')}' on {calendar_email} (User ID: {user_id})"
-        )
+        title = meeting_data.get("title", "Untitled")
+        logger.info(f"Creating busy block for '{title}' on {calendar_email}" f" (User ID: {user_id})")
         service = build("calendar", "v3", credentials=credentials)
 
         # Construct the event body for the busy block.
@@ -774,7 +777,10 @@ class GoogleCalendarProvider(CalendarProvider):
         missing_fields = [field for field in required_fields if not getattr(account, field, None)]
 
         if missing_fields:
-            error_msg = f"Missing required credential fields in database for {calendar_email} (User ID: {user_id}): {missing_fields}"
+            error_msg = (
+                f"Missing required credential fields in database for "
+                f"{calendar_email} (User ID: {user_id}): {missing_fields}"
+            )
             logger.error(f"❌ AUTH ISSUE: {error_msg}")
             # Mark for re-authentication as the stored data is incomplete.
             account.needs_reauth = True
@@ -794,11 +800,17 @@ class GoogleCalendarProvider(CalendarProvider):
             # Optional: Check if the access token is expired and attempt refresh immediately.
             # if credentials.expired and credentials.refresh_token:
             #     try:
-            #         logger.info(f"Access token expired for {calendar_email}, attempting refresh within get_credentials.")
+            #         logger.info(
+            #             f"Access token expired for {calendar_email}, "
+            #             "attempting refresh within get_credentials."
+            #         )
             #         credentials.refresh(Request())
-            #         self.store_credentials(calendar_email, credentials, user_id) # Store refreshed token
+            #         self.store_credentials(calendar_email, credentials, user_id)
             #     except Exception as refresh_error:
-            #         logger.error(f"Failed to auto-refresh expired token within get_credentials for {calendar_email}: {refresh_error}")
+            #         logger.error(
+            #             f"Failed to auto-refresh expired token within "
+            #             f"get_credentials for {calendar_email}: {refresh_error}"
+            #         )
             #         account.needs_reauth = True
             #         account.save()
             #         raise Exception(f"Failed to refresh expired token: {refresh_error}")

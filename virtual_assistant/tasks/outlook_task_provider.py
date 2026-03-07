@@ -2,8 +2,6 @@
 Outlook implementation of the task provider interface.
 """
 
-import json
-import os
 from datetime import datetime
 from typing import List, Optional
 
@@ -11,7 +9,6 @@ from flask import redirect, url_for
 from msgraph import GraphServiceClient
 
 from virtual_assistant.database.external_account import ExternalAccount
-from virtual_assistant.database.task import Task
 from virtual_assistant.meetings.o365_calendar_provider import AccessTokenCredential
 from virtual_assistant.utils.logger import logger
 

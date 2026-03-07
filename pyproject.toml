@@ -58,8 +58,20 @@ line_length = 120
 [tool.pylint.main]
 load-plugins = []
 
+[tool.pylint.format]
+max-line-length = 120
+
 [tool.pylint."messages control"]
-disable = ["logging-fstring-interpolation", "duplicate-code"]
+disable = [
+    "logging-fstring-interpolation",
+    "duplicate-code",
+    "missing-module-docstring",
+    "missing-function-docstring",
+]
+
+[tool.pylint.typecheck]
+# Google API client uses dynamic attributes (e.g., service.events())
+generated-members = ["events"]
 
 [build-system]
 requires = ["poetry-core"]

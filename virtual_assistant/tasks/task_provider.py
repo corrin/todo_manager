@@ -1,5 +1,3 @@
-import json  # Needed for credential file handling
-import os  # Needed for path operations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
@@ -49,7 +47,8 @@ class TaskProvider(ABC):
     def get_credentials(self, user_id: int, task_user_email: str) -> Optional[Dict[str, Any]]:
         """Get task provider credentials from the ExternalAccount database model."""
         logger.debug(
-            f"Retrieving {self.provider_name} credentials from DB for user_id='{user_id}', task_user_email='{task_user_email}'"
+            f"Retrieving {self.provider_name} credentials from DB "
+            f"for user_id='{user_id}', task_user_email='{task_user_email}'"
         )
 
         user = User.query.filter_by(id=user_id).first()
@@ -78,19 +77,22 @@ class TaskProvider(ABC):
             credentials = {k: v for k, v in credentials.items() if v is not None}
 
             logger.debug(
-                f"{self.provider_name} credentials retrieved from DB for user_id='{user_id}', task_user_email='{task_user_email}'"
+                f"{self.provider_name} credentials retrieved from DB "
+                f"for user_id='{user_id}', task_user_email='{task_user_email}'"
             )
             return credentials
         else:
             logger.warning(
-                f"{self.provider_name} ExternalAccount not found in DB for user_id='{user_id}', task_user_email='{task_user_email}'"
+                f"{self.provider_name} ExternalAccount not found in DB "
+                f"for user_id='{user_id}', task_user_email='{task_user_email}'"
             )
             return None
 
     def store_credentials(self, user_id: int, task_user_email: str, credentials: Dict[str, Any]):
         """Store task provider credentials in the ExternalAccount database model."""
         logger.debug(
-            f"Storing {self.provider_name} credentials to DB for user_id='{user_id}', task_user_email='{task_user_email}'"
+            f"Storing {self.provider_name} credentials to DB "
+            f"for user_id='{user_id}', task_user_email='{task_user_email}'"
         )
 
         user = User.query.filter_by(id=user_id).first()
@@ -101,7 +103,7 @@ class TaskProvider(ABC):
 
         try:
             # set_task_account handles both creation and update
-            account = ExternalAccount.set_task_account(
+            ExternalAccount.set_task_account(
                 user_id=user_id,
                 provider_name=self.provider_name,
                 task_user_email=task_user_email,
@@ -109,12 +111,14 @@ class TaskProvider(ABC):
             )
             db.session.commit()  # Commit the changes
             logger.debug(
-                f"{self.provider_name} credentials stored in DB for user_id='{user_id}', task_user_email='{task_user_email}'"
+                f"{self.provider_name} credentials stored in DB "
+                f"for user_id='{user_id}', task_user_email='{task_user_email}'"
             )
         except Exception as e:
             db.session.rollback()  # Rollback on error
             logger.error(
-                f"Error storing {self.provider_name} credentials to DB for user_id='{user_id}', task_user_email='{task_user_email}': {e}"
+                f"Error storing {self.provider_name} credentials to DB "
+                f"for user_id='{user_id}', task_user_email='{task_user_email}': {e}"
             )
             # Re-raise the exception to signal failure
             raise Exception(f"Database error storing credentials: {e}") from e

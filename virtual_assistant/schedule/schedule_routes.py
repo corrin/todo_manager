@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from flask import Blueprint, flash, jsonify, request
 from flask_login import current_user, login_required

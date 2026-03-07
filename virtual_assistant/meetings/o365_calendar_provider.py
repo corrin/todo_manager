@@ -1,20 +1,15 @@
 # o365_calendar_provider.py
-import json
 import logging
-import os
 import time
 import urllib.parse
 import uuid
 from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qs, quote
 
 import msal
 import requests
 from asgiref.sync import async_to_sync
 from azure.core.credentials import AccessToken as AzureAccessToken
-from azure.identity import ClientSecretCredential
-from flask import render_template, session
-from kiota_abstractions.base_request_configuration import RequestConfiguration
+from flask import session
 from msgraph import GraphServiceClient
 from msgraph.generated.users.item.calendar.events.events_request_builder import (
     EventsRequestBuilder,
@@ -510,7 +505,10 @@ class O365CalendarProvider(CalendarProvider):
                 ],
                 filter=f"start/dateTime ge '{start_date}' and end/dateTime le '{end_date}'",
                 expand=[
-                    "singleValueExtendedProperties($filter=id eq 'String {00020329-0000-0000-C000-000000000046} Name original_event_id')"
+                    "singleValueExtendedProperties("
+                    "$filter=id eq 'String "
+                    "{00020329-0000-0000-C000-000000000046} "
+                    "Name original_event_id')"
                 ],
             )
 
@@ -560,7 +558,10 @@ class O365CalendarProvider(CalendarProvider):
                         meeting_type = "Meeting" if meeting["is_real_meeting"] else "Busy Block"
                         response_info = f"Response: {meeting['response_status']}" if meeting["is_real_meeting"] else ""
                         logger.info(
-                            f"📅 O365 {meeting_type}: '{meeting['title']}' - {meeting['start']} to {meeting['end']} - {meeting['location']} - {meeting['attendee_info']} {response_info}"
+                            f"📅 O365 {meeting_type}: '{meeting['title']}' "
+                            f"- {meeting['start']} to {meeting['end']} "
+                            f"- {meeting['location']} "
+                            f"- {meeting['attendee_info']} {response_info}"
                         )
 
             # Log a meaningful summary of processed meetings

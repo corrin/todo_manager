@@ -2,7 +2,7 @@
 Task hierarchy module for handling hierarchical task structures.
 """
 
-from typing import Dict, List, Optional, Set
+from typing import Dict, List
 
 from .task_provider import Task
 

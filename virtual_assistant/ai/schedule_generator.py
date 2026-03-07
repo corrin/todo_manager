@@ -139,7 +139,7 @@ class ScheduleGenerator:
 
     def _parse_schedule_response(self, response):
         """Parse the AI response into a structured schedule."""
-        logger.debug(f"[DEBUG] Starting to parse schedule response")
+        logger.debug("[DEBUG] Starting to parse schedule response")
         logger.debug(f"[DEBUG] Response first 100 chars: {response[:100]}...")
 
         try:
@@ -147,46 +147,46 @@ class ScheduleGenerator:
             # First, look for JSON within triple backticks
             import re
 
-            logger.debug(f"[DEBUG] Looking for JSON in triple backticks")
+            logger.debug("[DEBUG] Looking for JSON in triple backticks")
             json_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", response)
 
             if json_match:
                 json_str = json_match.group(1)
-                logger.debug(f"[DEBUG] Found JSON in triple backticks")
+                logger.debug("[DEBUG] Found JSON in triple backticks")
             else:
                 # If no triple backticks, try to find JSON object directly
-                logger.debug(f"[DEBUG] Looking for JSON object directly")
+                logger.debug("[DEBUG] Looking for JSON object directly")
                 json_match = re.search(r"(\{[\s\S]*\})", response)
                 if json_match:
                     json_str = json_match.group(1)
-                    logger.debug(f"[DEBUG] Found JSON object directly")
+                    logger.debug("[DEBUG] Found JSON object directly")
                 else:
                     # If still no JSON found, use the entire response
-                    logger.debug(f"[DEBUG] No JSON format found, using entire response")
+                    logger.debug("[DEBUG] No JSON format found, using entire response")
                     json_str = response
 
             logger.debug(f"[DEBUG] Extracted JSON string first 100 chars: {json_str[:100]}...")
 
             # Parse the JSON
-            logger.debug(f"[DEBUG] Attempting to parse JSON")
+            logger.debug("[DEBUG] Attempting to parse JSON")
             schedule = json.loads(json_str)
-            logger.debug(f"[DEBUG] JSON parsed successfully")
+            logger.debug("[DEBUG] JSON parsed successfully")
 
             # Validate the schedule structure
-            logger.debug(f"[DEBUG] Validating schedule structure")
+            logger.debug("[DEBUG] Validating schedule structure")
             if not isinstance(schedule, dict):
-                logger.debug(f"[DEBUG] Validation failed: Schedule is not a dictionary")
+                logger.debug("[DEBUG] Validation failed: Schedule is not a dictionary")
                 raise ValueError("Schedule is not a dictionary")
 
             if "date" not in schedule or "schedule" not in schedule:
-                logger.debug(f"[DEBUG] Validation failed: Schedule missing required fields")
+                logger.debug("[DEBUG] Validation failed: Schedule missing required fields")
                 raise ValueError("Schedule missing required fields")
 
             if not isinstance(schedule["schedule"], list):
-                logger.debug(f"[DEBUG] Validation failed: Schedule entries is not a list")
+                logger.debug("[DEBUG] Validation failed: Schedule entries is not a list")
                 raise ValueError("Schedule entries is not a list")
 
-            logger.debug(f"[DEBUG] Schedule validation passed")
+            logger.debug("[DEBUG] Schedule validation passed")
             logger.debug(f"[DEBUG] Schedule date: {schedule['date']}, entries: {len(schedule['schedule'])}")
 
             # Return the parsed schedule

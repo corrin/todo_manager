@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, update
+from sqlalchemy import update
 from sqlalchemy.orm import relationship
 
 from virtual_assistant.database.database import db
@@ -236,11 +236,11 @@ class ExternalAccount(db.Model):
         return (
             cls.query.filter(
                 cls.user_id == user_id,
-                cls.use_for_tasks == True,
-                cls.needs_reauth == False,
+                cls.use_for_tasks.is_(True),
+                cls.needs_reauth.is_(False),
                 db.or_(
-                    db.and_(cls.provider == "todoist", cls.api_key != None),
-                    db.and_(cls.provider.in_(["google", "o365"]), cls.token != None),
+                    db.and_(cls.provider == "todoist", cls.api_key.is_not(None)),
+                    db.and_(cls.provider.in_(["google", "o365"]), cls.token.is_not(None)),
                 ),
             )
             .order_by(cls.provider, cls.external_email)

@@ -83,7 +83,8 @@ class TaskManager:
         except Exception as e:
             # Log provider-specific errors and re-raise
             logger.error(
-                f"Error getting tasks from provider '{provider_name}' for user_id={user_id} / account '{task_user_email}': {e}"
+                f"Error getting tasks from provider '{provider_name}' "
+                f"for user_id={user_id} / account '{task_user_email}': {e}"
             )
             raise  # Re-raise the original exception to be handled by the caller
 

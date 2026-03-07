@@ -6,8 +6,6 @@ from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.tasks.task_manager import TaskManager
 from virtual_assistant.utils.logger import logger
 
-from .todoist_provider import TodoistProvider
-
 
 def _get_task_manager():
     return TaskManager()
@@ -58,7 +56,7 @@ def init_todoist_routes():
                 )
                 return redirect(url_for("settings"))
 
-            ext_account = ExternalAccount.set_task_account(
+            ExternalAccount.set_task_account(
                 user_id=current_user.id,
                 provider_name="todoist",
                 task_user_email=submitted_email,

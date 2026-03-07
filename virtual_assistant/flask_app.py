@@ -1,10 +1,14 @@
 import asyncio
-import json
 import os
 import threading
 
 from dotenv import load_dotenv
-from flask import (
+
+# Load environment variables before importing modules that read them
+load_dotenv()
+
+import jinja2  # noqa: E402
+from flask import (  # noqa: E402
     Flask,
     flash,
     jsonify,
@@ -15,42 +19,30 @@ from flask import (
     send_from_directory,
     url_for,
 )
-from flask_migrate import Migrate
-from sqlalchemy.exc import IntegrityError  # Keep for potential use elsewhere
-
-# Load environment variables
-load_dotenv()
-import jinja2
-from flask_login import (
-    LoginManager,
+from flask_login import (  # noqa: E402
     current_user,
     login_required,
     login_user,
     logout_user,
 )
+from flask_migrate import Migrate  # noqa: E402
 
-from virtual_assistant.ai.ai_manager import (  # Needed for create_ai_manager factory
-    AIManager,
-)
-from virtual_assistant.ai.auth_routes import init_ai_routes
-from virtual_assistant.auth.user_auth import setup_login_manager
-from virtual_assistant.database.database import Database, db
-from virtual_assistant.database.database_routes import database_bp
-from virtual_assistant.database.external_account import ExternalAccount
-from virtual_assistant.database.user import User
-from virtual_assistant.meetings.calendar_provider_factory import CalendarProviderFactory
-from virtual_assistant.meetings.meetings_routes import init_app as init_meetings_app  # Renamed to avoid conflict
-from virtual_assistant.schedule.schedule_routes import init_schedule_routes
-
-# Import necessary components from other modules
-from virtual_assistant.tasks.task_manager import (  # Needed for create_task_manager factory
-    TaskManager,
-)
-from virtual_assistant.tasks.task_routes import init_task_routes
-from virtual_assistant.tasks.todoist_routes import init_todoist_routes
-from virtual_assistant.tasks.token_refresh import start_token_refresh_scheduler
-from virtual_assistant.utils.logger import logger
-from virtual_assistant.utils.settings import Settings
+from virtual_assistant.ai.ai_manager import AIManager  # noqa: E402
+from virtual_assistant.ai.auth_routes import init_ai_routes  # noqa: E402
+from virtual_assistant.auth.user_auth import setup_login_manager  # noqa: E402
+from virtual_assistant.database.database import Database, db  # noqa: E402
+from virtual_assistant.database.database_routes import database_bp  # noqa: E402
+from virtual_assistant.database.external_account import ExternalAccount  # noqa: E402
+from virtual_assistant.database.user import User  # noqa: E402
+from virtual_assistant.meetings.calendar_provider_factory import CalendarProviderFactory  # noqa: E402
+from virtual_assistant.meetings.meetings_routes import init_app as init_meetings_app  # noqa: E402
+from virtual_assistant.schedule.schedule_routes import init_schedule_routes  # noqa: E402
+from virtual_assistant.tasks.task_manager import TaskManager  # noqa: E402
+from virtual_assistant.tasks.task_routes import init_task_routes  # noqa: E402
+from virtual_assistant.tasks.todoist_routes import init_todoist_routes  # noqa: E402
+from virtual_assistant.tasks.token_refresh import start_token_refresh_scheduler  # noqa: E402
+from virtual_assistant.utils.logger import logger  # noqa: E402
+from virtual_assistant.utils.settings import Settings  # noqa: E402
 
 # --- Factory Functions ---
 # These create instances when needed, promoting better separation
@@ -86,8 +78,8 @@ def create_app():
 
     # --- Initialization ---
     Database.init_app(app)
-    migrate = Migrate(app, db)
-    login_manager = setup_login_manager(app)
+    Migrate(app, db)
+    setup_login_manager(app)
 
     # Global auth check - require login for all routes by default
     @app.before_request
@@ -202,8 +194,6 @@ def about():
 @login_required
 def settings():
     """Displays the settings page, fetching necessary account information."""
-    app_login = current_user.app_login
-
     all_ext_accounts = (
         ExternalAccount.query.filter_by(user_id=current_user.id)
         .order_by(ExternalAccount.provider, ExternalAccount.external_email)
