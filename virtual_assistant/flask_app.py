@@ -148,10 +148,16 @@ app = create_app()
 # --- Core Routes ---
 
 @app.route("/")
-@login_required 
+@login_required
 def index():
-    """Displays the main application page for logged-in users."""
-    return render_template('index.html', user=current_user)
+    """Redirect to chat page."""
+    return redirect(url_for('chat_page'))
+
+@app.route("/chat")
+@login_required
+def chat_page():
+    """Displays the main chat interface."""
+    return render_template('chat.html', user=current_user)
 
 @app.route("/new-user")
 def new_user():
