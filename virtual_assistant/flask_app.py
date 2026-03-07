@@ -96,6 +96,9 @@ def create_app():
     # Pass the factory function to init_app for meetings
     app.register_blueprint(init_meetings_app(create_calendar_provider), url_prefix="/meetings")
     app.register_blueprint(database_bp, url_prefix="/database")
+
+    from virtual_assistant.chat.chat_routes import chat_bp
+    app.register_blueprint(chat_bp)
     
     # --- Template and Static Files ---
     template_dir = os.path.join(app.root_path, "templates")
