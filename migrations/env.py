@@ -15,6 +15,7 @@ if project_root not in sys.path:
 from virtual_assistant.database.user import User
 from virtual_assistant.database.task import Task
 from virtual_assistant.database.external_account import ExternalAccount
+from virtual_assistant.chat.models import Conversation, ChatMessage
 from virtual_assistant.database.database import db
 
 # --- Alembic Config ---
