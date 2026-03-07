@@ -900,10 +900,11 @@ class O365CalendarProvider(CalendarProvider):
         if not account:
             logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}")
             account = ExternalAccount(
-                calendar_email=calendar_email,
+                external_email=calendar_email,
                 user_id=user_id,
                 provider=self.provider_name,
-                is_primary=is_first_account,  # Set as primary if it's the first account
+                is_primary_calendar=is_first_account,
+                use_for_calendar=True,
                 **credentials
             )
         else:

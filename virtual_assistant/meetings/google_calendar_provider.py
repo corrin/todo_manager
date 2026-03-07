@@ -158,7 +158,6 @@ class GoogleCalendarProvider(CalendarProvider):
         }
 
         # Store email details in session for the callback
-        # session["app_login"] = app_login # No longer needed here, user_id is passed directly
         session["reauth_calendar_email"] = calendar_email
 
         return None, authorization_url
@@ -677,21 +676,18 @@ class GoogleCalendarProvider(CalendarProvider):
             'scopes': ' '.join(credentials.scopes) # Store scopes as a space-separated string.
         }
 
-        # Determine if this should be the primary account.
-        # It becomes primary only if the user doesn't already have a primary account set.
-        has_primary = ExternalAccount.query.filter_by(user_id=user_id, is_primary=True).first() is not None
-        is_first_account = not has_primary # Set as primary if no other primary exists for this user.
+        has_primary = ExternalAccount.query.filter_by(user_id=user_id, is_primary_calendar=True).first() is not None
+        is_first_account = not has_primary
 
         if not account:
-            # Create a new ExternalAccount record if one doesn't exist.
             logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}")
             account = ExternalAccount(
                 external_email=calendar_email,
                 provider=self.provider_name,
                 user_id=user_id,
-                is_primary=is_first_account,
+                is_primary_calendar=is_first_account,
                 created_at=datetime.now(timezone.utc),
-                has_calendar=True,
+                use_for_calendar=True,
                 **credentials_data
             )
         else:

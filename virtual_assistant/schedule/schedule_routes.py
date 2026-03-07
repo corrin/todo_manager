@@ -73,7 +73,7 @@ def init_schedule_routes():
             calendar_account = ExternalAccount.query.filter_by(
                 user_id=current_user.id,
                 use_for_calendar=True,
-                is_primary=True
+                is_primary_calendar=True
             ).first()
             
             if not calendar_account:
