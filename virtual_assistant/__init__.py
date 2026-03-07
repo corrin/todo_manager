@@ -1,8 +1,8 @@
 from flask import Flask
 from flask_migrate import Migrate
-from flask_sqlalchemy import SQLAlchemy
 
-db = SQLAlchemy()
+from virtual_assistant.database.database import db
+
 migrate = Migrate()
 
 

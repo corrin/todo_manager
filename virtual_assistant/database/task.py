@@ -2,55 +2,63 @@ import hashlib
 import json
 import uuid
 from datetime import datetime
+from typing import Optional
 
-from virtual_assistant.database.database import db
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from virtual_assistant.database.database import Base, db
 from virtual_assistant.database.user import MySQLUUID
 from virtual_assistant.utils.logger import logger
 
 
-class Task(db.Model):
+class Task(Base):
     """Comprehensive task model that tracks tasks across all providers."""
 
     __tablename__ = "tasks"
 
     # Primary identification
-    id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(MySQLUUID, db.ForeignKey("app_user.id"), nullable=False, index=True)  # Foreign key to the User
+    id: Mapped[uuid.UUID] = mapped_column(MySQLUUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        MySQLUUID, ForeignKey("app_user.id"), index=True
+    )  # Foreign key to the User
 
     # Provider identification (composite unique constraint)
-    task_user_email = db.Column(
-        db.String(255), nullable=True, index=True
+    task_user_email: Mapped[Optional[str]] = mapped_column(
+        String(255), index=True, default=None
     )  # Email associated with the task provider account (e.g., Google account email for Google Tasks)
-    provider = db.Column(db.String(50), nullable=False)  # 'todoist', 'google_tasks', 'outlook', 'sqlite'
-    provider_task_id = db.Column(db.String(255), nullable=False)  # ID from the provider
+    provider: Mapped[str] = mapped_column(String(50))  # 'todoist', 'google_tasks', 'outlook', 'sqlite'
+    provider_task_id: Mapped[str] = mapped_column(String(255))  # ID from the provider
 
     # Task content
-    title = db.Column(db.String(500), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(50), nullable=False)  # 'active', 'completed'
-    due_date = db.Column(db.DateTime, nullable=True)
-    priority = db.Column(db.Integer, nullable=True)  # 1=low, 2=medium, 3=high, 4=urgent
+    title: Mapped[str] = mapped_column(String(500))
+    description: Mapped[Optional[str]] = mapped_column(default=None)
+    status: Mapped[str] = mapped_column(String(50))  # 'active', 'completed'
+    due_date: Mapped[Optional[datetime]] = mapped_column(default=None)
+    priority: Mapped[Optional[int]] = mapped_column(default=None)  # 1=low, 2=medium, 3=high, 4=urgent
 
     # Organizational info
-    project_id = db.Column(db.String(255), nullable=True)  # Provider's project ID
-    project_name = db.Column(db.String(255), nullable=True)
-    parent_id = db.Column(db.String(255), nullable=True)  # For hierarchical tasks
-    section_id = db.Column(db.String(255), nullable=True)
+    project_id: Mapped[Optional[str]] = mapped_column(String(255), default=None)  # Provider's project ID
+    project_name: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    parent_id: Mapped[Optional[str]] = mapped_column(String(255), default=None)  # For hierarchical tasks
+    section_id: Mapped[Optional[str]] = mapped_column(String(255), default=None)
 
     # Ordering info
-    list_type = db.Column(db.String(50), default="unprioritized")  # 'prioritized' or 'unprioritized'
-    position = db.Column(db.Integer, default=0)
+    list_type: Mapped[Optional[str]] = mapped_column(
+        String(50), default="unprioritized"
+    )  # 'prioritized' or 'unprioritized'
+    position: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # Change tracking
-    content_hash = db.Column(db.String(64), nullable=False)  # Hash of task content to detect changes
-    last_synced = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    content_hash: Mapped[str] = mapped_column(String(64))  # Hash of task content to detect changes
+    last_synced: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[Optional[datetime]] = mapped_column(default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Composite unique constraint
     __table_args__ = (
         # Ensure a task from a specific provider account for a specific app user is unique
-        db.UniqueConstraint(
+        UniqueConstraint(
             "user_id",
             "task_user_email",
             "provider",
@@ -273,7 +281,7 @@ class Task(db.Model):
             if position is None:
                 # Find the highest position in the destination list
                 max_position_result = (
-                    db.session.query(db.func.max(cls.position))
+                    db.session.query(func.max(cls.position))
                     .filter_by(user_id=task.user_id, list_type=destination)
                     .first()
                 )

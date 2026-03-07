@@ -1,12 +1,18 @@
 # db_setup.py
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql import text
 
 from virtual_assistant.utils.logger import logger
 
+
+class Base(DeclarativeBase):
+    pass
+
+
 # Create a single, centralized SQLAlchemy instance
-db = SQLAlchemy()
+db = SQLAlchemy(model_class=Base)
 migrate = Migrate()
 
 
@@ -16,8 +22,6 @@ class Database:
     """
 
     _instance = None
-    # Class-level attributes to expose SQLAlchemy components
-    Model = db.Model
     session = db.session
 
     def __init__(self):

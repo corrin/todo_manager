@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
-from sqlalchemy import update
-from sqlalchemy.orm import relationship
+from sqlalchemy import ForeignKey, String, and_, or_, update
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from virtual_assistant.database.database import db
+from virtual_assistant.database.database import Base, db
 from virtual_assistant.database.user import MySQLUUID
 from virtual_assistant.utils.logger import logger
 
@@ -14,35 +15,34 @@ TASK_PROVIDER_MAP = {"todoist": "todoist", "google_tasks": "google", "outlook": 
 PROVIDER_TO_TASK = {"todoist": "todoist", "google": "google_tasks", "o365": "outlook"}
 
 
-class ExternalAccount(db.Model):
+class ExternalAccount(Base):
     """Model for managing all external service accounts (Google, O365, Todoist)."""
 
     __tablename__ = "external_account"
 
-    id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
-    external_email = db.Column(db.String(255), nullable=False)
-    user_id = db.Column(MySQLUUID, db.ForeignKey("app_user.id"), nullable=False)
-    provider = db.Column(db.String(50), nullable=False)  # 'google', 'o365', 'todoist'
-    token = db.Column(db.Text)  # For OAuth access tokens
-    api_key = db.Column(db.Text)  # For API key authentication
-    refresh_token = db.Column(db.Text)
-    token_uri = db.Column(db.String(255))
-    client_id = db.Column(db.String(255))
-    client_secret = db.Column(db.String(255))
-    scopes = db.Column(db.Text)
-    is_primary_calendar = db.Column(db.Boolean, default=False)
-    is_primary_tasks = db.Column(db.Boolean, default=False)
-    last_sync = db.Column(db.DateTime(timezone=True))
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(
-        db.DateTime,
+    id: Mapped[uuid.UUID] = mapped_column(MySQLUUID, primary_key=True, default=uuid.uuid4)
+    external_email: Mapped[str] = mapped_column(String(255))
+    user_id: Mapped[uuid.UUID] = mapped_column(MySQLUUID, ForeignKey("app_user.id"))
+    provider: Mapped[str] = mapped_column(String(50))  # 'google', 'o365', 'todoist'
+    token: Mapped[Optional[str]] = mapped_column(default=None)  # For OAuth access tokens
+    api_key: Mapped[Optional[str]] = mapped_column(default=None)  # For API key authentication
+    refresh_token: Mapped[Optional[str]] = mapped_column(default=None)
+    token_uri: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    client_id: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    client_secret: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    scopes: Mapped[Optional[str]] = mapped_column(default=None)
+    is_primary_calendar: Mapped[bool] = mapped_column(default=False)
+    is_primary_tasks: Mapped[bool] = mapped_column(default=False)
+    last_sync: Mapped[Optional[datetime]] = mapped_column(default=None)
+    created_at: Mapped[Optional[datetime]] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
-    expires_at = db.Column(db.DateTime, nullable=True)
-    needs_reauth = db.Column(db.Boolean, nullable=False, default=False)
-    use_for_calendar = db.Column(db.Boolean, nullable=False, default=False)
-    use_for_tasks = db.Column(db.Boolean, nullable=False, default=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+    needs_reauth: Mapped[bool] = mapped_column(default=False)
+    use_for_calendar: Mapped[bool] = mapped_column(default=False)
+    use_for_tasks: Mapped[bool] = mapped_column(default=False)
 
     # Relationships
     user = relationship("User", back_populates="external_accounts")
@@ -238,9 +238,9 @@ class ExternalAccount(db.Model):
                 cls.user_id == user_id,
                 cls.use_for_tasks.is_(True),
                 cls.needs_reauth.is_(False),
-                db.or_(
-                    db.and_(cls.provider == "todoist", cls.api_key.is_not(None)),
-                    db.and_(cls.provider.in_(["google", "o365"]), cls.token.is_not(None)),
+                or_(
+                    and_(cls.provider == "todoist", cls.api_key.is_not(None)),
+                    and_(cls.provider.in_(["google", "o365"]), cls.token.is_not(None)),
                 ),
             )
             .order_by(cls.provider, cls.external_email)

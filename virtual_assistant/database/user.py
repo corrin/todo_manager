@@ -1,10 +1,11 @@
 import uuid
+from typing import Optional
 
 from flask_login import UserMixin
-from sqlalchemy import BINARY, TypeDecorator
-from sqlalchemy.orm import relationship  # Added relationship
+from sqlalchemy import BINARY, String, TypeDecorator
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from virtual_assistant.database.database import db
+from virtual_assistant.database.database import Base
 
 
 # Custom UUID type for MySQL
@@ -25,18 +26,20 @@ class MySQLUUID(TypeDecorator):
         return uuid.UUID(bytes=value)
 
 
-class User(UserMixin, db.Model):
+class User(UserMixin, Base):
     __tablename__ = "app_user"
-    id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
-    app_login = db.Column(
-        db.String(120), unique=True, index=True, nullable=False
-    )  # User's login identifier for this app
+    id: Mapped[uuid.UUID] = mapped_column(MySQLUUID, primary_key=True, default=uuid.uuid4)
+    app_login: Mapped[str] = mapped_column(String(120), unique=True, index=True)  # User's login identifier for this app
 
     # User-specific configuration (previously in config.json)
-    ai_api_key = db.Column(db.Text, nullable=True)
-    ai_instructions = db.Column(db.Text, nullable=True)  # Custom AI instructions for the user
-    schedule_slot_duration = db.Column(db.Integer, default=60)  # Schedule slot duration in minutes (30, 60, or 120)
-    llm_model = db.Column(db.String(100), nullable=True)  # e.g., 'gpt-4o', 'claude-sonnet-4-20250514'
+    ai_api_key: Mapped[Optional[str]] = mapped_column(default=None)
+    ai_instructions: Mapped[Optional[str]] = mapped_column(default=None)  # Custom AI instructions for the user
+    schedule_slot_duration: Mapped[Optional[int]] = mapped_column(
+        default=60
+    )  # Schedule slot duration in minutes (30, 60, or 120)
+    llm_model: Mapped[Optional[str]] = mapped_column(
+        String(100), default=None
+    )  # e.g., 'gpt-4o', 'claude-sonnet-4-20250514'
 
     # Define relationships using back_populates for bidirectional linking
     external_accounts = relationship(
