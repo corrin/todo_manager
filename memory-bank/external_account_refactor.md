@@ -1,5 +1,8 @@
 # External Account Refactoring Plan
 
+> **Note:** This file is an active refactoring plan migrated from Cursor's memory-bank system.
+> For general project documentation, see README.md and ARCHITECTURE.md in the project root.
+
 ## Current Situation
 - You broke the basic Flask/Alembic setup.  This needs to be corrected back to best pracice before the task is resumed.
 - Authentication and token management is currently handled in `CalendarAccount` model
