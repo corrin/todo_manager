@@ -64,8 +64,8 @@ def test_conversation_messages_relationship(app, user):
         db.session.add(conv)
         db.session.commit()
 
-        msg1 = ChatMessage(conversation_id=conv.id, role="user", content="Hi")
-        msg2 = ChatMessage(conversation_id=conv.id, role="assistant", content="Hello!")
+        msg1 = ChatMessage(conversation_id=conv.id, role="user", content="Hi", sequence=0)
+        msg2 = ChatMessage(conversation_id=conv.id, role="assistant", content="Hello!", sequence=1)
         db.session.add_all([msg1, msg2])
         db.session.commit()
 
@@ -99,8 +99,8 @@ def test_get_conversation_history(app, user):
         db.session.commit()
 
         msgs = [
-            ChatMessage(conversation_id=conv.id, role="user", content="Hi"),
-            ChatMessage(conversation_id=conv.id, role="assistant", content="Hello!"),
+            ChatMessage(conversation_id=conv.id, role="user", content="Hi", sequence=0),
+            ChatMessage(conversation_id=conv.id, role="assistant", content="Hello!", sequence=1),
         ]
         db.session.add_all(msgs)
         db.session.commit()
