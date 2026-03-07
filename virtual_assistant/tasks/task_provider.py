@@ -1,18 +1,18 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-import os # Needed for path operations
-import json # Needed for credential file handling
-from virtual_assistant.utils.logger import logger
+from typing import Any, Dict, List, Optional
+
+from virtual_assistant.database.database import db
 from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.user import User
-from virtual_assistant.database.database import db
+from virtual_assistant.utils.logger import logger
 
 
 @dataclass
 class Task:
     """Represents a task from any task provider."""
+
     id: str  # Internal UUID
     title: str
     project_id: str
@@ -46,7 +46,10 @@ class TaskProvider(ABC):
     # OAuth providers (Google, O365) should override these methods.
     def get_credentials(self, user_id: int, task_user_email: str) -> Optional[Dict[str, Any]]:
         """Get task provider credentials from the ExternalAccount database model."""
-        logger.debug(f"Retrieving {self.provider_name} credentials from DB for user_id='{user_id}', task_user_email='{task_user_email}'")
+        logger.debug(
+            f"Retrieving {self.provider_name} credentials from DB "
+            f"for user_id='{user_id}', task_user_email='{task_user_email}'"
+        )
 
         user = User.query.filter_by(id=user_id).first()
         if not user:
@@ -59,29 +62,38 @@ class TaskProvider(ABC):
         if account:
             # Construct credentials dictionary from model attributes
             credentials = {
-                'api_key': account.api_key,
-                'token': account.token,
-                'refresh_token': account.refresh_token,
-                'expires_at': account.expires_at,
-                'scopes': account.scopes,
-                'needs_reauth': account.needs_reauth,
+                "api_key": account.api_key,
+                "token": account.token,
+                "refresh_token": account.refresh_token,
+                "expires_at": account.expires_at,
+                "scopes": account.scopes,
+                "needs_reauth": account.needs_reauth,
                 # Include identifiers for context if needed by caller
-                'user_id': user_id,
-                'task_user_email': task_user_email,
-                'provider_name': self.provider_name
+                "user_id": user_id,
+                "task_user_email": task_user_email,
+                "provider_name": self.provider_name,
             }
             # Filter out None values to return only stored credentials
             credentials = {k: v for k, v in credentials.items() if v is not None}
-            
-            logger.debug(f"{self.provider_name} credentials retrieved from DB for user_id='{user_id}', task_user_email='{task_user_email}'")
+
+            logger.debug(
+                f"{self.provider_name} credentials retrieved from DB "
+                f"for user_id='{user_id}', task_user_email='{task_user_email}'"
+            )
             return credentials
         else:
-            logger.warning(f"{self.provider_name} ExternalAccount not found in DB for user_id='{user_id}', task_user_email='{task_user_email}'")
+            logger.warning(
+                f"{self.provider_name} ExternalAccount not found in DB "
+                f"for user_id='{user_id}', task_user_email='{task_user_email}'"
+            )
             return None
 
     def store_credentials(self, user_id: int, task_user_email: str, credentials: Dict[str, Any]):
         """Store task provider credentials in the ExternalAccount database model."""
-        logger.debug(f"Storing {self.provider_name} credentials to DB for user_id='{user_id}', task_user_email='{task_user_email}'")
+        logger.debug(
+            f"Storing {self.provider_name} credentials to DB "
+            f"for user_id='{user_id}', task_user_email='{task_user_email}'"
+        )
 
         user = User.query.filter_by(id=user_id).first()
         if not user:
@@ -91,17 +103,23 @@ class TaskProvider(ABC):
 
         try:
             # set_task_account handles both creation and update
-            account = ExternalAccount.set_task_account(
+            ExternalAccount.set_task_account(
                 user_id=user_id,
                 provider_name=self.provider_name,
                 task_user_email=task_user_email,
-                credentials=credentials
+                credentials=credentials,
             )
-            db.session.commit() # Commit the changes
-            logger.debug(f"{self.provider_name} credentials stored in DB for user_id='{user_id}', task_user_email='{task_user_email}'")
+            db.session.commit()  # Commit the changes
+            logger.debug(
+                f"{self.provider_name} credentials stored in DB "
+                f"for user_id='{user_id}', task_user_email='{task_user_email}'"
+            )
         except Exception as e:
-            db.session.rollback() # Rollback on error
-            logger.error(f"Error storing {self.provider_name} credentials to DB for user_id='{user_id}', task_user_email='{task_user_email}': {e}")
+            db.session.rollback()  # Rollback on error
+            logger.error(
+                f"Error storing {self.provider_name} credentials to DB "
+                f"for user_id='{user_id}', task_user_email='{task_user_email}': {e}"
+            )
             # Re-raise the exception to signal failure
             raise Exception(f"Database error storing credentials: {e}") from e
 

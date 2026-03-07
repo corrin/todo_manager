@@ -7,6 +7,7 @@
 """
 Module docstring
 """
+
 import os
 import sys
 
@@ -17,9 +18,7 @@ if PROJECT_HOME not in sys.path:
 
 # Activate the virtual environment
 # Path to the virtualenv you want to use
-ACTIVATE_ENV = os.path.expanduser(
-    "/home/lakeland/.virtualenvs/virtual_assitant/bin/activate_this.py"
-)
+ACTIVATE_ENV = os.path.expanduser("/home/lakeland/.virtualenvs/virtual_assitant/bin/activate_this.py")
 # Execute the script to activate the virtual environment
 with open(ACTIVATE_ENV, encoding="utf-8") as file_:
     exec(file_.read(), {"__file__": ACTIVATE_ENV})

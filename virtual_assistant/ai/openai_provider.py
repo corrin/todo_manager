@@ -1,7 +1,9 @@
-from .ai_provider import AIProvider
-from virtual_assistant.utils.logger import logger
 import openai
 from flask import redirect, url_for
+
+from virtual_assistant.utils.logger import logger
+
+from .ai_provider import AIProvider
 
 
 class OpenAIProvider(AIProvider):
@@ -13,11 +15,11 @@ class OpenAIProvider(AIProvider):
     def authenticate(self, user_id):
         """Check if we have valid credentials and return auth URL if needed."""
         credentials = self.get_credentials(user_id)
-        
+
         if not credentials:
             logger.info(f"No OpenAI credentials found for user ID: {user_id}")
-            return self.provider_name, redirect(url_for('openai_auth.setup_credentials'))
-        
+            return self.provider_name, redirect(url_for("openai_auth.setup_credentials"))
+
         # Test the credentials
         try:
             client = openai.OpenAI(api_key=credentials.get("api_key"))
@@ -26,7 +28,7 @@ class OpenAIProvider(AIProvider):
             return None
         except Exception as e:
             logger.error(f"OpenAI credentials invalid for user ID: {user_id}: {e}")
-            return self.provider_name, redirect(url_for('openai_auth.setup_credentials'))
+            return self.provider_name, redirect(url_for("openai_auth.setup_credentials"))
 
     def generate_text(self, user_id, prompt):
         """Generate text using OpenAI."""
@@ -36,15 +38,15 @@ class OpenAIProvider(AIProvider):
 
         try:
             client = openai.OpenAI(api_key=credentials.get("api_key"))
-            
+
             # Get custom AI instructions if available
             ai_instructions = credentials.get("ai_instructions")
             system_message = "You are a helpful assistant in charge of my to-do list."
-            
+
             # If user has custom AI instructions, use them
             if ai_instructions:
                 system_message = ai_instructions
-                
+
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[

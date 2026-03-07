@@ -1,26 +1,29 @@
 # db_setup.py
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.sql import text
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
 from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.sql import text
 
 from virtual_assistant.utils.logger import logger
 
+
+class Base(DeclarativeBase):
+    pass
+
+
 # Create a single, centralized SQLAlchemy instance
-db = SQLAlchemy()
+db = SQLAlchemy(model_class=Base)
 migrate = Migrate()
+
 
 class Database:
     """
     Database singleton class that wraps SQLAlchemy functionality.
     """
+
     _instance = None
-    # Class-level attributes to expose SQLAlchemy components
-    Model = db.Model
     session = db.session
-    
+
     def __init__(self):
         if Database._instance is not None:
             raise Exception("This class is a singleton!")
@@ -52,8 +55,7 @@ class Database:
     def init_app(cls, app):
         """Initialize the database with the Flask app"""
         from virtual_assistant.utils.settings import Settings
-        import os
-        
+
         # Ensure the database directory exists (Only needed for SQLite)
         # db_uri = Settings.DATABASE_URI
         # if db_uri and db_uri.startswith('sqlite:///'):
@@ -61,11 +63,10 @@ class Database:
         #     db_dir = os.path.dirname(db_path)
         #     os.makedirs(db_dir, exist_ok=True)
         # Removed this block as it causes errors with non-SQLite URIs and is unnecessary
-        
         # Configure SQLAlchemy
-        app.config['SQLALCHEMY_DATABASE_URI'] = Settings.DATABASE_URI
-        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        
+        app.config["SQLALCHEMY_DATABASE_URI"] = Settings.DATABASE_URI
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
         # Initialize database and migrations
         db.init_app(app)
         migrate.init_app(app, db)

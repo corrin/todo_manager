@@ -1,8 +1,11 @@
-from abc import ABC, abstractmethod
-from virtual_assistant.utils.logger import logger
-from virtual_assistant.database.user import User
-from typing import Optional, Dict, Any
 import uuid
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
+
+from virtual_assistant.database.user import User
+from virtual_assistant.utils.logger import logger
+
+
 class AIProvider(ABC):
     """Base class for AI providers (OpenAI, etc.)"""
 
@@ -35,13 +38,13 @@ class AIProvider(ABC):
             Exception: If generation fails
         """
         pass
-        
+
     def get_credentials(self, user_id) -> Optional[Dict[str, Any]]:
         """Get credentials for the specified user.
-        
+
         Args:
             user_id: The user's ID
-            
+
         Returns:
             Optional[Dict[str, Any]]: Credentials dictionary or None if not found
         """
@@ -49,19 +52,16 @@ class AIProvider(ABC):
             # Convert string ID to UUID if needed
             if isinstance(user_id, str):
                 user_id = uuid.UUID(user_id)
-                
+
             # Find user by ID
             user = User.query.filter_by(id=user_id).first()
             if not user:
                 logger.warning(f"User not found with ID: {user_id}")
                 return None
-                
+
             if not user.ai_api_key:
                 return None
-            return {
-                "api_key": user.ai_api_key,
-                "ai_instructions": user.ai_instructions
-            }
+            return {"api_key": user.ai_api_key, "ai_instructions": user.ai_instructions}
         except Exception as e:
             logger.error(f"Error getting credentials: {e}")
             return None

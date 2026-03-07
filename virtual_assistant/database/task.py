@@ -1,51 +1,70 @@
-from virtual_assistant.database.database import db
-from virtual_assistant.database.user import MySQLUUID
-from datetime import datetime
 import hashlib
 import json
 import uuid
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from virtual_assistant.database.database import Base, db
+from virtual_assistant.database.user import MySQLUUID
 from virtual_assistant.utils.logger import logger
 
-class Task(db.Model):
+
+class Task(Base):
     """Comprehensive task model that tracks tasks across all providers."""
-    __tablename__ = 'tasks'
+
+    __tablename__ = "tasks"
 
     # Primary identification
-    id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(MySQLUUID, db.ForeignKey('app_user.id'), nullable=False, index=True) # Foreign key to the User
+    id: Mapped[uuid.UUID] = mapped_column(MySQLUUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        MySQLUUID, ForeignKey("app_user.id"), index=True
+    )  # Foreign key to the User
 
     # Provider identification (composite unique constraint)
-    task_user_email = db.Column(db.String(255), nullable=True, index=True) # Email associated with the task provider account (e.g., Google account email for Google Tasks)
-    provider = db.Column(db.String(50), nullable=False)  # 'todoist', 'google_tasks', 'outlook', 'sqlite'
-    provider_task_id = db.Column(db.String(255), nullable=False)  # ID from the provider
+    task_user_email: Mapped[Optional[str]] = mapped_column(
+        String(255), index=True, default=None
+    )  # Email associated with the task provider account (e.g., Google account email for Google Tasks)
+    provider: Mapped[str] = mapped_column(String(50))  # 'todoist', 'google_tasks', 'outlook', 'sqlite'
+    provider_task_id: Mapped[str] = mapped_column(String(255))  # ID from the provider
 
     # Task content
-    title = db.Column(db.String(500), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(50), nullable=False)  # 'active', 'completed'
-    due_date = db.Column(db.DateTime, nullable=True)
-    priority = db.Column(db.Integer, nullable=True)  # 1=low, 2=medium, 3=high, 4=urgent
+    title: Mapped[str] = mapped_column(String(500))
+    description: Mapped[Optional[str]] = mapped_column(default=None)
+    status: Mapped[str] = mapped_column(String(50))  # 'active', 'completed'
+    due_date: Mapped[Optional[datetime]] = mapped_column(default=None)
+    priority: Mapped[Optional[int]] = mapped_column(default=None)  # 1=low, 2=medium, 3=high, 4=urgent
 
     # Organizational info
-    project_id = db.Column(db.String(255), nullable=True)  # Provider's project ID
-    project_name = db.Column(db.String(255), nullable=True)
-    parent_id = db.Column(db.String(255), nullable=True)  # For hierarchical tasks
-    section_id = db.Column(db.String(255), nullable=True)
+    project_id: Mapped[Optional[str]] = mapped_column(String(255), default=None)  # Provider's project ID
+    project_name: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    parent_id: Mapped[Optional[str]] = mapped_column(String(255), default=None)  # For hierarchical tasks
+    section_id: Mapped[Optional[str]] = mapped_column(String(255), default=None)
 
     # Ordering info
-    list_type = db.Column(db.String(50), default='unprioritized')  # 'prioritized' or 'unprioritized'
-    position = db.Column(db.Integer, default=0)
+    list_type: Mapped[Optional[str]] = mapped_column(
+        String(50), default="unprioritized"
+    )  # 'prioritized' or 'unprioritized'
+    position: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # Change tracking
-    content_hash = db.Column(db.String(64), nullable=False)  # Hash of task content to detect changes
-    last_synced = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    content_hash: Mapped[str] = mapped_column(String(64))  # Hash of task content to detect changes
+    last_synced: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[Optional[datetime]] = mapped_column(default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Composite unique constraint
     __table_args__ = (
         # Ensure a task from a specific provider account for a specific app user is unique
-        db.UniqueConstraint('user_id', 'task_user_email', 'provider', 'provider_task_id', name='uq_user_id_task_user_provider_task'),
+        UniqueConstraint(
+            "user_id",
+            "task_user_email",
+            "provider",
+            "provider_task_id",
+            name="uq_user_id_task_user_provider_task",
+        ),
     )
 
     @classmethod
@@ -61,30 +80,35 @@ class Task(db.Model):
         Returns:
             Tuple[Task, bool]: The task object and whether it was created or updated
         """
-        logger.debug(f"[SYNC] Processing task from {provider}: id={provider_task.id}, title='{provider_task.title}', status='{provider_task.status}'")
+        logger.debug(
+            f"[SYNC] Processing task from {provider}: id={provider_task.id}, "
+            f"title='{provider_task.title}', status='{provider_task.status}'"
+        )
 
         # Log detailed information about the incoming task status
-        logger.info(f"[SYNC] Incoming provider task status from {provider}: id={provider_task.id}, status='{provider_task.status}'")
+        logger.info(
+            f"[SYNC] Incoming provider task status from {provider}: "
+            f"id={provider_task.id}, status='{provider_task.status}'"
+        )
 
         # Calculate content hash to detect changes
         task_content = {
-            'title': provider_task.title,
-            'status': provider_task.status,
-            'due_date': provider_task.due_date.isoformat() if provider_task.due_date else None,
-            'priority': provider_task.priority,
-            'project_id': provider_task.project_id,
-            'parent_id': getattr(provider_task, 'parent_id', None),
-            'section_id': getattr(provider_task, 'section_id', None)
+            "title": provider_task.title,
+            "status": provider_task.status,
+            "due_date": (provider_task.due_date.isoformat() if provider_task.due_date else None),
+            "priority": provider_task.priority,
+            "project_id": provider_task.project_id,
+            "parent_id": getattr(provider_task, "parent_id", None),
+            "section_id": getattr(provider_task, "section_id", None),
         }
         content_hash = hashlib.sha256(json.dumps(task_content, sort_keys=True).encode()).hexdigest()
 
         # Look for existing task with same provider/provider_task_id
         existing_task = cls.query.filter_by(
-            user_id=user_id,
-            provider=provider,
-            provider_task_id=provider_task.id
+            user_id=user_id, provider=provider, provider_task_id=provider_task.id
         ).first()
-        # TODO: Decide if we should also filter by task_user_email here if it's provided and not null? (Note: app_login changed to user_id)
+        # TODO: Decide if we should also filter by task_user_email here
+        # if it's provided and not null? (Note: app_login changed to user_id)
         # existing_task = cls.query.filter_by(
         #     user_id=user_id,
         #     task_user_email=task_user_email,
@@ -93,15 +117,22 @@ class Task(db.Model):
         # ).first()
 
         if existing_task:
-            logger.debug(f"[SYNC] Found existing task in database: id={existing_task.id}, status='{existing_task.status}'")
+            logger.debug(
+                f"[SYNC] Found existing task in database: id={existing_task.id}, status='{existing_task.status}'"
+            )
 
             # Check if status has changed
             status_changed = existing_task.status != provider_task.status
             hash_changed = existing_task.content_hash != content_hash
 
             # Log status change and hash change information
-            logger.debug(f"[SYNC] Task {provider_task.id} comparison: status_changed={status_changed}, hash_changed={hash_changed}")
-            logger.debug(f"[SYNC] Task {provider_task.id} content hash: db={existing_task.content_hash}, new={content_hash}")
+            logger.debug(
+                f"[SYNC] Task {provider_task.id} comparison: "
+                f"status_changed={status_changed}, hash_changed={hash_changed}"
+            )
+            logger.debug(
+                f"[SYNC] Task {provider_task.id} content hash: db={existing_task.content_hash}, new={content_hash}"
+            )
 
             # Track if we made any updates
             updated = False
@@ -109,7 +140,10 @@ class Task(db.Model):
             # Log status changes specifically
             if status_changed:
                 # If only status changed, update just that field
-                logger.info(f"[SYNC] Status-only change for task {provider_task.id}: old='{existing_task.status}', new='{provider_task.status}'")
+                logger.info(
+                    f"[SYNC] Status-only change for task {provider_task.id}: "
+                    f"old='{existing_task.status}', new='{provider_task.status}'"
+                )
 
                 existing_task.status = provider_task.status
                 existing_task.last_synced = datetime.utcnow()
@@ -122,7 +156,10 @@ class Task(db.Model):
             # Check if content has changed or status specifically has changed
             if existing_task.content_hash != content_hash:
                 # Log hash differences for debugging
-                logger.info(f"[SYNC] Content hash changed for task {provider_task.id}: old={existing_task.content_hash}, new={content_hash}")
+                logger.info(
+                    f"[SYNC] Content hash changed for task {provider_task.id}: "
+                    f"old={existing_task.content_hash}, new={content_hash}"
+                )
 
                 # Update task content
                 existing_task.title = provider_task.title
@@ -130,14 +167,14 @@ class Task(db.Model):
                 existing_task.due_date = provider_task.due_date
                 existing_task.priority = provider_task.priority
                 existing_task.project_id = provider_task.project_id
-                existing_task.project_name = getattr(provider_task, 'project_name', None)
-                existing_task.parent_id = getattr(provider_task, 'parent_id', None)
-                existing_task.section_id = getattr(provider_task, 'section_id', None)
+                existing_task.project_name = getattr(provider_task, "project_name", None)
+                existing_task.parent_id = getattr(provider_task, "parent_id", None)
+                existing_task.section_id = getattr(provider_task, "section_id", None)
                 existing_task.content_hash = content_hash
                 existing_task.last_synced = datetime.utcnow()
                 # Update task_user_email if it has changed or wasn't set before
                 if existing_task.task_user_email != task_user_email:
-                     existing_task.task_user_email = task_user_email
+                    existing_task.task_user_email = task_user_email
 
                 db.session.commit()
                 updated = True
@@ -155,19 +192,19 @@ class Task(db.Model):
                 due_date=provider_task.due_date,
                 priority=provider_task.priority,
                 project_id=provider_task.project_id,
-                project_name=getattr(provider_task, 'project_name', None),
-                parent_id=getattr(provider_task, 'parent_id', None),
-                section_id=getattr(provider_task, 'section_id', None),
+                project_name=getattr(provider_task, "project_name", None),
+                parent_id=getattr(provider_task, "parent_id", None),
+                section_id=getattr(provider_task, "section_id", None),
                 content_hash=content_hash,
-                list_type='unprioritized',  # New tasks start unprioritized
-                position=0  # Will be updated by position calculation
+                list_type="unprioritized",  # New tasks start unprioritized
+                position=0,  # Will be updated by position calculation
             )
 
             db.session.add(new_task)
             db.session.commit()
 
             # Calculate position for the new task
-            cls.add_to_list(new_task.id, 'unprioritized')
+            cls.add_to_list(new_task.id, "unprioritized")
 
             return new_task, True
 
@@ -184,7 +221,7 @@ class Task(db.Model):
         deleted_tasks = cls.query.filter(
             cls.user_id == user_id,
             cls.provider == provider,
-            ~cls.provider_task_id.in_(current_provider_task_ids)
+            ~cls.provider_task_id.in_(current_provider_task_ids),
         ).all()
 
         # Delete these tasks
@@ -204,24 +241,19 @@ class Task(db.Model):
             tuple: (prioritized_tasks, unprioritized_tasks, completed_tasks)
         """
         # Get prioritized active tasks
-        prioritized = cls.query.filter_by(
-            user_id=user_id,
-            list_type='prioritized',
-            status='active'
-        ).order_by(cls.position).all()
+        prioritized = (
+            cls.query.filter_by(user_id=user_id, list_type="prioritized", status="active").order_by(cls.position).all()
+        )
 
         # Get unprioritized active tasks
-        unprioritized = cls.query.filter_by(
-            user_id=user_id,
-            list_type='unprioritized',
-            status='active'
-        ).order_by(cls.position).all()
-        
+        unprioritized = (
+            cls.query.filter_by(user_id=user_id, list_type="unprioritized", status="active")
+            .order_by(cls.position)
+            .all()
+        )
+
         # Get completed tasks (from both prioritized and unprioritized lists)
-        completed = cls.query.filter_by(
-            user_id=user_id,
-            status='completed'
-        ).order_by(cls.position).all()
+        completed = cls.query.filter_by(user_id=user_id, status="completed").order_by(cls.position).all()
 
         return (prioritized, unprioritized, completed)
 
@@ -239,7 +271,7 @@ class Task(db.Model):
             raise ValueError(f"Task with ID {task_id} not found")
 
         # If the task is already in this list, just update position
-        same_list = (task.list_type == destination)
+        same_list = task.list_type == destination
 
         # Begin a transaction
         db.session.begin_nested()
@@ -248,8 +280,11 @@ class Task(db.Model):
             # If position is not specified, place at the end
             if position is None:
                 # Find the highest position in the destination list
-                max_position_result = db.session.query(db.func.max(cls.position))\
-                    .filter_by(user_id=task.user_id, list_type=destination).first()
+                max_position_result = (
+                    db.session.query(func.max(cls.position))
+                    .filter_by(user_id=task.user_id, list_type=destination)
+                    .first()
+                )
                 max_position = max_position_result[0] if max_position_result[0] is not None else -1
                 position = max_position + 1
 
@@ -259,10 +294,8 @@ class Task(db.Model):
                     cls.user_id == task.user_id,
                     cls.list_type == destination,
                     cls.id != task_id,
-                    cls.position >= position
-                ).update({
-                    cls.position: cls.position + 1
-                }, synchronize_session=False)
+                    cls.position >= position,
+                ).update({cls.position: cls.position + 1}, synchronize_session=False)
 
             # If moving to the same list but earlier position, adjust the position
             if same_list and position < task.position:
@@ -273,7 +306,7 @@ class Task(db.Model):
                     cls.user_id == task.user_id,
                     cls.list_type == destination,
                     cls.position > task.position,
-                    cls.position <= position
+                    cls.position <= position,
                 ).count()
                 actual_position = position - tasks_between
             else:
@@ -292,7 +325,7 @@ class Task(db.Model):
             raise e
 
     @classmethod
-    def add_to_list(cls, task_id, list_type='unprioritized'):
+    def add_to_list(cls, task_id, list_type="unprioritized"):
         """Add a task to a list at the end.
 
         Args:
@@ -315,10 +348,7 @@ class Task(db.Model):
 
         try:
             for task_id, position in task_positions.items():
-                cls.query.filter_by(id=task_id, user_id=user_id).update({
-                    'list_type': list_type,
-                    'position': position
-                })
+                cls.query.filter_by(id=task_id, user_id=user_id).update({"list_type": list_type, "position": position})
 
             # Commit the transaction
             db.session.commit()
@@ -331,22 +361,21 @@ class Task(db.Model):
     def to_dict(self):
         """Convert task to dictionary representation."""
         return {
-            'id': self.id, # This is the internal DB id, maybe rename to db_id?
-            'user_id': self.user_id,
-            'task_user_email': self.task_user_email,
-            'provider': self.provider,
-            'provider_task_id': self.provider_task_id,
-            'title': self.title,
-            'description': self.description,
-            'status': self.status,
-            'due_date': self.due_date.isoformat() if self.due_date else None,
-            'priority': self.priority,
-            'project_id': self.project_id,
-            'project_name': self.project_name,
-            'parent_id': self.parent_id,
-            'section_id': self.section_id,
-            'list_type': self.list_type,
-            'position': self.position,
-            'last_synced': self.last_synced.isoformat() if self.last_synced else None
+            "id": self.id,  # This is the internal DB id, maybe rename to db_id?
+            "user_id": self.user_id,
+            "task_user_email": self.task_user_email,
+            "provider": self.provider,
+            "provider_task_id": self.provider_task_id,
+            "title": self.title,
+            "description": self.description,
+            "status": self.status,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
+            "priority": self.priority,
+            "project_id": self.project_id,
+            "project_name": self.project_name,
+            "parent_id": self.parent_id,
+            "section_id": self.section_id,
+            "list_type": self.list_type,
+            "position": self.position,
+            "last_synced": self.last_synced.isoformat() if self.last_synced else None,
         }
-

@@ -1,7 +1,6 @@
 from flask_login import LoginManager
 
 from virtual_assistant.database.user import User
-from virtual_assistant.database.database import db
 
 # Instantiate the LoginManager
 login_manager = LoginManager()
@@ -20,5 +19,5 @@ def setup_login_manager(app):
 def load_user(user_id):
     try:
         return User.query.get(user_id)
-    except:
+    except Exception:
         return None

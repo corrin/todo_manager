@@ -1,14 +1,15 @@
 """Chat API endpoints with SSE streaming support."""
 
 import json
-import litellm
-from flask import Blueprint, request, Response, jsonify, stream_with_context
-from flask_login import login_required, current_user
 
+import litellm
+from flask import Blueprint, Response, jsonify, request, stream_with_context
+from flask_login import current_user, login_required
+
+from virtual_assistant.chat.models import ChatMessage, Conversation
+from virtual_assistant.chat.tools import TOOL_DEFINITIONS, execute_tool
 from virtual_assistant.database.database import db
 from virtual_assistant.database.task import Task
-from virtual_assistant.chat.models import Conversation, ChatMessage
-from virtual_assistant.chat.tools import TOOL_DEFINITIONS, execute_tool
 from virtual_assistant.utils.logger import logger
 
 chat_bp = Blueprint("chat", __name__)
@@ -61,12 +62,14 @@ def _execute_tool_calls(tool_calls, user_id):
             arguments = {}
 
         result = execute_tool(name, arguments, user_id)
-        results.append({
-            "tool_call_id": tc_id,
-            "name": name,
-            "result": result,
-            "is_mutating": name in MUTATING_TOOLS,
-        })
+        results.append(
+            {
+                "tool_call_id": tc_id,
+                "name": name,
+                "result": result,
+                "is_mutating": name in MUTATING_TOOLS,
+            }
+        )
     return results
 
 
@@ -91,11 +94,16 @@ def _save_tool_messages(conversation, tool_calls_raw, tool_results):
         if isinstance(tc, dict):
             tc_data.append(tc)
         else:
-            tc_data.append({
-                "id": tc.id,
-                "type": "function",
-                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-            })
+            tc_data.append(
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+            )
 
     assistant_msg = ChatMessage(
         conversation_id=conversation.id,
@@ -132,7 +140,10 @@ def chat():
 
     api_key = current_user.ai_api_key
     if not api_key:
-        return jsonify({"error": "No API key configured. Go to Settings to add one."}), 400
+        return (
+            jsonify({"error": "No API key configured. Go to Settings to add one."}),
+            400,
+        )
 
     # Get or create conversation
     conversation_id = data.get("conversation_id")
@@ -197,33 +208,42 @@ def _json_response(conversation, messages, model, api_key):
                 _save_tool_messages(conversation, choice.message.tool_calls, tool_results)
 
                 # Add to messages for next iteration
-                messages.append({
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                        }
-                        for tc in choice.message.tool_calls
-                    ],
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                            for tc in choice.message.tool_calls
+                        ],
+                    }
+                )
                 for tr in tool_results:
-                    messages.append({
-                        "role": "tool",
-                        "content": json.dumps(tr["result"]),
-                        "tool_call_id": tr["tool_call_id"],
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "content": json.dumps(tr["result"]),
+                            "tool_call_id": tr["tool_call_id"],
+                        }
+                    )
                 continue
 
             # No tool calls — we have the final response
             content = choice.message.content or ""
             _save_assistant_message(conversation, content)
-            return jsonify({
-                "content": content,
-                "conversation_id": str(conversation.id),
-            })
+            return jsonify(
+                {
+                    "content": content,
+                    "conversation_id": str(conversation.id),
+                }
+            )
 
     except Exception as e:
         logger.exception(f"Error in chat endpoint: {e}")
@@ -283,7 +303,8 @@ def _stream_response(conversation, messages, model, api_key):
                     # Send tool call events
                     any_mutating = False
                     for tr in tool_results:
-                        yield f"data: {json.dumps({'type': 'tool_call', 'name': tr['name'], 'result': tr['result']})}\n\n"
+                        event = json.dumps({"type": "tool_call", "name": tr["name"], "result": tr["result"]})
+                        yield f"data: {event}\n\n"
                         if tr["is_mutating"]:
                             any_mutating = True
 
@@ -291,20 +312,28 @@ def _stream_response(conversation, messages, model, api_key):
                         yield f"data: {json.dumps({'type': 'dashboard_refresh'})}\n\n"
 
                     # Add to messages for next iteration
-                    current_messages.append({
-                        "role": "assistant",
-                        "content": "",
-                        "tool_calls": [
-                            {"id": tc["id"], "type": "function", "function": tc["function"]}
-                            for tc in tool_calls_list
-                        ],
-                    })
+                    current_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": tc["id"],
+                                    "type": "function",
+                                    "function": tc["function"],
+                                }
+                                for tc in tool_calls_list
+                            ],
+                        }
+                    )
                     for tr in tool_results:
-                        current_messages.append({
-                            "role": "tool",
-                            "content": json.dumps(tr["result"]),
-                            "tool_call_id": tr["tool_call_id"],
-                        })
+                        current_messages.append(
+                            {
+                                "role": "tool",
+                                "content": json.dumps(tr["result"]),
+                                "tool_call_id": tr["tool_call_id"],
+                            }
+                        )
                     continue
 
                 # No tool calls — stream is complete
@@ -335,11 +364,13 @@ def dashboard():
 
     calendar_data = execute_tool("get_calendar", {}, current_user.id)
 
-    return jsonify({
-        "tasks": {
-            "prioritized": [t.to_dict() for t in prioritized],
-            "unprioritized": [t.to_dict() for t in unprioritized],
-            "completed": [t.to_dict() for t in completed[:10]],
-        },
-        "events": calendar_data.get("events", []),
-    })
+    return jsonify(
+        {
+            "tasks": {
+                "prioritized": [t.to_dict() for t in prioritized],
+                "unprioritized": [t.to_dict() for t in unprioritized],
+                "completed": [t.to_dict() for t in completed[:10]],
+            },
+            "events": calendar_data.get("events", []),
+        }
+    )

@@ -6,25 +6,32 @@ import os
 import sys
 
 # Add the project root directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from flask import Flask
 
 from virtual_assistant.database.database import db
 from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.utils.settings import Settings
-from flask import Flask
+
 
 def main():
     """Check the current calendar accounts in the database."""
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = Settings.DATABASE_URI
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config["SQLALCHEMY_DATABASE_URI"] = Settings.DATABASE_URI
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     db.init_app(app)
-    
-    with app.app_context():
-        print('Current calendar accounts:')
-        accounts = ExternalAccount.query.all() # FIXME: Need to filter on calendar accounts
-        for account in accounts:
-            print(f'- {account.external_email} ({account.provider}) for user {account.user_id}')
 
-if __name__ == '__main__':
+    with app.app_context():
+        print("Current calendar accounts:")
+        accounts = (
+            ExternalAccount.query.all()
+        )  # FIXME: Need to filter on calendar accounts
+        for account in accounts:
+            print(
+                f"- {account.external_email} ({account.provider}) for user {account.user_id}"
+            )
+
+
+if __name__ == "__main__":
     main()

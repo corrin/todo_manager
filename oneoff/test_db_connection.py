@@ -1,6 +1,7 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy import text
+
+from sqlalchemy import create_engine, text
+
 from virtual_assistant.utils.logger import logger
 
 # Get database URI from environment

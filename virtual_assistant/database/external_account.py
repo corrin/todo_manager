@@ -1,47 +1,52 @@
-from datetime import datetime, timezone
-from sqlalchemy import and_, update
-from sqlalchemy.orm import relationship
 import uuid
+from datetime import datetime, timezone
+from typing import Optional
 
-from virtual_assistant.database.database import db
+from sqlalchemy import ForeignKey, String, and_, or_, update
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from virtual_assistant.database.database import Base, db
 from virtual_assistant.database.user import MySQLUUID
 from virtual_assistant.utils.logger import logger
 
 # Maps task provider names (used in task routes/providers) to ExternalAccount provider names
-TASK_PROVIDER_MAP = {'todoist': 'todoist', 'google_tasks': 'google', 'outlook': 'o365'}
+TASK_PROVIDER_MAP = {"todoist": "todoist", "google_tasks": "google", "outlook": "o365"}
 # Reverse mapping: ExternalAccount provider names to task provider names
-PROVIDER_TO_TASK = {'todoist': 'todoist', 'google': 'google_tasks', 'o365': 'outlook'}
+PROVIDER_TO_TASK = {"todoist": "todoist", "google": "google_tasks", "o365": "outlook"}
 
 
-class ExternalAccount(db.Model):
+class ExternalAccount(Base):
     """Model for managing all external service accounts (Google, O365, Todoist)."""
 
-    __tablename__ = 'external_account'
+    __tablename__ = "external_account"
 
-    id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
-    external_email = db.Column(db.String(255), nullable=False)
-    user_id = db.Column(MySQLUUID, db.ForeignKey('app_user.id'), nullable=False)
-    provider = db.Column(db.String(50), nullable=False)  # 'google', 'o365', 'todoist'
-    token = db.Column(db.Text)  # For OAuth access tokens
-    api_key = db.Column(db.Text)  # For API key authentication
-    refresh_token = db.Column(db.Text)
-    token_uri = db.Column(db.String(255))
-    client_id = db.Column(db.String(255))
-    client_secret = db.Column(db.String(255))
-    scopes = db.Column(db.Text)
-    is_primary_calendar = db.Column(db.Boolean, default=False)
-    is_primary_tasks = db.Column(db.Boolean, default=False)
-    last_sync = db.Column(db.DateTime(timezone=True))
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    expires_at = db.Column(db.DateTime, nullable=True)
-    needs_reauth = db.Column(db.Boolean, nullable=False, default=False)
-    use_for_calendar = db.Column(db.Boolean, nullable=False, default=False)
-    use_for_tasks = db.Column(db.Boolean, nullable=False, default=False)
-    
+    id: Mapped[uuid.UUID] = mapped_column(MySQLUUID, primary_key=True, default=uuid.uuid4)
+    external_email: Mapped[str] = mapped_column(String(255))
+    user_id: Mapped[uuid.UUID] = mapped_column(MySQLUUID, ForeignKey("app_user.id"))
+    provider: Mapped[str] = mapped_column(String(50))  # 'google', 'o365', 'todoist'
+    token: Mapped[Optional[str]] = mapped_column(default=None)  # For OAuth access tokens
+    api_key: Mapped[Optional[str]] = mapped_column(default=None)  # For API key authentication
+    refresh_token: Mapped[Optional[str]] = mapped_column(default=None)
+    token_uri: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    client_id: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    client_secret: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    scopes: Mapped[Optional[str]] = mapped_column(default=None)
+    is_primary_calendar: Mapped[bool] = mapped_column(default=False)
+    is_primary_tasks: Mapped[bool] = mapped_column(default=False)
+    last_sync: Mapped[Optional[datetime]] = mapped_column(default=None)
+    created_at: Mapped[Optional[datetime]] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+    needs_reauth: Mapped[bool] = mapped_column(default=False)
+    use_for_calendar: Mapped[bool] = mapped_column(default=False)
+    use_for_tasks: Mapped[bool] = mapped_column(default=False)
+
     # Relationships
     user = relationship("User", back_populates="external_accounts")
-    
+
     def __init__(self, external_email, provider, **kwargs):
         self.external_email = external_email
         self.provider = provider
@@ -55,15 +60,11 @@ class ExternalAccount(db.Model):
     def get_by_email_and_provider(cls, external_email, provider):
         """Get account by email and provider."""
         return cls.query.filter_by(external_email=external_email, provider=provider).first()
-        
+
     @classmethod
     def get_by_email_provider_and_user(cls, external_email, provider, user_id):
         """Get account by email, provider, and user ID."""
-        return cls.query.filter_by(
-            external_email=external_email,
-            provider=provider,
-            user_id=user_id
-        ).first()
+        return cls.query.filter_by(external_email=external_email, provider=provider, user_id=user_id).first()
 
     @classmethod
     def get_accounts_for_user(cls, user_id):
@@ -81,7 +82,7 @@ class ExternalAccount(db.Model):
         account = cls.get_by_email_provider_and_user(external_email, provider, user_id)
         if not account:
             raise ValueError(f"No account found for {external_email} ({provider}) for user ID {user_id}")
-        
+
         db.session.delete(account)
         db.session.commit()
 
@@ -89,18 +90,18 @@ class ExternalAccount(db.Model):
         """Update the last sync timestamp."""
         self.last_sync = datetime.now(timezone.utc)
         db.session.commit()
-        
+
     @classmethod
     def set_as_primary(cls, external_email, provider, user_id, account_type):
         """Set an account as the primary account for a user for either calendar or tasks.
-        
+
         Args:
             external_email: Email of the account
             provider: Provider name ('google', 'o365', 'todoist')
             user_id: User ID
             account_type: Must be either 'calendar' or 'tasks'
         """
-        if account_type not in ('calendar', 'tasks'):
+        if account_type not in ("calendar", "tasks"):
             logger.error(f"Invalid account_type: {account_type}")
             raise ValueError("account_type must be 'calendar' or 'tasks'")
 
@@ -111,19 +112,11 @@ class ExternalAccount(db.Model):
 
         try:
             # Unset existing primary account of this type
-            if account_type == 'calendar':
-                db.session.execute(
-                    update(cls)
-                    .where(cls.user_id == user_id)
-                    .values(is_primary_calendar=False)
-                )
+            if account_type == "calendar":
+                db.session.execute(update(cls).where(cls.user_id == user_id).values(is_primary_calendar=False))
                 account.is_primary_calendar = True
             else:
-                db.session.execute(
-                    update(cls)
-                    .where(cls.user_id == user_id)
-                    .values(is_primary_tasks=False)
-                )
+                db.session.execute(update(cls).where(cls.user_id == user_id).values(is_primary_tasks=False))
                 account.is_primary_tasks = True
 
             db.session.commit()
@@ -132,28 +125,22 @@ class ExternalAccount(db.Model):
             logger.error(f"Error setting primary {account_type} account: {e}")
             db.session.rollback()
             raise
-            
+
     @classmethod
     def get_primary_account(cls, user_id, account_type):
         """Get the primary account for a user for either calendar or tasks.
-        
+
         Args:
             user_id: User ID
             account_type: Must be either 'calendar' or 'tasks'
         """
-        if account_type not in ('calendar', 'tasks'):
+        if account_type not in ("calendar", "tasks"):
             raise ValueError("account_type must be 'calendar' or 'tasks'")
 
-        if account_type == 'calendar':
-            return cls.query.filter_by(
-                user_id=user_id,
-                is_primary_calendar=True
-            ).first()
+        if account_type == "calendar":
+            return cls.query.filter_by(user_id=user_id, is_primary_calendar=True).first()
         else:
-            return cls.query.filter_by(
-                user_id=user_id,
-                is_primary_tasks=True
-            ).first()
+            return cls.query.filter_by(user_id=user_id, is_primary_tasks=True).first()
 
     # --- Task Account helper methods (replacing TaskAccount model) ---
 
@@ -171,7 +158,7 @@ class ExternalAccount(db.Model):
             user_id=user_id,
             provider=ea_provider,
             external_email=task_user_email,
-            use_for_tasks=True
+            use_for_tasks=True,
         ).first()
 
     @classmethod
@@ -189,34 +176,23 @@ class ExternalAccount(db.Model):
         """
         ea_provider = TASK_PROVIDER_MAP.get(provider_name, provider_name)
 
-        account = cls.query.filter_by(
-            user_id=user_id,
-            provider=ea_provider,
-            external_email=task_user_email
-        ).first()
+        account = cls.query.filter_by(user_id=user_id, provider=ea_provider, external_email=task_user_email).first()
 
         if not account:
-            account = cls(
-                external_email=task_user_email,
-                provider=ea_provider,
-                user_id=user_id
-            )
+            account = cls(external_email=task_user_email, provider=ea_provider, user_id=user_id)
             db.session.add(account)
 
         # Update credential fields
-        account.api_key = credentials.get('api_key', account.api_key)
-        account.token = credentials.get('token', account.token)
-        account.refresh_token = credentials.get('refresh_token', account.refresh_token)
-        account.expires_at = credentials.get('expires_at', account.expires_at)
-        account.scopes = credentials.get('scopes', account.scopes)
-        account.needs_reauth = credentials.get('needs_reauth', False)
+        account.api_key = credentials.get("api_key", account.api_key)
+        account.token = credentials.get("token", account.token)
+        account.refresh_token = credentials.get("refresh_token", account.refresh_token)
+        account.expires_at = credentials.get("expires_at", account.expires_at)
+        account.scopes = credentials.get("scopes", account.scopes)
+        account.needs_reauth = credentials.get("needs_reauth", False)
         account.use_for_tasks = True
 
         # Auto-set as primary tasks if no primary exists
-        has_primary = cls.query.filter_by(
-            user_id=user_id,
-            is_primary_tasks=True
-        ).first() is not None
+        has_primary = cls.query.filter_by(user_id=user_id, is_primary_tasks=True).first() is not None
         if not has_primary:
             account.is_primary_tasks = True
             logger.info(f"Setting {ea_provider} account for user {user_id} as primary tasks (no primary exists)")
@@ -236,11 +212,7 @@ class ExternalAccount(db.Model):
             bool: True if found and handled
         """
         ea_provider = TASK_PROVIDER_MAP.get(provider_name, provider_name)
-        account = cls.query.filter_by(
-            user_id=user_id,
-            provider=ea_provider,
-            external_email=task_user_email
-        ).first()
+        account = cls.query.filter_by(user_id=user_id, provider=ea_provider, external_email=task_user_email).first()
 
         if not account:
             return False
@@ -261,12 +233,16 @@ class ExternalAccount(db.Model):
         Returns accounts that have use_for_tasks=True and are not needing reauth,
         with appropriate credentials present.
         """
-        return cls.query.filter(
-            cls.user_id == user_id,
-            cls.use_for_tasks == True,
-            cls.needs_reauth == False,
-            db.or_(
-                db.and_(cls.provider == 'todoist', cls.api_key != None),
-                db.and_(cls.provider.in_(['google', 'o365']), cls.token != None)
+        return (
+            cls.query.filter(
+                cls.user_id == user_id,
+                cls.use_for_tasks.is_(True),
+                cls.needs_reauth.is_(False),
+                or_(
+                    and_(cls.provider == "todoist", cls.api_key.is_not(None)),
+                    and_(cls.provider.in_(["google", "o365"]), cls.token.is_not(None)),
+                ),
             )
-        ).order_by(cls.provider, cls.external_email).all()
+            .order_by(cls.provider, cls.external_email)
+            .all()
+        )

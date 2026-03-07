@@ -1,7 +1,8 @@
 from virtual_assistant.utils.logger import logger
-from .todoist_provider import TodoistProvider
-from .outlook_task_provider import OutlookTaskProvider
+
 from .google_task_provider import GoogleTaskProvider
+from .outlook_task_provider import OutlookTaskProvider
+from .todoist_provider import TodoistProvider
 
 
 class TaskManager:
@@ -33,25 +34,23 @@ class TaskManager:
             user_id: The user's database ID.
             task_user_email: The email associated with the task provider account.
             provider_name: Optional specific provider to authenticate with.
-        
+
         Returns:
             Dict of provider_name: auth_result pairs
         """
         auth_results = {}
-        providers_to_check = (
-            {provider_name: self.providers[provider_name]}
-            if provider_name
-            else self.providers
-        )
+        providers_to_check = {provider_name: self.providers[provider_name]} if provider_name else self.providers
 
         for name, provider in providers_to_check.items():
             try:
                 # Call provider authenticate with correct arguments
                 result = provider.authenticate(user_id=user_id, task_user_email=task_user_email)
 
-                if result: # result is (provider_name, redirect_url) if auth needed
+                if result:  # result is (provider_name, redirect_url) if auth needed
                     auth_results[name] = result
-                logger.debug(f"Authentication result for {name} (user_id={user_id}/{task_user_email}): {result is not None}")
+                logger.debug(
+                    f"Authentication result for {name} (user_id={user_id}/{task_user_email}): {result is not None}"
+                )
             except Exception as e:
                 logger.error(f"Error authenticating with {name} (user_id={user_id}/{task_user_email}): {e}")
                 auth_results[name] = None
@@ -83,28 +82,27 @@ class TaskManager:
             return provider.get_tasks(user_id=user_id, task_user_email=task_user_email)
         except Exception as e:
             # Log provider-specific errors and re-raise
-            logger.error(f"Error getting tasks from provider '{provider_name}' for user_id={user_id} / account '{task_user_email}': {e}")
-            raise # Re-raise the original exception to be handled by the caller
+            logger.error(
+                f"Error getting tasks from provider '{provider_name}' "
+                f"for user_id={user_id} / account '{task_user_email}': {e}"
+            )
+            raise  # Re-raise the original exception to be handled by the caller
 
     def get_ai_instructions(self, user_id, task_user_email, provider_name=None):
         """Get AI instructions from specified or default provider.
-        
+
         Args:
             user_id: The user's database ID
             task_user_email: The email associated with the task provider account
             provider_name: Optional specific provider to use
-        
+
         Returns:
             str: The instruction text, or None if not found
         """
         if provider_name and provider_name not in self.providers:
             raise ValueError(f"Unknown task provider: {provider_name}")
 
-        provider = (
-            self.providers[provider_name]
-            if provider_name
-            else next(iter(self.providers.values()))
-        )
+        provider = self.providers[provider_name] if provider_name else next(iter(self.providers.values()))
 
         try:
             return provider.get_ai_instructions(user_id=user_id, task_user_email=task_user_email)
@@ -114,25 +112,26 @@ class TaskManager:
 
     def update_task_status(self, user_id, task_id, status):
         """Update task status.
-        
+
         Args:
             user_id: The user's database ID
             task_id: The task's database ID (UUID)
             status: New status
-            
+
         Returns:
             bool: True if update successful
         """
         # Get the task from the database
         from virtual_assistant.database.task import Task
+
         task = Task.query.filter_by(id=task_id, user_id=user_id).first()
         if not task:
             raise ValueError(f"Task with ID {task_id} not found")
-            
+
         # Get the provider
         provider_name = task.provider
         provider = self.get_provider(provider_name)
-        
+
         try:
             return provider.update_task_status(user_id=user_id, task_id=task_id, status=status)
         except Exception as e:
@@ -141,27 +140,27 @@ class TaskManager:
 
     def create_instruction_task(self, user_id, task_user_email, instructions, provider_name=None):
         """Create or update the AI instruction task.
-        
+
         Args:
             user_id: The user's database ID
             task_user_email: The email associated with the task provider account
             instructions: The instruction text
             provider_name: Optional specific provider to use
-        
+
         Returns:
             bool: True if successful
         """
         if provider_name and provider_name not in self.providers:
             raise ValueError(f"Unknown task provider: {provider_name}")
 
-        provider = (
-            self.providers[provider_name]
-            if provider_name
-            else next(iter(self.providers.values()))
-        )
+        provider = self.providers[provider_name] if provider_name else next(iter(self.providers.values()))
 
         try:
-            return provider.create_instruction_task(user_id=user_id, task_user_email=task_user_email, instructions=instructions)
+            return provider.create_instruction_task(
+                user_id=user_id,
+                task_user_email=task_user_email,
+                instructions=instructions,
+            )
         except Exception as e:
             logger.error(f"Error creating instruction task: {e}")
             raise
