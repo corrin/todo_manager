@@ -9,6 +9,19 @@ from virtual_assistant.ai.ai_manager import AIManager
 from virtual_assistant.ai.schedule_generator import ScheduleGenerator
 from virtual_assistant.meetings.o365_calendar_provider import O365CalendarProvider
 
+def _provider_from_model(llm_model):
+    """Map an LLM model string to the legacy provider name for ScheduleGenerator."""
+    if not llm_model:
+        return "openai"
+    model = llm_model.lower()
+    if model.startswith("claude") or model.startswith("anthropic/"):
+        return "anthropic"
+    if model.startswith("gemini") or model.startswith("google/"):
+        return "google"
+    # Default to openai (covers gpt-*, o1-*, etc.)
+    return "openai"
+
+
 def init_schedule_routes():
     bp = Blueprint('schedule', __name__, url_prefix='/api/schedule')
     
@@ -26,7 +39,9 @@ def init_schedule_routes():
             
             # Generate schedule
             ai_manager = AIManager()
-            ai_provider = ai_manager.get_provider(current_user.ai_provider)
+            # Derive provider name from llm_model (e.g. "gpt-4o" → "openai")
+            provider_name = _provider_from_model(current_user.llm_model)
+            ai_provider = ai_manager.get_provider(provider_name)
             schedule_generator = ScheduleGenerator(ai_provider)
             schedule = schedule_generator.generate_daily_schedule(
                 user_id=current_user.id,
@@ -34,7 +49,7 @@ def init_schedule_routes():
                 date=target_date,
                 slot_duration=slot_duration
             )
-            
+
             return jsonify(schedule)
             
         except Exception as e:
@@ -56,7 +71,8 @@ def init_schedule_routes():
             
             # Generate schedule
             ai_manager = AIManager()
-            ai_provider = ai_manager.get_provider(current_user.ai_provider)
+            provider_name = _provider_from_model(current_user.llm_model)
+            ai_provider = ai_manager.get_provider(provider_name)
             schedule_generator = ScheduleGenerator(ai_provider)
             schedule = schedule_generator.generate_daily_schedule(
                 user_id=current_user.id,
@@ -64,7 +80,7 @@ def init_schedule_routes():
                 date=target_date,
                 slot_duration=slot_duration
             )
-            
+
             # Check if there was an error generating the schedule
             if 'error' in schedule:
                 return jsonify(schedule), 500

@@ -25,7 +25,7 @@ def upgrade():
     sa.Column('title', sa.String(length=255), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('updated_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['app_user.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('chat_message',

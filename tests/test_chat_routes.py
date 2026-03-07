@@ -26,7 +26,7 @@ def app():
 def user(app):
     with app.app_context():
         u = User(app_login="test@example.com")
-        u.openai_key = "sk-test-key"
+        u.ai_api_key = "sk-test-key"
         db.session.add(u)
         db.session.commit()
         yield u

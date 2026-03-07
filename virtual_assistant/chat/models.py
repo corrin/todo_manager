@@ -8,7 +8,7 @@ class Conversation(db.Model):
     __tablename__ = "conversation"
 
     id = db.Column(MySQLUUID(), primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(MySQLUUID(), db.ForeignKey("user.id"), nullable=False)
+    user_id = db.Column(MySQLUUID(), db.ForeignKey("app_user.id"), nullable=False)
     title = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(

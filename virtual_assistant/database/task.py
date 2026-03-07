@@ -12,7 +12,7 @@ class Task(db.Model):
 
     # Primary identification
     id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(MySQLUUID, db.ForeignKey('user.id'), nullable=False, index=True) # Foreign key to the User
+    user_id = db.Column(MySQLUUID, db.ForeignKey('app_user.id'), nullable=False, index=True) # Foreign key to the User
 
     # Provider identification (composite unique constraint)
     task_user_email = db.Column(db.String(255), nullable=True, index=True) # Email associated with the task provider account (e.g., Google account email for Google Tasks)

@@ -207,15 +207,13 @@ def save_general_settings():
     """Saves general application settings (AI provider, API keys, etc.)."""
     app_login = current_user.app_login 
     try:
-        # Update general User model fields from form (AI provider, API keys, AI instructions)
-        current_user.ai_provider = request.form.get('ai_provider', current_user.ai_provider)
-        
+        # Update general User model fields from form (API keys, AI instructions)
         # Only update keys if non-empty value is provided in the form
-        openai_key_form = request.form.get('openai_key')
+        ai_api_key_form = request.form.get('ai_api_key')
 
         # Update only if the form field exists and has a value (protects against accidental clearing)
-        if 'openai_key' in request.form and openai_key_form:
-             current_user.openai_key = openai_key_form
+        if 'ai_api_key' in request.form and ai_api_key_form:
+             current_user.ai_api_key = ai_api_key_form
 
         # Always update AI instructions (can be empty to clear)
         current_user.ai_instructions = request.form.get('ai_instructions', '')

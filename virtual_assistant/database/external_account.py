@@ -20,7 +20,7 @@ class ExternalAccount(db.Model):
 
     id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
     external_email = db.Column(db.String(255), nullable=False)
-    user_id = db.Column(MySQLUUID, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(MySQLUUID, db.ForeignKey('app_user.id'), nullable=False)
     provider = db.Column(db.String(50), nullable=False)  # 'google', 'o365', 'todoist'
     token = db.Column(db.Text)  # For OAuth access tokens
     api_key = db.Column(db.Text)  # For API key authentication

@@ -130,7 +130,7 @@ def chat():
     if not message:
         return jsonify({"error": "Message is required"}), 400
 
-    api_key = current_user.openai_key
+    api_key = current_user.ai_api_key
     if not api_key:
         return jsonify({"error": "No API key configured. Go to Settings to add one."}), 400
 
