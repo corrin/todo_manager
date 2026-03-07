@@ -36,10 +36,7 @@ class AccessTokenCredential:
 
         # Log the token length and first/last few characters for debugging
         token_length = len(self.token) if self.token else 0
-        token_preview = ""
-        if token_length > 10:
-            token_preview = f"{self.token[:5]}...{self.token[-5:]}"
-        logger.debug(f"Using access token of length {token_length}, preview: {token_preview}")
+        logger.debug(f"Using access token of length {token_length}")
 
         # Return an Azure AccessToken with the token and an expiration time
         return AzureAccessToken(token=self.token, expires_on=int(time.time()) + 3600)
@@ -167,7 +164,7 @@ class O365CalendarProvider(CalendarProvider):
             raise ValueError(error_msg)
 
         session["oauth_state"] = state
-        logger.debug(f"Generated OAuth state: {state}")
+        logger.debug("Generated OAuth state")
 
         # Get auth URL from MSAL
         try:
@@ -185,7 +182,7 @@ class O365CalendarProvider(CalendarProvider):
                 logger.error(error_msg)
                 raise ValueError(error_msg)
 
-            logger.debug(f"Generated auth URL: {auth_url[:100]}...")
+            logger.debug("Generated auth URL successfully")
             return None, auth_url
         except Exception as e:
             error_msg = f"Error generating authorization URL: {str(e)}"
@@ -332,8 +329,7 @@ class O365CalendarProvider(CalendarProvider):
             # Extract values after validating existence
             code = query_dict["code"][0]
             received_state = query_dict["state"][0]
-            logger.debug(f"Received authorization code: {code[:10]}...")
-            logger.debug(f"Received state: {received_state}")
+            logger.debug("Received authorization code and state")
 
             # FAIL EARLY: Check for error in the callback
             if "error" in query_dict:
@@ -347,7 +343,7 @@ class O365CalendarProvider(CalendarProvider):
 
             # FAIL EARLY: Verify state exists in session
             expected_state = session.get("oauth_state")
-            logger.debug(f"Expected state from session: {expected_state}")
+            logger.debug(f"Session oauth_state present: {expected_state is not None}")
             if not expected_state:
                 error_msg = "No state found in session - security verification failed"
                 logger.error(error_msg)
@@ -355,7 +351,7 @@ class O365CalendarProvider(CalendarProvider):
 
             # FAIL EARLY: Verify state matches
             if received_state != expected_state:
-                error_msg = f"State mismatch error: expected {expected_state}, got {received_state}"
+                error_msg = "State mismatch error: OAuth state verification failed"
                 logger.error(error_msg)
                 raise ValueError(error_msg)
 
@@ -388,7 +384,7 @@ class O365CalendarProvider(CalendarProvider):
                 error_description = result.get("error_description", "Unknown error")
                 error_msg = f"Failed to obtain tokens: {error_code} - {error_description}"
                 logger.error(f"❌ TOKEN ERROR: {error_msg}")
-                logger.debug(f"Full token error response: {result}")
+                logger.debug(f"Token error response keys: {result.keys()}")
                 raise ValueError(error_msg)
 
             logger.debug("Successfully acquired access token")
@@ -421,7 +417,7 @@ class O365CalendarProvider(CalendarProvider):
 
             # Extract email from ID token claims
             claims = result["id_token_claims"]
-            logger.debug(f"ID token claims: {claims}")
+            logger.debug(f"ID token claims keys: {claims.keys()}")
 
             if "preferred_username" not in claims:
                 raise ValueError(f"No preferred_username in ID token claims. Available claims: {claims.keys()}")
