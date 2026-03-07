@@ -1,17 +1,15 @@
 from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.utils.logger import logger
 from .openai_provider import OpenAIProvider
-from .grok_provider import GrokProvider
 
 
 class AIManager:
-    """Manages multiple AI providers (OpenAI, Grok, etc.)"""
+    """Manages multiple AI providers."""
 
     def __init__(self):
         self.providers = {}
         self.provider_classes = {
             "openai": OpenAIProvider,
-            "grok": GrokProvider,
         }
         self._initialize_providers()
 

@@ -216,20 +216,18 @@ def save_general_settings():
         
         # Only update keys if non-empty value is provided in the form
         openai_key_form = request.form.get('openai_key')
-        grok_key_form = request.form.get('grok_key')
-        
+
         # Update only if the form field exists and has a value (protects against accidental clearing)
         if 'openai_key' in request.form and openai_key_form:
              current_user.openai_key = openai_key_form
-        if 'grok_key' in request.form and grok_key_form:
-             current_user.grok_key = grok_key_form
-             # Always update AI instructions (can be empty to clear)
-             current_user.ai_instructions = request.form.get('ai_instructions', '')
-             
-             # Update schedule slot duration
-             slot_duration = request.form.get('schedule_slot_duration')
-             if slot_duration in ['30', '60', '120']:
-                 current_user.schedule_slot_duration = int(slot_duration)
+
+        # Always update AI instructions (can be empty to clear)
+        current_user.ai_instructions = request.form.get('ai_instructions', '')
+
+        # Update schedule slot duration
+        slot_duration = request.form.get('schedule_slot_duration')
+        if slot_duration in ['30', '60', '120']:
+            current_user.schedule_slot_duration = int(slot_duration)
              
         
         db.session.add(current_user) # Stage user changes
