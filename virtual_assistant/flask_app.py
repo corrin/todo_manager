@@ -96,6 +96,9 @@ def create_app():
     # Pass the factory function to init_app for meetings
     app.register_blueprint(init_meetings_app(create_calendar_provider), url_prefix="/meetings")
     app.register_blueprint(database_bp, url_prefix="/database")
+
+    from virtual_assistant.chat.chat_routes import chat_bp
+    app.register_blueprint(chat_bp)
     
     # --- Template and Static Files ---
     template_dir = os.path.join(app.root_path, "templates")
@@ -145,10 +148,16 @@ app = create_app()
 # --- Core Routes ---
 
 @app.route("/")
-@login_required 
+@login_required
 def index():
-    """Displays the main application page for logged-in users."""
-    return render_template('index.html', user=current_user)
+    """Redirect to chat page."""
+    return redirect(url_for('chat_page'))
+
+@app.route("/chat")
+@login_required
+def chat_page():
+    """Displays the main chat interface."""
+    return render_template('chat.html', user=current_user)
 
 @app.route("/new-user")
 def new_user():
@@ -198,18 +207,21 @@ def save_general_settings():
     """Saves general application settings (AI provider, API keys, etc.)."""
     app_login = current_user.app_login 
     try:
-        # Update general User model fields from form (AI provider, API keys, AI instructions)
-        current_user.ai_provider = request.form.get('ai_provider', current_user.ai_provider)
-        
+        # Update general User model fields from form (API keys, AI instructions)
         # Only update keys if non-empty value is provided in the form
-        openai_key_form = request.form.get('openai_key')
+        ai_api_key_form = request.form.get('ai_api_key')
 
         # Update only if the form field exists and has a value (protects against accidental clearing)
-        if 'openai_key' in request.form and openai_key_form:
-             current_user.openai_key = openai_key_form
+        if 'ai_api_key' in request.form and ai_api_key_form:
+             current_user.ai_api_key = ai_api_key_form
 
         # Always update AI instructions (can be empty to clear)
         current_user.ai_instructions = request.form.get('ai_instructions', '')
+
+        # Update LLM model
+        llm_model = request.form.get('llm_model')
+        if llm_model:
+            current_user.llm_model = llm_model
 
         # Update schedule slot duration
         slot_duration = request.form.get('schedule_slot_duration')

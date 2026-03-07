@@ -56,16 +56,12 @@ class AIProvider(ABC):
                 logger.warning(f"User not found with ID: {user_id}")
                 return None
                 
-            if self.provider_name == "openai":
-                if not user.openai_key:
-                    return None
-                return {
-                    "api_key": user.openai_key,
-                    "ai_instructions": user.ai_instructions
-                }
-            else:
-                logger.warning(f"Unknown provider: {self.provider_name}")
+            if not user.ai_api_key:
                 return None
+            return {
+                "api_key": user.ai_api_key,
+                "ai_instructions": user.ai_instructions
+            }
         except Exception as e:
             logger.error(f"Error getting credentials: {e}")
             return None
