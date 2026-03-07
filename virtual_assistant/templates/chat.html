@@ -339,7 +339,9 @@
             }
 
             if (!resp.ok) {
-                throw new Error(`Server error: ${resp.status}`);
+                const errorData = await resp.json().catch(() => null);
+                const errorMsg = errorData?.error || `Server error: ${resp.status}`;
+                throw new Error(errorMsg);
             }
 
             // Read SSE stream
@@ -380,8 +382,9 @@
                                 }
                                 break;
                             case 'error':
-                                assistantContent += '\n\n**Error:** ' + (event.message || 'Unknown error');
+                                assistantContent += '\n\n**Error:** ' + event.message;
                                 assistantDiv.innerHTML = marked.parse(assistantContent);
+                                chatMessages.scrollTop = chatMessages.scrollHeight;
                                 break;
                         }
                     } catch (parseErr) {
@@ -391,9 +394,7 @@
             }
         } catch (err) {
             console.error('Chat error:', err);
-            if (!assistantContent) {
-                assistantDiv.innerHTML = '<em>Sorry, something went wrong. Please try again.</em>';
-            }
+            assistantDiv.innerHTML = marked.parse('**Error:** ' + err.message);
         } finally {
             isStreaming = false;
             sendBtn.disabled = false;
@@ -412,9 +413,12 @@
             }
             const data = await resp.json();
             renderCalendar(data.events || []);
-            renderTasks(data.prioritized_tasks || [], data.unprioritized_tasks || []);
+            const tasks = data.tasks || {};
+            renderTasks(tasks.prioritized || [], tasks.unprioritized || []);
         } catch (err) {
             console.error('Dashboard error:', err);
+            document.getElementById('calendarEvents').innerHTML =
+                '<p class="text-danger">Failed to load dashboard: ' + escapeHtml(err.message) + '</p>';
         }
     }
 

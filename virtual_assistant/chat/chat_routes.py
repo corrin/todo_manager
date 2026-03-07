@@ -132,7 +132,7 @@ def chat():
 
     api_key = current_user.openai_key
     if not api_key:
-        return jsonify({"error": "OpenAI API key not configured. Please set it in Settings."}), 400
+        return jsonify({"error": "No API key configured. Go to Settings to add one."}), 400
 
     # Get or create conversation
     conversation_id = data.get("conversation_id")
@@ -227,7 +227,7 @@ def _json_response(conversation, messages, model, api_key):
 
     except Exception as e:
         logger.exception(f"Error in chat endpoint: {e}")
-        return jsonify({"error": str(e)}), 500
+        raise
 
 
 def _stream_response(conversation, messages, model, api_key):
@@ -333,11 +333,13 @@ def dashboard():
     """Return current tasks and calendar state."""
     prioritized, unprioritized, completed = Task.get_user_tasks_by_list(current_user.id)
 
+    calendar_data = execute_tool("get_calendar", {}, current_user.id)
+
     return jsonify({
         "tasks": {
             "prioritized": [t.to_dict() for t in prioritized],
             "unprioritized": [t.to_dict() for t in unprioritized],
             "completed": [t.to_dict() for t in completed[:10]],
         },
-        "events": [],
+        "events": calendar_data.get("events", []),
     })
