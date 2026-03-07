@@ -72,6 +72,7 @@ def create_app():
         public_endpoints = [
             'login',
             'new_user',
+            'about',
             'static',  # Allow static files
             'favicon'  # Allow favicon
         ]
@@ -153,6 +154,11 @@ def index():
 def new_user():
     """Displays the welcome page for new or logged-out users."""
     return render_template('new_user.html')
+
+@app.route("/about")
+def about():
+    """Displays the about page (no login required)."""
+    return render_template('about.html')
 
 @app.route('/settings', methods=['GET'])
 @login_required

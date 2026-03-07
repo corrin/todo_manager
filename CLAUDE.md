@@ -1,4 +1,4 @@
-# Virtual Assistant (Task Master)
+# Virtual Assistant (Aligned)
 
 ## Project Overview
 A Flask-based virtual assistant that integrates task management, calendar, and AI services. Uses a provider-based architecture with support for multiple backends (Google, O365, Todoist, OpenAI).

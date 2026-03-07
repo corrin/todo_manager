@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}About - Aligned{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="text-center mb-5">
+        <h1>Aligned</h1>
+        <p class="lead">Spend your time on what matters to you.</p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <p class="fs-5">You know how you want to spend your time &mdash; health, relationships, meaningful work. But somehow the day fills up with other things. Aligned fixes that.</p>
+
+            <h4 class="mt-5">What should I do next?</h4>
+            <p>That's the question Aligned answers. You tell it your priorities, and it schedules your time accordingly &mdash; writing focused work blocks directly into your calendar, fitted around your existing commitments.</p>
+
+            <h4 class="mt-4">Tell it what matters</h4>
+            <p>You can set two kinds of goals:</p>
+            <ul>
+                <li><strong>Time goals</strong> &mdash; "I want to spend 8 hours a week on fitness"</li>
+                <li><strong>Recurring goals</strong> &mdash; "Call Joe every 30 days"</li>
+            </ul>
+            <p>Aligned tracks your progress against these goals and schedules your time to keep you on track.</p>
+
+            <h4 class="mt-4">It decides what comes first</h4>
+            <p>Aligned doesn't just shuffle tasks randomly. It prioritises based on what matters most right now: hard deadlines come first, then goals where you're falling behind, then things you haven't done in a while. It also tries to keep you in flow by grouping similar work together.</p>
+
+            <h4 class="mt-4">It adapts to reality</h4>
+            <p>Plans change. Something urgent comes up, or a task takes longer than expected. Traditional planners just mark everything overdue. Aligned reschedules around what actually happened, so your plan always reflects today, not last Monday.</p>
+
+            <h4 class="mt-4">It asks when it's unsure</h4>
+            <p>If Aligned can't figure out the next step for a goal, it'll ask rather than guess. For example: <em>"Your top priority is marathon training, but I'm not sure what to schedule. Should I put in a run, or would you rather plan a training programme first?"</em></p>
+
+            <h4 class="mt-4">Your calendar stays yours</h4>
+            <p>Aligned writes to a dedicated calendar and never touches your existing events. You'll always see its suggestions as separate blocks alongside your normal schedule.</p>
+
+            <h4 class="mt-4">Simple to use</h4>
+            <p>Tell Aligned what matters to you. Check your calendar to see what to work on next. Let it know when things change. That's it.</p>
+
+            <h4 class="mt-4">Pricing</h4>
+            <p>Aligned is currently free. No credit card needed. If that changes, we'll let you know well in advance.</p>
+
+            <div class="text-center mt-5 mb-3">
+                {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">Go to Dashboard</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">Get Started</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

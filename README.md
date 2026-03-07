@@ -1,10 +1,10 @@
-# Task Master
+# Aligned
 
 An intelligent task and calendar management assistant that helps organize your work and schedule more effectively.
 
 ## Overview
 
-Task Master is an AI-based scrum master that helps you manage your time and tasks effectively. It functions by:
+Aligned is an AI-based scrum master that helps you manage your time and tasks effectively. It functions by:
 a) Receiving feedback from you on what you've been doing and what you've accomplished (daily or multiple times a day).
 b) Reviewing your goals, including how you want to spend your time and what you want to accomplish.
 c) Refining and rewriting your plan to align with the new information and your progress.
@@ -32,7 +32,7 @@ e) Minimizing context switching, for example, by organizing your week into large
 
 ## Architecture
 
-Task Master follows a provider-based architecture with clean separation of concerns:
+Aligned follows a provider-based architecture with clean separation of concerns:
 
 1. **Task Management** - Retrieves and organizes tasks and goals from external providers (like Todoist, with Google/Outlook Tasks in development) and caches them in a local database.
 2. **AI Processing** - Analyzes goals and feedback, adapts plans, breaks down objectives, and generates schedules.

@@ -1,8 +1,8 @@
-# Task Master Architecture
+# Aligned Architecture
 
 ## System Overview
 
-Task Master is built on Flask and follows a provider-based architecture with five main components:
+Aligned is built on Flask and follows a provider-based architecture with five main components:
 
 ### 1. Task Management
 - **Task Providers**: Integrations with task sources

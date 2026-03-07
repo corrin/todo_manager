@@ -19,7 +19,6 @@ from asgiref.sync import async_to_sync
 from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
 from virtual_assistant.meetings.o365_calendar_provider import O365CalendarProvider
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.database.external_account import ExternalAccount
 from flask_login import current_user # Import current_user
 from flask_login import login_required # Import login_required

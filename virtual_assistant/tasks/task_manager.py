@@ -1,4 +1,3 @@
-from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.utils.logger import logger
 from .todoist_provider import TodoistProvider
 from .outlook_task_provider import OutlookTaskProvider

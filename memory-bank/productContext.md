@@ -1,23 +1,23 @@
 # Product Context
 
-## Why Task Master Exists
-Task Master addresses the common problem of translating a growing todo list into actionable time blocks on a calendar. It bridges the gap between task management and time management, helping users allocate appropriate time for their work.
+## Why Aligned Exists
+Aligned addresses the common problem of translating a growing todo list into actionable time blocks on a calendar. It bridges the gap between task management and time management, helping users allocate appropriate time for their work.
 
-## Problems Task Master Solves
+## Problems Aligned Solves
 
 ### 1. Task-to-Time Conversion Challenge
-Many people maintain task lists but struggle to convert them into actual time blocks on their calendars. Task Master automates this process, ensuring tasks get the dedicated time they need for completion.
+Many people maintain task lists but struggle to convert them into actual time blocks on their calendars. Aligned automates this process, ensuring tasks get the dedicated time they need for completion.
 
 ### 2. Scheduling Complexity
-Manually scheduling tasks around existing appointments is time-consuming and error-prone. Task Master intelligently fits tasks into available time slots while respecting fixed appointments.
+Manually scheduling tasks around existing appointments is time-consuming and error-prone. Aligned intelligently fits tasks into available time slots while respecting fixed appointments.
 
 ### 3. Time Allocation Consistency
-Users often have recurring areas of focus that need regular attention. Task Master supports natural language rules (e.g., "work on my hobby project twice a week") to maintain consistent time allocation across important life areas.
+Users often have recurring areas of focus that need regular attention. Aligned supports natural language rules (e.g., "work on my hobby project twice a week") to maintain consistent time allocation across important life areas.
 
 ### 4. Multiple System Management
-Managing separate task and calendar systems creates friction. Task Master integrates with popular tools (Todoist, Google Calendar, Office 365) to create a seamless workflow between these systems.
+Managing separate task and calendar systems creates friction. Aligned integrates with popular tools (Todoist, Google Calendar, Office 365) to create a seamless workflow between these systems.
 
-## How Task Master Works
+## How Aligned Works
 
 1. **Task Collection**: The system connects to task providers to collect user tasks
 2. **Rule Processing**: AI interprets natural language scheduling rules

@@ -1,7 +1,7 @@
-# Task Master Project Brief
+# Aligned Project Brief
 
 ## Project Purpose
-Task Master is an intelligent task and meeting management assistant designed to help users organize work and schedule more effectively. The application takes a user's todo list and converts it into calendar appointments focused on tasks, following user-defined rules for time allocation.
+Aligned is an intelligent task and meeting management assistant designed to help users organize work and schedule more effectively. The application takes a user's todo list and converts it into calendar appointments focused on tasks, following user-defined rules for time allocation.
 
 ## Core Requirements
 1. **Task Management** - Integration with task providers (Todoist, SQLite) to collect and manage user tasks

@@ -2,7 +2,7 @@
 
 ## Core Architecture
 
-The Task Master application is structured around five main components:
+The Aligned application is structured around five main components:
 
 1. **Task Management** - Creating, updating, and tracking tasks across various providers
 2. **AI Processing** - Natural language processing for task creation and management

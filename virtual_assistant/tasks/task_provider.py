@@ -4,12 +4,10 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 import os # Needed for path operations
 import json # Needed for credential file handling
-from virtual_assistant.database.user_manager import UserDataManager # Needed for user context (folder path)
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.user import User
 from virtual_assistant.database.database import db
-# Settings is used by UserDataManager internally, no need to import here
 
 
 @dataclass
