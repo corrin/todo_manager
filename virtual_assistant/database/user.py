@@ -31,6 +31,7 @@ class User(UserMixin, db.Model):
     openai_key = db.Column(db.Text, nullable=True)
     ai_instructions = db.Column(db.Text, nullable=True) # Custom AI instructions for the user
     schedule_slot_duration = db.Column(db.Integer, default=60) # Schedule slot duration in minutes (30, 60, or 120)
+    llm_model = db.Column(db.String(100), nullable=True)  # e.g., 'gpt-4o', 'claude-sonnet-4-20250514'
 
     # Define relationships using back_populates for bidirectional linking
     external_accounts = relationship("ExternalAccount", back_populates="user", lazy=True, cascade="all, delete-orphan")

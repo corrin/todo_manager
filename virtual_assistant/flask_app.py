@@ -220,6 +220,11 @@ def save_general_settings():
         # Always update AI instructions (can be empty to clear)
         current_user.ai_instructions = request.form.get('ai_instructions', '')
 
+        # Update LLM model
+        llm_model = request.form.get('llm_model')
+        if llm_model:
+            current_user.llm_model = llm_model
+
         # Update schedule slot duration
         slot_duration = request.form.get('schedule_slot_duration')
         if slot_duration in ['30', '60', '120']:
