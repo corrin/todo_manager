@@ -28,10 +28,10 @@ flask-migrate = "*"
 todoist-api-python = "*"
 msal = "*"
 flask-login = "*"
-msgraph-sdk = "^1.24.0"
-msgraph-core = "^1.3.2"
-azure-identity = "^1.21.0"
-asgiref = "^3.8.1"
+msgraph-sdk = "^1.55.0"
+msgraph-core = "^1.3.8"
+azure-identity = "^1.25.2"
+asgiref = "^3.11.1"
 pymysql = "^1.1.1"
 litellm = "^1.82.0"
 
@@ -47,6 +47,19 @@ playwright = "*"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.pylint.main]
+load-plugins = []
+
+[tool.pylint."messages control"]
+disable = ["logging-fstring-interpolation", "duplicate-code"]
 
 [build-system]
 requires = ["poetry-core"]

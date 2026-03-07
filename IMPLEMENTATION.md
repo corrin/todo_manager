@@ -76,7 +76,7 @@ This document outlines the current implementation status of the Aligned applicat
 
 ### Task System
 - 🔲 Outlook Tasks provider: Partially Implemented: Core authentication and task fetching are developed. Task creation, update, and AI instruction functionalities are largely stubs and require completion.
-  
+
 - 🔲 Google Tasks provider: Partially Implemented: Core authentication and task fetching are developed. Task creation, update, and AI instruction functionalities are largely stubs and require completion.
 
 ### AI System

@@ -52,13 +52,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const fillCalendarBtn = document.getElementById('fillCalendarBtn');
     const scheduleResult = document.getElementById('scheduleResult');
     const scheduleOutput = document.getElementById('scheduleOutput');
-    
+
     if (fillCalendarBtn) {
         fillCalendarBtn.addEventListener('click', function() {
             // Show loading state
             fillCalendarBtn.disabled = true;
             fillCalendarBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-            
+
             // Make API call to generate schedule and add to calendar
             fetch('/api/schedule/generate-and-add-to-calendar', {
                 method: 'POST',
@@ -80,11 +80,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Display the result
                 scheduleOutput.textContent = JSON.stringify(data, null, 2);
                 scheduleResult.style.display = 'block';
-                
+
                 // Reset button state
                 fillCalendarBtn.disabled = false;
                 fillCalendarBtn.innerHTML = 'Fill Calendar with Tasks';
-                
+
                 // Scroll to the result
                 scheduleResult.scrollIntoView({ behavior: 'smooth' });
             })
@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 scheduleOutput.textContent = error.message || 'An error occurred';
                 scheduleResult.style.display = 'block';
                 scheduleOutput.parentElement.className = 'alert alert-danger';
-                
+
                 // Reset button state
                 fillCalendarBtn.disabled = false;
                 fillCalendarBtn.innerHTML = 'Fill Calendar with Tasks';

@@ -16,7 +16,7 @@
 {% block content %}
 <div class="container">
     <h1>Settings</h1>
-    
+
     <!-- Basic Settings -->
     <div class="card mb-4">
         <div class="card-header">
@@ -253,7 +253,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="edit_todoist_api_key" class="form-label">New Todoist API Key</label>
-                        <input type="password" class="form-control" id="edit_todoist_api_key" name="api_key" 
+                        <input type="password" class="form-control" id="edit_todoist_api_key" name="api_key"
                                placeholder="Enter new API key to update">
                         <small class="form-text text-muted">Leave blank to keep the current key (if set), or enter a new key.</small>
                         <div id="edit_todoist_test_result" class="mt-2"></div> {# Optional: Add test button here too #}
@@ -411,7 +411,7 @@ document.addEventListener('DOMContentLoaded', function() {
             modalBodyInputEmail.value = email;
             modalBodyInputId.value = accountId;
             // Clear the API key field when opening
-            editModal.querySelector('.modal-body input#edit_todoist_api_key').value = ''; 
+            editModal.querySelector('.modal-body input#edit_todoist_api_key').value = '';
         });
     }
 
@@ -427,7 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var modalBodyInputEmail = modal.querySelector('.modal-body input#delete_todoist_email');
             var modalBodyInputId = modal.querySelector('.modal-body input#delete_todoist_account_id');
             var modalBodyDisplayEmail = modal.querySelector('.modal-body strong#delete_email_display');
-            
+
             if(modalBodyInputEmail) modalBodyInputEmail.value = email;
             if(modalBodyInputId) modalBodyInputId.value = accountId;
             if(modalBodyDisplayEmail) modalBodyDisplayEmail.textContent = email;
@@ -471,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Optional: Add Todoist Test Button Logic (if needed inside modals)
     // Similar to the original test button logic, but target elements within the modal
 });

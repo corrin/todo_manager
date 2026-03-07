@@ -1,6 +1,7 @@
 """OpenAI-format tool definitions and executor for task management."""
 
 import uuid
+
 from virtual_assistant.database.database import db
 from virtual_assistant.database.task import Task
 
@@ -168,7 +169,10 @@ def _create_task(arguments, user_id):
     priority = arguments.get("priority")
 
     content_hash = hashlib.sha256(
-        json.dumps({"title": title, "description": description, "priority": priority}, sort_keys=True).encode()
+        json.dumps(
+            {"title": title, "description": description, "priority": priority},
+            sort_keys=True,
+        ).encode()
     ).hexdigest()
 
     task = Task(
@@ -212,33 +216,34 @@ def _update_task(arguments, user_id):
 def _get_calendar(arguments, user_id):
     """Get calendar events for a given date."""
     import asyncio
+
     from virtual_assistant.database.external_account import ExternalAccount
-    from virtual_assistant.meetings.calendar_provider_factory import CalendarProviderFactory
+    from virtual_assistant.meetings.calendar_provider_factory import (
+        CalendarProviderFactory,
+    )
     from virtual_assistant.utils.logger import logger
 
     try:
-        primary = ExternalAccount.query.filter_by(
-            user_id=user_id, is_primary_calendar=True
-        ).first()
+        primary = ExternalAccount.query.filter_by(user_id=user_id, is_primary_calendar=True).first()
         if not primary:
             return {"events": [], "message": "No primary calendar configured"}
 
         provider = CalendarProviderFactory.get_provider(primary.provider)
         loop = asyncio.new_event_loop()
         try:
-            meetings = loop.run_until_complete(
-                provider.get_meetings(primary.external_email, user_id)
-            )
+            meetings = loop.run_until_complete(provider.get_meetings(primary.external_email, user_id))
         finally:
             loop.close()
 
         events = []
         for m in meetings:
-            events.append({
-                "title": getattr(m, "subject", str(m)),
-                "start": str(getattr(m, "start", "")),
-                "end": str(getattr(m, "end", "")),
-            })
+            events.append(
+                {
+                    "title": getattr(m, "subject", str(m)),
+                    "start": str(getattr(m, "start", "")),
+                    "end": str(getattr(m, "end", "")),
+                }
+            )
         return {"events": events}
     except Exception as e:
         logger.exception(f"Error fetching calendar: {e}")

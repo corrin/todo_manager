@@ -1,4 +1,5 @@
 import pytest
+
 from virtual_assistant.flask_app import create_app
 
 

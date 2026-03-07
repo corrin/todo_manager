@@ -24,7 +24,7 @@ e) Minimizing context switching, for example, by organizing your week into large
 
 - **Multiple Provider Integration:** Connects with various task management and calendar systems to gather your data and update your schedule.
 
-- **AI-Powered Planning & Adaptation:** 
+- **AI-Powered Planning & Adaptation:**
   - Aligns your schedule with your stated goals and priorities.
   - Dynamically refines your plan based on your progress and feedback.
   - Breaks down large objectives into actionable tasks.
@@ -75,5 +75,3 @@ poetry run flask db revision --autogenerate -m "description"  # Create migration
 ## License
 
 This project is proprietary. All rights reserved.
-
-

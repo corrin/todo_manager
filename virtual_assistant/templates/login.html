@@ -31,7 +31,7 @@ function handleCredentialResponse(response) {
     // Decode the credential response to get user info
     const responsePayload = jwt_decode(response.credential);
     const email = responsePayload.email;
-    
+
     fetch('/login', {
         method: 'POST',
         headers: {

@@ -1,8 +1,11 @@
-from flask_login import UserMixin
-from sqlalchemy.orm import relationship # Added relationship
 import uuid
+
+from flask_login import UserMixin
 from sqlalchemy import BINARY, TypeDecorator
+from sqlalchemy.orm import relationship  # Added relationship
+
 from virtual_assistant.database.database import db
+
 
 # Custom UUID type for MySQL
 class MySQLUUID(TypeDecorator):
@@ -23,22 +26,30 @@ class MySQLUUID(TypeDecorator):
 
 
 class User(UserMixin, db.Model):
-    __tablename__ = 'app_user'
+    __tablename__ = "app_user"
     id = db.Column(MySQLUUID, primary_key=True, default=uuid.uuid4)
-    app_login = db.Column(db.String(120), unique=True, index=True, nullable=False) # User's login identifier for this app
+    app_login = db.Column(
+        db.String(120), unique=True, index=True, nullable=False
+    )  # User's login identifier for this app
 
     # User-specific configuration (previously in config.json)
     ai_api_key = db.Column(db.Text, nullable=True)
-    ai_instructions = db.Column(db.Text, nullable=True) # Custom AI instructions for the user
-    schedule_slot_duration = db.Column(db.Integer, default=60) # Schedule slot duration in minutes (30, 60, or 120)
+    ai_instructions = db.Column(db.Text, nullable=True)  # Custom AI instructions for the user
+    schedule_slot_duration = db.Column(db.Integer, default=60)  # Schedule slot duration in minutes (30, 60, or 120)
     llm_model = db.Column(db.String(100), nullable=True)  # e.g., 'gpt-4o', 'claude-sonnet-4-20250514'
 
     # Define relationships using back_populates for bidirectional linking
-    external_accounts = relationship("ExternalAccount", back_populates="user", lazy=True, cascade="all, delete-orphan")
+    external_accounts = relationship(
+        "ExternalAccount",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
     def __init__(self, app_login):
         self.app_login = app_login
         # id is auto-generated
-    
+
     def __repr__(self):
         return f"<User id={self.id} app_login={self.app_login}>"
 

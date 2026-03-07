@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+
 from virtual_assistant.database.database import db
 from virtual_assistant.database.user import MySQLUUID
 
@@ -26,16 +27,12 @@ class Conversation(db.Model):
     )
 
     def next_sequence(self):
-        last = ChatMessage.query.filter_by(
-            conversation_id=self.id
-        ).order_by(ChatMessage.sequence.desc()).first()
+        last = ChatMessage.query.filter_by(conversation_id=self.id).order_by(ChatMessage.sequence.desc()).first()
         return (last.sequence + 1) if last else 0
 
     @staticmethod
     def get_history(conversation_id):
-        messages = ChatMessage.query.filter_by(
-            conversation_id=conversation_id
-        ).order_by(ChatMessage.sequence).all()
+        messages = ChatMessage.query.filter_by(conversation_id=conversation_id).order_by(ChatMessage.sequence).all()
         return [msg.to_dict() for msg in messages]
 
     def __repr__(self):
@@ -46,9 +43,7 @@ class ChatMessage(db.Model):
     __tablename__ = "chat_message"
 
     id = db.Column(MySQLUUID(), primary_key=True, default=uuid.uuid4)
-    conversation_id = db.Column(
-        MySQLUUID(), db.ForeignKey("conversation.id"), nullable=False
-    )
+    conversation_id = db.Column(MySQLUUID(), db.ForeignKey("conversation.id"), nullable=False)
     role = db.Column(db.String(20), nullable=False)
     content = db.Column(db.Text, nullable=True)
     tool_calls = db.Column(db.JSON, nullable=True)

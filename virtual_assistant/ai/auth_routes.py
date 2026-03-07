@@ -1,38 +1,40 @@
-from flask import Blueprint, request, render_template, redirect, url_for, flash
+from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+
 from virtual_assistant.utils.logger import logger
+
 from .ai_manager import AIManager
 
 
 def init_ai_routes():
     """Initialize routes for AI provider authentication."""
-    bp = Blueprint('ai_auth', __name__, url_prefix='/ai_auth')
+    bp = Blueprint("ai_auth", __name__, url_prefix="/ai_auth")
     ai_manager = AIManager()
 
-    @bp.route('/setup/<provider>', methods=['GET', 'POST'])
+    @bp.route("/setup/<provider>", methods=["GET", "POST"])
     @login_required
     def setup_credentials(provider):
         """Handle credential setup for AI providers."""
-        if request.method == 'POST':
-            api_key = request.form.get('api_key')
+        if request.method == "POST":
+            api_key = request.form.get("api_key")
             if not api_key:
-                flash('API key is required')
-                return redirect(url_for('ai_auth.setup_credentials', provider=provider))
+                flash("API key is required")
+                return redirect(url_for("ai_auth.setup_credentials", provider=provider))
 
             try:
                 app_login = current_user.app_login
                 provider_instance = ai_manager.get_provider(provider)
                 if not provider_instance:
-                    flash(f'Unknown provider: {provider}')
-                    return redirect(url_for('index'))
+                    flash(f"Unknown provider: {provider}")
+                    return redirect(url_for("index"))
 
                 provider_instance.store_credentials(app_login, {"api_key": api_key})
-                flash(f'{provider} credentials saved successfully')
-                return redirect(url_for('index'))
+                flash(f"{provider} credentials saved successfully")
+                return redirect(url_for("index"))
             except Exception as e:
                 logger.error(f"Error saving {provider} credentials: {e}")
-                flash('Error saving credentials')
-                return redirect(url_for('ai_auth.setup_credentials', provider=provider))
+                flash("Error saving credentials")
+                return redirect(url_for("ai_auth.setup_credentials", provider=provider))
 
         # GET request - show setup form
         template_name = f"{provider}_setup.html"

@@ -1,4 +1,5 @@
 from virtual_assistant.utils.logger import logger
+
 from .openai_provider import OpenAIProvider
 
 
@@ -23,20 +24,16 @@ class AIManager:
 
     def authenticate(self, email, provider_name=None):
         """Authenticate with specified or all providers.
-        
+
         Args:
             email: User's email
             provider_name: Optional specific provider to authenticate with
-        
+
         Returns:
             Dict of provider_name: auth_result pairs
         """
         auth_results = {}
-        providers_to_check = (
-            {provider_name: self.providers[provider_name]}
-            if provider_name
-            else self.providers
-        )
+        providers_to_check = {provider_name: self.providers[provider_name]} if provider_name else self.providers
 
         for name, provider in providers_to_check.items():
             try:
@@ -52,12 +49,12 @@ class AIManager:
 
     def generate_text(self, email, prompt, provider_name=None):
         """Generate text using specified or default provider.
-        
+
         Args:
             email: User's email
             prompt: Text prompt
             provider_name: Optional specific provider to use
-        
+
         Returns:
             Generated text
         """
@@ -65,11 +62,7 @@ class AIManager:
             raise ValueError(f"Unknown AI provider: {provider_name}")
 
         # If no provider specified, try them in order until one works
-        providers_to_try = (
-            [self.providers[provider_name]]
-            if provider_name
-            else self.providers.values()
-        )
+        providers_to_try = [self.providers[provider_name]] if provider_name else self.providers.values()
 
         last_error = None
         for provider in providers_to_try:

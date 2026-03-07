@@ -12,12 +12,12 @@
         color: #6c757d;
         margin-bottom: 10px;
     }
-    
+
     /* Add a subtle visual indicator that task details aren't editable */
     .task-content {
         cursor: default;
     }
-    
+
     /* Make the task completion button more prominent */
     .task-complete-btn {
         min-width: 38px;
@@ -34,7 +34,7 @@
             <div class="readonly-notice">
                 <i class="fas fa-info-circle"></i> Note: Only task completion status can be changed. Other task details can only be edited in the source task provider.
             </div>
-            
+
             <!-- Error Display Container -->
             <div id="error-container" class="alert alert-danger mt-3 mb-3" style="display: none;">
                 <div class="d-flex justify-content-between align-items-center">
@@ -44,7 +44,7 @@
                 <hr>
                 <p id="error-message"></p>
             </div>
-            
+
             {% if error %}
             <div class="alert alert-danger">
                 <p>{{ error }}</p>
@@ -141,7 +141,7 @@
                 <p>No tasks found. Add tasks in your task provider to see them here.</p>
             </div>
             {% endif %}
-            
+
             <div class="mt-4">
                 <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Home</a>
                 <a href="{{ url_for('tasks.list_tasks') }}" class="btn btn-primary">Refresh Tasks</a>

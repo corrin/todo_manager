@@ -1,21 +1,24 @@
 import uuid
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from virtual_assistant.flask_app import create_app
+import pytest
+
+from virtual_assistant.chat.models import ChatMessage, Conversation
 from virtual_assistant.database.database import db
 from virtual_assistant.database.user import User
-from virtual_assistant.chat.models import Conversation, ChatMessage
+from virtual_assistant.flask_app import create_app
 
 
 @pytest.fixture()
 def app():
     app = create_app()
-    app.config.update({
-        "TESTING": True,
-        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
-        "SERVER_NAME": "localhost",
-    })
+    app.config.update(
+        {
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SERVER_NAME": "localhost",
+        }
+    )
     with app.app_context():
         db.create_all()
         yield app
