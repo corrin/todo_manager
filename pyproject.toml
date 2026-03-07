@@ -40,6 +40,12 @@ pylint = "*"
 isort = "*"
 black = "*"
 pre-commit = "*"
+pytest = "*"
+pytest-playwright = "*"
+playwright = "*"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [build-system]
 requires = ["poetry-core"]

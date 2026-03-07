@@ -21,7 +21,6 @@ from virtual_assistant.meetings.o365_calendar_provider import O365CalendarProvid
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.database.user_manager import UserDataManager
 from virtual_assistant.database.external_account import ExternalAccount
-from virtual_assistant.database.task import TaskAccount # Import TaskAccount
 from flask_login import current_user # Import current_user
 from flask_login import login_required # Import login_required
 from virtual_assistant.database.database import db
@@ -38,18 +37,17 @@ providers = {
     "o365": O365CalendarProvider,
 }
 
-def handle_token_expiry(account, error):
+def handle_token_expiry(ext_account, error):
     """Handle token expiry by marking account for reauthorization."""
     if isinstance(error, RefreshError) or "token expired" in str(error).lower():
-        logger.warning(f"Token expired for {account.calendar_email} ({account.provider})")
-        # Mark account as needing reauth
-        account.needs_reauth = True
+        logger.warning(f"Token expired for {ext_account.external_email} ({ext_account.provider})")
+        ext_account.needs_reauth = True
         db.session.commit()
         return {
             'error': 'Token expired',
             'needs_reauth': True,
             'reauth_url': url_for(
-                f'meetings.authenticate_{account.provider}_calendar',
+                f'meetings.authenticate_{ext_account.provider}_calendar',
                 _external=True
             )
         }
@@ -82,12 +80,20 @@ def set_primary_account():
             flash("Invalid account ID format.", "error")
             return render_template("error.html", error="Invalid account ID format", title="Invalid Request")
         
+        # Look up the account to get the email for the flash message
+        ext_account = ExternalAccount.query.filter_by(id=account_id, user_id=user_id).first()
+        if not ext_account:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "error": "Account not found"}), 404
+            flash("Calendar account not found.", "error")
+            return redirect(url_for("settings"))
+
         # Set the account as primary using ExternalAccount
         ExternalAccount.set_as_primary(account_id, user_id, 'calendar')
-        
+
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({"success": True})
-        flash(f"Set {calendar_email} as your primary calendar account.", "success")
+        flash(f"Set {ext_account.external_email} as your primary calendar account.", "success")
         return redirect(url_for("settings"))
             
     except Exception as e:
@@ -136,12 +142,12 @@ def reauth_calendar_account():
         if auth_url is None and credentials is not None:
             logger.info(f"Token refreshed for {calendar_email} without needing reauthorization")
             # Mark account as no longer needing reauth
-            account = ExternalAccount.get_by_email_provider_and_user(
-                calendar_email, provider_name, current_user.id # Use user_id
+            ext_account = ExternalAccount.get_by_email_provider_and_user(
+                calendar_email, provider_name, current_user.id
             )
-            if account:
-                account.needs_reauth = False
-                account.save()
+            if ext_account:
+                ext_account.needs_reauth = False
+                ext_account.save()
             
             flash(f"Successfully refreshed access to {calendar_email}", "success")
             return redirect(url_for("meetings.sync_single_calendar", provider=provider_name, calendar_email=calendar_email))
@@ -229,73 +235,46 @@ def google_authenticate():
             raise ValueError("Failed to get credentials from OAuth callback")
     
         # Get the actual Google account email
-        calendar_account_email = google_provider.get_google_email(credentials)
+        external_email = google_provider.get_google_email(credentials)
         
-        logger.info(f"Google Calendar credentials received for account: {calendar_account_email}")
+        logger.info(f"Google Calendar credentials received for account: {external_email}")
         
         # Check if a ExternalAccount for this Google account already exists for this app user
-        existing_calendar_account = ExternalAccount.query.filter_by(
-            user_id=current_user.id, # Use user_id from current_user
-            account_email=calendar_account_email,
+        existing_ext_account = ExternalAccount.query.filter_by(
+            user_id=current_user.id,
+            external_email=external_email,
             provider=provider
         ).first()
-        
-        # Store/update CALENDAR credentials using the provider's method
-        # store_credentials now returns the ExternalAccount object directly or raises exception
-        calendar_account = google_provider.store_credentials(calendar_account_email, credentials, current_user.id)
 
-        # Verify credentials work by attempting to get meetings (optional but recommended)
+        # Store/update CALENDAR credentials using the provider's method
+        ext_account = google_provider.store_credentials(external_email, credentials, current_user.id)
+
+        # Verify credentials work by attempting to get meetings
         verification_failed = False
         try:
-            google_provider.get_meetings_sync(calendar_account_email, current_user.id) # Pass user_id
-            # Mark calendar account as active since verification succeeded
-            # calendar_account is guaranteed to be an object here if store_credentials didn't raise an error
-            calendar_account.needs_reauth = False
-            calendar_account.last_sync = datetime.now(timezone.utc)
-                 # Don't commit yet, do it after task account update
+            google_provider.get_meetings_sync(external_email, current_user.id)
+            ext_account.needs_reauth = False
+            ext_account.last_sync = datetime.now(timezone.utc)
         except Exception as verify_error:
              verification_failed = True
-             logger.error(f"Failed to verify Google Calendar credentials for {calendar_account_email} (User ID: {current_user.id}): {verify_error}")
-             # Mark as needing reauth if verification fails
-             calendar_account.needs_reauth = True # Mark as needing reauth if verification fails
-             # Don't commit yet
+             logger.error(f"Failed to verify Google Calendar credentials for {external_email} (User ID: {current_user.id}): {verify_error}")
+             ext_account.needs_reauth = True
 
-        # --- Also Create/Update TaskAccount ---
-        task_provider_name = 'google_tasks'
-        # Prepare credentials dictionary for TaskAccount
-        task_credentials = {
-            'token': credentials.token,
-            'refresh_token': credentials.refresh_token,
-            # Attempt to get expiry, handle potential AttributeError if not present
-            'expires_at': getattr(credentials, 'expiry', None),
-            'scopes': " ".join(credentials.scopes) if credentials.scopes else None,
-            # Set reauth based on calendar verification result
-            'needs_reauth': verification_failed
-        }
-        # Use TaskAccount's class method to handle creation or update
-        task_account = TaskAccount.set_account(
-            user_id=current_user.id,
-            provider_name=task_provider_name,
-            task_user_email=calendar_account_email, # Use the same email
-            credentials=task_credentials
-        )
-        # Stage the task account changes if an object was returned (created/updated)
-        if task_account:
-             db.session.add(task_account)
+        # --- Enable task usage on the same ExternalAccount ---
+        ext_account.use_for_tasks = True
+        ext_account.expires_at = getattr(credentials, 'expiry', None)
 
         # --- Commit all changes and Flash message ---
         try:
-            db.session.commit() # Commit both ExternalAccount and TaskAccount changes
-            # Flash message should only mention Calendar context, as per user requirement
-            if existing_calendar_account: # Check if the *calendar* account existed before
-                flash(f"Successfully reauthorized Google Calendar for {calendar_account_email}.", "success")
+            db.session.commit()
+            if existing_ext_account:
+                flash(f"Successfully reauthorized Google Calendar for {external_email}.", "success")
             else:
-                flash(f"Google Calendar for {calendar_account_email} connected successfully.", "success")
+                flash(f"Google Calendar for {external_email} connected successfully.", "success")
         except Exception as commit_error:
              db.session.rollback()
-             logger.error(f"Error committing account updates for Google user {current_user.id} ({calendar_account_email}): {commit_error}")
-             flash(f"Error saving account details for {calendar_account_email}.", "danger")
-             # Redirect to settings on error saving
+             logger.error(f"Error committing account updates for Google user {current_user.id} ({external_email}): {commit_error}")
+             flash(f"Error saving account details for {external_email}.", "danger")
              return redirect(url_for("settings"))
 
         # Redirect to settings page after successful connection/reauth
@@ -312,9 +291,7 @@ def o365_authenticate():
     logger.info(f"O365 authenticate route called with URL: {request.url}")
     
     o365_provider = O365CalendarProvider()
-    
-    # app_login = session.get("app_login") # Use current_user instead
-    
+
     try:
         # Handle the callback synchronously, expecting email and credentials dict
         result = async_to_sync(o365_provider.handle_oauth_callback)(request.url, current_user.id) # Pass user_id
@@ -328,54 +305,35 @@ def o365_authenticate():
         credentials = result['credentials'] # Expecting dict like {'token': ..., 'refresh_token': ..., 'expires_at': ...}
 
         # Check if a ExternalAccount for this O365 account already exists
-        existing_calendar_account = ExternalAccount.query.filter_by(
+        existing_ext_account = ExternalAccount.query.filter_by(
             user_id=current_user.id,
-            account_email=calendar_email,
+            external_email=calendar_email,
             provider='o365'
         ).first()
 
         # --- Create/Update ExternalAccount ---
-        calendar_account = existing_calendar_account
-        if not calendar_account:
-             calendar_account = ExternalAccount(
-                 account_email=calendar_email,
+        ext_account = existing_ext_account
+        if not ext_account:
+             ext_account = ExternalAccount(
+                 external_email=calendar_email,
                  provider='o365',
                  user_id=current_user.id
              )
-             db.session.add(calendar_account)
-        
-        # Update ExternalAccount fields from credentials dict
-        calendar_account.token = credentials.get('token')
-        calendar_account.refresh_token = credentials.get('refresh_token')
-        # Assuming O365 provider handles client_id/secret internally if needed
-        # calendar_account.scopes = Settings.O365_SCOPES # Store scopes if needed
-        calendar_account.needs_reauth = False # Assume success for now
-        calendar_account.last_sync = datetime.now(timezone.utc)
-        # Verification step could be added here if O365 provider has a sync check method
+             db.session.add(ext_account)
 
-        # --- Also Create/Update TaskAccount ---
-        task_provider_name = 'outlook' # Map 'o365' calendar to 'outlook' task provider
-        task_credentials = {
-            'token': credentials.get('token'),
-            'refresh_token': credentials.get('refresh_token'),
-            'expires_at': credentials.get('expires_at'), # Pass expiry if available
-            'scopes': credentials.get('scopes'), # Pass scopes if available
-            'needs_reauth': False # Assume success
-        }
-        task_account = TaskAccount.set_account(
-            user_id=current_user.id,
-            provider_name=task_provider_name,
-            task_user_email=calendar_email,
-            credentials=task_credentials
-        )
-        if task_account:
-             db.session.add(task_account)
+        ext_account.token = credentials.get('token')
+        ext_account.refresh_token = credentials.get('refresh_token')
+        ext_account.needs_reauth = False
+        ext_account.last_sync = datetime.now(timezone.utc)
+
+        # --- Enable task usage on the same ExternalAccount ---
+        ext_account.use_for_tasks = True
+        ext_account.expires_at = credentials.get('expires_at')
 
         # --- Commit all changes and Flash message ---
         try:
             db.session.commit()
-            # Flash message only mentions Calendar context
-            if existing_calendar_account:
+            if existing_ext_account:
                 flash(f"Successfully reauthorized Office 365 Calendar for {calendar_email}.", "success")
             else:
                 flash(f"Office 365 Calendar for {calendar_email} connected successfully.", "success")
@@ -386,8 +344,6 @@ def o365_authenticate():
              return redirect(url_for("settings"))
         # Redirect to settings page after successful connection/reauth
         return redirect(url_for("settings"))
-        
-        return redirect(url_for("meetings.sync_single_calendar", provider='o365', calendar_email=calendar_email))
         
     except Exception as e:
         logger.error(f"❌ AUTH ERROR in o365_authenticate: {str(e)}")
@@ -420,89 +376,81 @@ def sync_meetings():
         'status': 'success',
         'message': ''
     }
-    accounts = ExternalAccount.get_accounts_for_user(user_id)
-    if not accounts:
+    ext_accounts = ExternalAccount.get_accounts_for_user(user_id)
+    if not ext_accounts:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'error': 'No calendar accounts found'}), 404
         flash('No calendar accounts found', 'error')
         return render_template("error.html", error="No calendar accounts found", title="No Accounts")
-    
-    for account in accounts:
-        if getattr(account, 'needs_reauth', False):
-            # Skip accounts already marked as needing reauth
-            logger.warning(f"⚠️ SKIPPING SYNC: Account {account.calendar_email} already needs reauthorization")
+
+    for ext_account in ext_accounts:
+        if getattr(ext_account, 'needs_reauth', False):
+            logger.warning(f"⚠️ SKIPPING SYNC: Account {ext_account.external_email} already needs reauthorization")
             results['needs_reauth'].append({
-                'email': account.calendar_email,
-                'provider': account.provider,
+                'email': ext_account.external_email,
+                'provider': ext_account.provider,
                 'reason': 'Account previously marked as needing reauthorization',
                 'reauth_url': url_for(
-                    f'meetings.authenticate_{account.provider}_calendar',
+                    f'meetings.authenticate_{ext_account.provider}_calendar',
                     _external=True
                 )
             })
             results['status'] = 'needs_reauth'
             continue
-                
-        logger.info(f"Attempting to sync {account.provider} calendar for {account.calendar_email}")
-        provider = providers[account.provider]()
-        
-        try:
-            # Skip unsupported providers
-            if account.provider not in providers:
-                logger.error(f"Unsupported provider: {account.provider}")
-                results['errors'].append({
-                    'email': account.calendar_email,
-                    'provider': account.provider,
-                    'error': f"Unsupported calendar provider: {account.provider}"
-                })
-                results['status'] = 'error'
-                continue
 
-            # Handle O365 and Google providers differently
-            if account.provider == 'o365':
-                # O365 needs to use async methods with async_to_sync
-                meetings = async_to_sync(provider.get_meetings)(account.calendar_email, user_id)
+        logger.info(f"Attempting to sync {ext_account.provider} calendar for {ext_account.external_email}")
+
+        # Skip unsupported providers
+        if ext_account.provider not in providers:
+            logger.error(f"Unsupported provider: {ext_account.provider}")
+            results['errors'].append({
+                'email': ext_account.external_email,
+                'provider': ext_account.provider,
+                'error': f"Unsupported calendar provider: {ext_account.provider}"
+            })
+            results['status'] = 'error'
+            continue
+
+        provider = providers[ext_account.provider]()
+
+        try:
+            if ext_account.provider == 'o365':
+                meetings = async_to_sync(provider.get_meetings)(ext_account.external_email, user_id)
             else:
-                # Google can use synchronous methods directly
-                meetings = provider.get_meetings_sync(account.calendar_email, user_id)
-            
-            # Log success
-            logger.info(f"Successfully synced {len(meetings)} meetings for {account.calendar_email}")
-            flash(f"Successfully synced {len(meetings)} meetings from {account.calendar_email}", "success")
-            
-            # Only log as a success if we get here (no exceptions were thrown)
+                meetings = provider.get_meetings_sync(ext_account.external_email, user_id)
+
+            logger.info(f"Successfully synced {len(meetings)} meetings for {ext_account.external_email}")
+            flash(f"Successfully synced {len(meetings)} meetings from {ext_account.external_email}", "success")
+
             success_info = {
-                'email': account.calendar_email,
-                'provider': account.provider,
+                'email': ext_account.external_email,
+                'provider': ext_account.provider,
                 'meetings_count': len(meetings)
             }
             results['success'].append(success_info)
-            
+
             if not meetings:
-                logger.info(f"No meetings found for {account.calendar_email} (empty calendar)")
+                logger.info(f"No meetings found for {ext_account.external_email} (empty calendar)")
             else:
-                logger.info(f"Successfully synced {len(meetings)} meetings for {account.calendar_email}")
-                
+                logger.info(f"Successfully synced {len(meetings)} meetings for {ext_account.external_email}")
+
         except Exception as e:
             error_msg = str(e)
-            
-            # Process authentication errors
-            if ("token expired" in error_msg.lower() or 
-                "authentication failed" in error_msg.lower() or 
+
+            if ("token expired" in error_msg.lower() or
+                "authentication failed" in error_msg.lower() or
                 "invalid credentials" in error_msg.lower() or
                 "missing refresh token" in error_msg.lower() or
                 "auth" in error_msg.lower() and "fail" in error_msg.lower()):
-                
-                logger.warning(f"⚠️ AUTH ISSUE: Token expired or authentication failed for {account.calendar_email}: {error_msg}")
-                
-                # Mark account as needing reauth if not already done
-                account.needs_reauth = True
+
+                logger.warning(f"⚠️ AUTH ISSUE: Token expired or authentication failed for {ext_account.external_email}: {error_msg}")
+
+                ext_account.needs_reauth = True
                 db.session.commit()
-                
-                # Check for specific missing fields
+
                 required_fields = ['token', 'refresh_token', 'token_uri', 'client_id', 'client_secret', 'scopes']
-                missing_fields = [field for field in required_fields if not getattr(account, field)]
-                
+                missing_fields = [field for field in required_fields if not getattr(ext_account, field)]
+
                 reason = "Authentication failed"
                 if "missing refresh token" in error_msg.lower():
                     reason = "Missing refresh token - try revoking app access in your Google account settings and reconnect"
@@ -510,27 +458,27 @@ def sync_meetings():
                     reason = f"Missing required fields: {', '.join(missing_fields)}"
                 elif "expired" in error_msg.lower():
                     reason = "Token has expired"
-                    
+
                 results['needs_reauth'].append({
-                    'email': account.calendar_email,
-                    'provider': account.provider,
+                    'email': ext_account.external_email,
+                    'provider': ext_account.provider,
                     'error': error_msg,
                     'reason': reason,
                     'reauth_url': url_for(
-                        f'meetings.refresh_{account.provider}_calendar',
-                        calendar_email=account.calendar_email,
+                        f'meetings.refresh_{ext_account.provider}_calendar',
+                        calendar_email=ext_account.external_email,
                         _external=True
-                    ) if account.refresh_token else url_for(
-                        f'meetings.authenticate_{account.provider}_calendar',
+                    ) if ext_account.refresh_token else url_for(
+                        f'meetings.authenticate_{ext_account.provider}_calendar',
                         _external=True
                     )
                 })
                 results['status'] = 'needs_reauth'
             else:
-                logger.error(f"❌ ERROR: Error syncing {account.provider} calendar ({account.calendar_email}): {error_msg}")
+                logger.error(f"❌ ERROR: Error syncing {ext_account.provider} calendar ({ext_account.external_email}): {error_msg}")
                 results['errors'].append({
-                    'email': account.calendar_email,
-                    'provider': account.provider,
+                    'email': ext_account.external_email,
+                    'provider': ext_account.provider,
                     'error': error_msg
                 })
                 results['status'] = 'error'
@@ -582,25 +530,24 @@ def refresh_google_calendar(calendar_email):
         user_id = current_user.id
         
         # Get the account
-        account = ExternalAccount.get_by_email_provider_and_user(
-            calendar_email, "google", app_login
+        ext_account = ExternalAccount.get_by_email_provider_and_user(
+            calendar_email, "google", user_id
         )
-        if not account:
+        if not ext_account:
             logger.error(f"No Google calendar account found for {calendar_email}")
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({"error": "Account not found"}), 404
             flash("Calendar account not found.", "error")
             return render_template("error.html", error="Calendar account not found", title="Account Error")
-            
-        # Try to refresh using existing refresh token
+
         provider = GoogleCalendarProvider()
         credentials = Credentials(
-            token=account.token,
-            refresh_token=account.refresh_token,
-            token_uri=account.token_uri,
-            client_id=account.client_id,
-            client_secret=account.client_secret,
-            scopes=account.scopes.split()
+            token=ext_account.token,
+            refresh_token=ext_account.refresh_token,
+            token_uri=ext_account.token_uri,
+            client_id=ext_account.client_id,
+            client_secret=ext_account.client_secret,
+            scopes=ext_account.scopes.split()
         )
         
         if not credentials.refresh_token:
@@ -616,8 +563,8 @@ def refresh_google_calendar(calendar_email):
         try:
             credentials.refresh(Request())
             provider.store_credentials(calendar_email, credentials, user_id)
-            account.needs_reauth = False
-            account.save()
+            ext_account.needs_reauth = False
+            ext_account.save()
             
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({"success": True})
@@ -648,19 +595,18 @@ def refresh_o365_calendar(calendar_email):
         user_id = current_user.id
         
         # Get the account
-        account = ExternalAccount.get_by_email_provider_and_user(
-            calendar_email, "o365", app_login
+        ext_account = ExternalAccount.get_by_email_provider_and_user(
+            calendar_email, "o365", user_id
         )
-        if not account:
+        if not ext_account:
             logger.error(f"No O365 calendar account found for {calendar_email}")
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({"error": "Account not found"}), 404
             flash("Calendar account not found.", "error")
             return render_template("error.html", error="Calendar account not found", title="Account Error")
-            
-        # Try to refresh using existing refresh token
+
         provider = O365CalendarProvider()
-        if not account.refresh_token:
+        if not ext_account.refresh_token:
             logger.error(f"No refresh token for {calendar_email}, need full reauth")
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({
@@ -674,9 +620,9 @@ def refresh_o365_calendar(calendar_email):
             # Use the O365 token endpoint to refresh
             token_url = f"{provider.authority}/oauth2/v2.0/token"
             data = {
-                'client_id': account.client_id,
-                'client_secret': account.client_secret,
-                'refresh_token': account.refresh_token,
+                'client_id': ext_account.client_id,
+                'client_secret': ext_account.client_secret,
+                'refresh_token': ext_account.refresh_token,
                 'grant_type': 'refresh_token'
             }
             response = requests.post(token_url, data=data)
@@ -684,15 +630,15 @@ def refresh_o365_calendar(calendar_email):
                 new_tokens = response.json()
                 credentials = {
                     'token': new_tokens['access_token'],
-                    'refresh_token': new_tokens.get('refresh_token', account.refresh_token),
-                    'token_uri': account.token_uri,
-                    'client_id': account.client_id,
-                    'client_secret': account.client_secret,
-                    'scopes': account.scopes
+                    'refresh_token': new_tokens.get('refresh_token', ext_account.refresh_token),
+                    'token_uri': ext_account.token_uri,
+                    'client_id': ext_account.client_id,
+                    'client_secret': ext_account.client_secret,
+                    'scopes': ext_account.scopes
                 }
                 provider.store_credentials(calendar_email, credentials, user_id)
-                account.needs_reauth = False
-                account.save()
+                ext_account.needs_reauth = False
+                ext_account.save()
                 
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     return jsonify({"success": True})
@@ -735,11 +681,11 @@ def sync_single_calendar(provider, calendar_email):
     came_from_settings = original_referrer and 'settings' in original_referrer
     
     # Get the specific account
-    account = ExternalAccount.get_by_email_provider_and_user(
-        calendar_email, provider, app_login
+    ext_account = ExternalAccount.get_by_email_provider_and_user(
+        calendar_email, provider, user_id
     )
-    
-    if not account:
+
+    if not ext_account:
         flash(f"Calendar account {calendar_email} not found", 'error')
         return render_template("error.html", error="Calendar account not found", title="Not Found")
     

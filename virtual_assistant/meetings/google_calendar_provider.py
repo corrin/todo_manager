@@ -31,14 +31,15 @@ class GoogleCalendarProvider(CalendarProvider):
         self.client_secret = Settings.GOOGLE_CLIENT_SECRET
         self.redirect_uri = Settings.GOOGLE_REDIRECT_URI
         self.scopes = [
-            'openid',  # OpenID Connect scope
-            'https://www.googleapis.com/auth/calendar',  # Calendar scope
-            'https://www.googleapis.com/auth/userinfo.email'  # Email scope
+            'openid',
+            'https://www.googleapis.com/auth/calendar',
+            'https://www.googleapis.com/auth/tasks',
+            'https://www.googleapis.com/auth/userinfo.email',
         ]
         self.provider_name = "google"
 
-        # Add this line to allow HTTPS
         os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+        os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
 
         # Keep these - useful for verifying config
         logger.debug("Google Calendar Provider initialized")
@@ -685,7 +686,7 @@ class GoogleCalendarProvider(CalendarProvider):
             # Create a new ExternalAccount record if one doesn't exist.
             logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}")
             account = ExternalAccount(
-                account_email=calendar_email,
+                external_email=calendar_email,
                 provider=self.provider_name,
                 user_id=user_id,
                 is_primary=is_first_account,

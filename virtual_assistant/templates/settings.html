@@ -29,9 +29,8 @@
                 <div class="form-group mb-3">
                     <label>AI Provider:</label>
                     <select class="form-control" name="ai_provider">
-                         <option value="">-- Select --</option> {# Add a default option #}
+                         <option value="">-- Select --</option>
                         <option value="openai" {% if user.ai_provider == 'openai' %}selected{% endif %}>OpenAI</option>
-                        <option value="grok" {% if user.ai_provider == 'grok' %}selected{% endif %}>Grok</option>
                     </select>
                 </div>
                 <div class="form-group mb-3">
@@ -39,12 +38,6 @@
                     <input type="password" name="openai_key" class="form-control"
                            placeholder="{% if user.openai_key %}••••••••••••••••••••••{% else %}Enter API Key{% endif %}">
                     {% if user.openai_key %}<small class="form-text text-muted">API key saved. Enter a new key to update.</small>{% endif %}
-                </div>
-                <div class="form-group mb-3">
-                    <label>Grok API Key:</label>
-                    <input type="password" name="grok_key" class="form-control"
-                           placeholder="{% if user.grok_key %}••••••••••••••••••••••{% else %}Enter API Key{% endif %}">
-                    {% if user.grok_key %}<small class="form-text text-muted">API key saved. Enter a new key to update.</small>{% endif %}
                 </div>
                 <div class="form-group mb-3">
                     <label>AI Instructions:</label>
@@ -88,85 +81,86 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for account in external_accounts %}
+                    {% for ext_account in external_accounts %}
                     <tr>
                         <td>
-                            {% if account.has_tasks %}
+                            {% if ext_account.has_tasks %}
                             <form action="{{ url_for('tasks.set_primary_task_provider') }}" method="POST" style="display: inline;" class="primary-task-form">
-                                <input type="radio" name="primary_task_account_id" value="{{ account.id }}"
-                                       {% if account.task_is_primary %}checked{% endif %}
+                                <input type="radio" name="primary_task_account_id" value="{{ ext_account.id }}"
+                                       {% if ext_account.task_is_primary %}checked{% endif %}
                                        onchange="setPrimaryTaskProvider(this)">
                             </form>
                             {% endif %}
-                            {% if account.has_calendar %}
+                            {% if ext_account.has_calendar %}
                             <form action="{{ url_for('meetings.set_primary_account') }}" method="POST" style="display: inline;" class="primary-calendar-form">
-                                <input type="radio" name="primary_calendar_account_id" value="{{ account.id }}"
-                                       {% if account.calendar_is_primary %}checked{% endif %}
+                                <input type="radio" name="primary_calendar_account_id" value="{{ ext_account.id }}"
+                                       {% if ext_account.calendar_is_primary %}checked{% endif %}
                                        onchange="setPrimaryCalendarAccount(this)">
                             </form>
                             {% endif %}
                         </td>
                         <td>
-                            {% if account.has_tasks %}
+                            {% if ext_account.has_tasks %}
                                 <i class="fas fa-check text-success"></i>
                             {% else %}
                                 <i class="fas fa-times text-muted"></i>
                             {% endif %}
                         </td>
                         <td>
-                            {% if account.has_calendar %}
+                            {% if ext_account.has_calendar %}
                                 <i class="fas fa-check text-success"></i>
                             {% else %}
                                 <i class="fas fa-times text-muted"></i>
                             {% endif %}
                         </td>
                         <td>
-                            {% if account.provider_name == 'todoist' %}Todoist
-                            {% elif account.provider_name == 'google_tasks' or account.provider == 'google' %}
+                            {% if ext_account.provider == 'todoist' %}Todoist
+                            {% elif ext_account.provider == 'google' %}
                             <i class="fab fa-google"></i> Google
-                            {% elif account.provider_name == 'outlook' or account.provider == 'o365' %}
+                            {% elif ext_account.provider == 'o365' %}
                             <i class="fab fa-microsoft"></i> Office 365
-                            {% else %}{{ account.provider_name or account.provider }}{% endif %}
+                            {% else %}{{ ext_account.provider }}{% endif %}
                         </td>
-                        <td>{{ account.task_user_email or account.email }}</td>
+                        <td>{{ ext_account.email }}</td>
                         <td>
-                            {% if account.has_tasks and account.provider_name == 'todoist' %}
-                                {% if account.api_key %}
+                            {% if ext_account.has_tasks and ext_account.provider == 'todoist' %}
+                                {% if ext_account.api_key %}
                                     <span class="badge bg-success">API Key Set</span>
                                 {% else %}
                                     <span class="badge bg-danger">API Key Missing</span>
                                 {% endif %}
-                            {% elif account.needs_reauth %}
+                            {% elif ext_account.needs_reauth %}
                                 <span class="badge bg-warning">Needs Reauth</span>
-                            {% elif account.token %}
+                            {% elif ext_account.token %}
                                 <span class="badge bg-success">Active</span>
                             {% else %}
                                 <span class="badge bg-secondary">Inactive</span>
                             {% endif %}
                         </td>
                         <td>
-                            {% if account.has_tasks and account.provider_name == 'todoist' %}
+                            {% if ext_account.has_tasks and ext_account.provider == 'todoist' %}
                                 <button type="button" class="btn btn-sm btn-primary"
                                         data-bs-toggle="modal" data-bs-target="#editTodoistModal"
-                                        data-email="{{ account.task_user_email }}"
-                                        data-account-id="{{ account.id }}"
-                                        data-key-set="{{ 'true' if account.api_key else 'false' }}">
+                                        data-email="{{ ext_account.email }}"
+                                        data-account-id="{{ ext_account.id }}"
+                                        data-key-set="{{ 'true' if ext_account.api_key else 'false' }}">
                                     <i class="fas fa-edit"></i> Edit Key
                                 </button>
                             {% endif %}
-                            {% if account.has_calendar and account.needs_reauth %}
-                                <a href="{{ url_for('meetings.reauth_calendar_account', provider=account.provider, calendar_email=account.email) }}"
+                            {% if ext_account.has_calendar and ext_account.needs_reauth %}
+                                <a href="{{ url_for('meetings.reauth_calendar_account', provider=ext_account.provider, calendar_email=ext_account.email) }}"
                                    class="btn btn-sm btn-warning">
                                     <i class="fas fa-sync"></i> Reauth
                                 </a>
                             {% endif %}
                             <button type="button" class="btn btn-sm btn-danger"
-                                    data-bs-toggle="modal" 
+                                    data-bs-toggle="modal"
                                     data-bs-target="#deleteAccountModal"
-                                    data-account-id="{{ account.id }}"
-                                    data-has-tasks="{{ 'true' if account.has_tasks else 'false' }}"
-                                    data-has-calendar="{{ 'true' if account.has_calendar else 'false' }}"
-                                    data-email="{{ account.task_user_email or account.email }}">
+                                    data-account-id="{{ ext_account.id }}"
+                                    data-has-tasks="{{ 'true' if ext_account.has_tasks else 'false' }}"
+                                    data-has-calendar="{{ 'true' if ext_account.has_calendar else 'false' }}"
+                                    data-provider="{{ ext_account.provider }}"
+                                    data-email="{{ ext_account.email }}">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </td>
@@ -298,27 +292,24 @@
     </div>
 </div>
 
-<!-- Delete Task Account Modal -->
-<div class="modal fade" id="deleteTaskAccountModal" tabindex="-1" aria-labelledby="deleteTaskAccountModalLabel" aria-hidden="true">
+<!-- Delete Account Modal -->
+<div class="modal fade" id="deleteAccountModal" tabindex="-1" aria-labelledby="deleteAccountModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            {# Point this form to the new task account deletion route #}
             <form method="POST" action="{{ url_for('tasks.delete_task_account') }}">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="deleteTaskAccountModalLabel">Delete Task Provider Account</h5>
+                    <h5 class="modal-title" id="deleteAccountModalLabel">Delete Account</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" id="delete_task_account_id" name="account_id">
-                    <input type="hidden" id="delete_task_provider_name" name="provider_name"> {# Pass provider name if needed by backend #}
-                    <p>Are you sure you want to delete the <strong id="delete_task_provider_display"></strong> task provider account associated with <strong id="delete_task_email_display"></strong>?</p>
-                    <p class="text-danger"><strong>This will remove stored credentials and stop task syncing for this account. It cannot be undone.</strong></p>
-                    {# Add warning if deleting Google/O365 task account #}
-                    <p id="delete_task_warning_oauth" class="text-warning" style="display: none;"><strong>Note:</strong> This will only remove the task provider connection. The associated Calendar account (if any) will remain connected.</p>
+                    <input type="hidden" id="delete_account_id" name="account_id">
+                    <p>Are you sure you want to delete the <strong id="delete_account_provider_display"></strong> account associated with <strong id="delete_account_email_display"></strong>?</p>
+                    <p class="text-danger"><strong>This will remove stored credentials and cannot be undone.</strong></p>
+                    <p id="delete_account_warning_oauth" class="text-warning" style="display: none;"><strong>Note:</strong> This account is used for both Calendar and Tasks. Deleting will only remove task access; calendar access will remain.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger">Delete Task Account</button>
+                    <button type="submit" class="btn btn-danger">Delete Account</button>
                 </div>
             </form>
         </div>
@@ -443,35 +434,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Delete Task Account Modal Logic (Generic for all task accounts)
-    var deleteTaskModal = document.getElementById('deleteTaskAccountModal');
-    if (deleteTaskModal) {
-        deleteTaskModal.addEventListener('show.bs.modal', function (event) {
+    // Delete Account Modal Logic (Generic for all accounts)
+    var deleteAccountModal = document.getElementById('deleteAccountModal');
+    if (deleteAccountModal) {
+        deleteAccountModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
             var email = button.getAttribute('data-email');
             var accountId = button.getAttribute('data-account-id');
-            var provider = button.getAttribute('data-provider'); // e.g., 'todoist', 'google_tasks', 'outlook'
-            var modal = deleteTaskModal; // Use specific modal variable
+            var provider = button.getAttribute('data-provider'); // e.g., 'todoist', 'google', 'o365'
+            var hasTasks = button.getAttribute('data-has-tasks') === 'true';
+            var hasCalendar = button.getAttribute('data-has-calendar') === 'true';
+            var modal = deleteAccountModal;
 
-            var modalInputId = modal.querySelector('.modal-body input#delete_task_account_id');
-            var modalInputProvider = modal.querySelector('.modal-body input#delete_task_provider_name');
-            var modalDisplayEmail = modal.querySelector('.modal-body strong#delete_task_email_display');
-            var modalDisplayProvider = modal.querySelector('.modal-body strong#delete_task_provider_display');
-            var modalWarningOAuth = modal.querySelector('.modal-body p#delete_task_warning_oauth');
+            var modalInputId = modal.querySelector('.modal-body input#delete_account_id');
+            var modalDisplayEmail = modal.querySelector('.modal-body strong#delete_account_email_display');
+            var modalDisplayProvider = modal.querySelector('.modal-body strong#delete_account_provider_display');
+            var modalWarningOAuth = modal.querySelector('.modal-body p#delete_account_warning_oauth');
 
             if(modalInputId) modalInputId.value = accountId;
-            if(modalInputProvider) modalInputProvider.value = provider;
             if(modalDisplayEmail) modalDisplayEmail.textContent = email;
-            
+
             // Display provider name nicely
             let providerText = provider;
-            if (provider === 'google_tasks') providerText = 'Google Tasks';
-            if (provider === 'outlook') providerText = 'O365 Tasks';
+            if (provider === 'google') providerText = 'Google';
+            if (provider === 'o365') providerText = 'Office 365';
+            if (provider === 'todoist') providerText = 'Todoist';
             if(modalDisplayProvider) modalDisplayProvider.textContent = providerText;
 
-            // Show warning only for Google/O365 task accounts
+            // Show warning for accounts used for both calendar and tasks
             if(modalWarningOAuth) {
-                if (provider === 'google_tasks' || provider === 'outlook') {
+                if (hasCalendar && hasTasks) {
                     modalWarningOAuth.style.display = 'block';
                 } else {
                     modalWarningOAuth.style.display = 'none';

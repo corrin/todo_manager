@@ -28,7 +28,7 @@ async def refresh_tokens_for_account(account: ExternalAccount) -> bool:
         raise Exception("Account cannot be None")
         
     if not account.refresh_token:
-        raise Exception(f"No refresh token available for {account.calendar_email}")
+        raise Exception(f"No refresh token available for {account.external_email}")
         
     # Get the appropriate provider for this account
     provider = CalendarProviderFactory.get_provider(account.provider)
@@ -36,10 +36,10 @@ async def refresh_tokens_for_account(account: ExternalAccount) -> bool:
         raise Exception(f"No provider found for {account.provider}")
         
     # Attempt to refresh the token
-    logger.info(f"Refreshing token for {account.calendar_email} ({account.provider})")
-    await provider.refresh_token(account.calendar_email, account.user_id)
+    logger.info(f"Refreshing token for {account.external_email} ({account.provider})")
+    await provider.refresh_token(account.external_email, account.user_id)
     
-    logger.info(f"✅ Successfully refreshed token for {account.calendar_email}")
+    logger.info(f"✅ Successfully refreshed token for {account.external_email}")
     return True
 
 
@@ -73,12 +73,12 @@ async def refresh_soon_expiring_tokens() -> Dict[str, int]:
     for account in accounts:
         # Skip accounts marked as needing reauth (these need user intervention)
         if account.needs_reauth:
-            logger.info(f"Skipping {account.calendar_email} as it needs full reauth")
+            logger.info(f"Skipping {account.external_email} as it needs full reauth")
             continue
             
         # Skip accounts without refresh tokens
         if not account.refresh_token:
-            logger.info(f"Skipping {account.calendar_email} as it has no refresh token")
+            logger.info(f"Skipping {account.external_email} as it has no refresh token")
             continue
             
         # Try to refresh the token
@@ -86,7 +86,7 @@ async def refresh_soon_expiring_tokens() -> Dict[str, int]:
             await refresh_tokens_for_account(account)
             success_count += 1
         except Exception as e:
-            logger.error(f"❌ Failed to refresh token for {account.calendar_email}: {str(e)}")
+            logger.error(f"❌ Failed to refresh token for {account.external_email}: {str(e)}")
             
             # Mark account as needing reauth
             account.needs_reauth = True

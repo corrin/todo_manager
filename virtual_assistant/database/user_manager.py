@@ -50,7 +50,7 @@ class UserDataManager(Database):
             .all()
         )
         cls.user_calendar_accounts = {
-            account.calendar_email: account.provider for account in calendar_accounts
+            account.external_email: account.provider for account in calendar_accounts
         }
         logger.debug(f"Loaded calendar accounts: {cls.user_calendar_accounts}")
 

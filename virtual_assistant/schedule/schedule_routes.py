@@ -115,7 +115,7 @@ def init_schedule_routes():
                     'subject': slot['activity'],
                     'start_time': start_time,
                     'end_time': end_time,
-                    'calendar_email': calendar_account.calendar_email,
+                    'calendar_email': calendar_account.external_email,
                     'description': slot.get('notes', ''),
                     'location': ''
                 }

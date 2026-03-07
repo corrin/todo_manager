@@ -34,7 +34,7 @@ class GoogleTaskProvider(TaskProvider):
         """Initialize the Google Tasks client using existing calendar credentials."""
         if self.client is None:
             account = ExternalAccount.get_by_email_provider_and_user(
-                account_email=task_user_email,
+                external_email=task_user_email,
                 provider='google',
                 user_id=user_id
             )
@@ -71,7 +71,7 @@ class GoogleTaskProvider(TaskProvider):
         """Check if we have valid Google credentials for the user/account and return auth URL if needed."""
         # Check if the user has a Google account linked
         account = ExternalAccount.get_by_email_provider_and_user(
-            account_email=task_user_email, provider='google', user_id=user_id
+            external_email=task_user_email, provider='google', user_id=user_id
         )
         
         if not account:
@@ -238,7 +238,7 @@ class GoogleTaskProvider(TaskProvider):
         try:
             # Get task account for the specified user
             account = ExternalAccount.get_by_email_provider_and_user(
-                account_email=task_data.get('task_user_email'),
+                external_email=task_data.get('task_user_email'),
                 provider='google',
                 user_id=user_id
             )
@@ -248,7 +248,7 @@ class GoogleTaskProvider(TaskProvider):
                 return False
             
             # Initialize the client
-            self._initialize_client(user_id=user_id, task_user_email=account.calendar_email)
+            self._initialize_client(user_id=user_id, task_user_email=account.external_email)
             if not self.client:
                 logger.error(f"No Google Tasks client initialized for user {user_id}")
                 return False

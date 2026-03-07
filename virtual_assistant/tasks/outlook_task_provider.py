@@ -32,7 +32,7 @@ class OutlookTaskProvider(TaskProvider):
         """Initialize the Microsoft Graph client using existing calendar credentials."""
         if self.client is None:
             account = ExternalAccount.get_by_email_provider_and_user(
-                account_email=task_user_email,
+                external_email=task_user_email,
                 provider='o365',
                 user_id=user_id
             )
@@ -56,7 +56,7 @@ class OutlookTaskProvider(TaskProvider):
         """Check if we have valid O365 credentials for the user/account and return auth URL if needed."""
         # Check if the user has an O365 account linked
         account = ExternalAccount.get_by_email_provider_and_user(
-            account_email=task_user_email, provider='o365', user_id=user_id
+            external_email=task_user_email, provider='o365', user_id=user_id
         )
         
         if not account:
@@ -68,7 +68,7 @@ class OutlookTaskProvider(TaskProvider):
         if account.needs_reauth:
             logger.info(f"O365 account for user_id '{user_id}' / task_user_email '{task_user_email}' needs reauthorization")
             # Redirect to reauth specific account, using 'calendar_email' parameter
-            return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='o365', calendar_email=account.calendar_email))
+            return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='o365', calendar_email=account.external_email))
         
         # Test the credentials by initializing the client
         try:
@@ -86,7 +86,7 @@ class OutlookTaskProvider(TaskProvider):
                 account.needs_reauth = True
                 account.save()
                 
-            return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='o365', email=account.calendar_email))
+            return self.provider_name, redirect(url_for('meetings.reauth_calendar_account', provider='o365', email=account.external_email))
 
     def get_tasks(self, user_id, task_user_email) -> List[Task]:
         """Get all tasks from Outlook using Microsoft Graph API."""

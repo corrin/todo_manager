@@ -24,7 +24,7 @@ def main():
         print('Current calendar accounts:')
         accounts = ExternalAccount.query.all() # FIXME: Need to filter on calendar accounts
         for account in accounts:
-            print(f'- {account.calendar_email} ({account.provider}) for user {account.app_login}')
+            print(f'- {account.external_email} ({account.provider}) for user {account.user_id}')
 
 if __name__ == '__main__':
     main()

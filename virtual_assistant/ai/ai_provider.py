@@ -4,14 +4,14 @@ from virtual_assistant.database.user import User
 from typing import Optional, Dict, Any
 import uuid
 class AIProvider(ABC):
-    """Base class for AI providers (OpenAI, Grok, etc.)"""
+    """Base class for AI providers (OpenAI, etc.)"""
 
     def __init__(self):
         self.provider_name = self._get_provider_name()
 
     @abstractmethod
     def _get_provider_name(self) -> str:
-        """Return the name of this provider (e.g., 'openai', 'grok')"""
+        """Return the name of this provider (e.g., 'openai')"""
         pass
 
     @abstractmethod
@@ -61,13 +61,6 @@ class AIProvider(ABC):
                     return None
                 return {
                     "api_key": user.openai_key,
-                    "ai_instructions": user.ai_instructions
-                }
-            elif self.provider_name == "grok":
-                if not user.grok_key:
-                    return None
-                return {
-                    "api_key": user.grok_key,
                     "ai_instructions": user.ai_instructions
                 }
             else:

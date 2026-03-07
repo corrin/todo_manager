@@ -1,27 +1,19 @@
 import logging
 from logging.config import fileConfig
-import os
 import sys
 from pathlib import Path
 
 from alembic import context
 from flask import current_app
 
-# --- Setup Flask App ---
 # Add project root to sys.path
 project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Import and create Flask app
-from virtual_assistant.flask_app import create_app
-
-app = create_app()
-app.app_context().push()
-
-# Import all models for autogenerate support
+# Import all models so Alembic autogenerate can detect them
 from virtual_assistant.database.user import User
-from virtual_assistant.database.task import TaskAccount
+from virtual_assistant.database.task import Task
 from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.database import db
 

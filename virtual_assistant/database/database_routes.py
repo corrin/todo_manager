@@ -34,21 +34,19 @@ def remove_external_account():
             return redirect(url_for("settings"))
             
         # Get the account
-        account = ExternalAccount.query.get(account_id)
-        if not account or account.user_id != current_user.id:
+        ext_account = ExternalAccount.query.get(account_id)
+        if not ext_account or ext_account.user_id != current_user.id:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({"success": False, "error": "Account not found"}), 404
             flash("Account not found", "error")
             return redirect(url_for("settings"))
             
-        # Check if this is a primary account
-        was_primary = (account.is_primary_calendar if account_type == 'calendar'
-                      else account.is_primary_tasks)
-                      
-        # Delete the account
+        was_primary = (ext_account.is_primary_calendar if account_type == 'calendar'
+                      else ext_account.is_primary_tasks)
+
         ExternalAccount.delete_by_email_and_provider(
-            account.account_email,
-            account.provider,
+            ext_account.external_email,
+            ext_account.provider,
             current_user.id
         )
         
@@ -66,7 +64,7 @@ def remove_external_account():
             
             if new_primary:
                 ExternalAccount.set_as_primary(
-                    new_primary.account_email,
+                    new_primary.external_email,
                     new_primary.provider,
                     current_user.id,
                     account_type

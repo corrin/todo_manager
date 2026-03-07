@@ -27,7 +27,6 @@ from virtual_assistant.database.database import Database, db
 from virtual_assistant.database.database_routes import database_bp
 from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.user import User
-from virtual_assistant.database.task import TaskAccount # Needed for settings GET route
 from virtual_assistant.auth.user_auth import setup_login_manager
 from virtual_assistant.tasks.token_refresh import start_token_refresh_scheduler
 from virtual_assistant.meetings.calendar_provider_factory import CalendarProviderFactory
@@ -159,50 +158,32 @@ def new_user():
 @login_required
 def settings():
     """Displays the settings page, fetching necessary account information."""
-    app_login = current_user.app_login 
-    
-    # --- Get Calendar Accounts ---
-    # Fetch ExternalAccount records with calendar usage enabled
-    calendar_accounts = ExternalAccount.query.filter_by(
-        user_id=current_user.id,
-        use_for_calendar=True
-    ).order_by(ExternalAccount.account_email).all()
-    
-    # Prepare data for template display
-    calendar_accounts_data_for_template = []
-    for account in calendar_accounts:
-        calendar_accounts_data_for_template.append({
-            'id': account.id,
-            'provider': account.provider,
-            'email': account.account_email,
-            'calendar_is_primary': account.is_primary_calendar,
-            'last_sync': account.last_sync.strftime('%Y-%m-%d %H:%M:%S') if account.last_sync else None,
-            'needs_reauth': account.needs_reauth,
-            'calendar_is_primary': account.is_primary # This is for the CALENDAR primary
+    app_login = current_user.app_login
+
+    all_ext_accounts = ExternalAccount.query.filter_by(
+        user_id=current_user.id
+    ).order_by(ExternalAccount.provider, ExternalAccount.external_email).all()
+
+    external_accounts = []
+    for ext_account in all_ext_accounts:
+        external_accounts.append({
+            'id': ext_account.id,
+            'provider': ext_account.provider,
+            'email': ext_account.external_email,
+            'has_calendar': ext_account.use_for_calendar,
+            'has_tasks': ext_account.use_for_tasks,
+            'calendar_is_primary': ext_account.is_primary_calendar,
+            'task_is_primary': ext_account.is_primary_tasks,
+            'api_key': bool(ext_account.api_key),
+            'token': bool(ext_account.token),
+            'needs_reauth': ext_account.needs_reauth,
+            'last_sync': ext_account.last_sync.strftime('%Y-%m-%d %H:%M:%S') if ext_account.last_sync else None,
         })
 
-    # --- Get Task Accounts ---
-    # Fetch ALL TaskAccount records (Todoist, Google, O365) for the task provider section
-    task_accounts_db = TaskAccount.query.filter_by(user_id=current_user.id).order_by(TaskAccount.provider_name, TaskAccount.task_user_email).all()
-    # Prepare task account data for template
-    task_accounts_data_for_template = []
-    for account in task_accounts_db:
-        task_accounts_data_for_template.append({
-            'id': account.id,
-            'provider_name': account.provider_name,
-            'task_user_email': account.task_user_email,
-            'api_key': bool(account.api_key), # Pass boolean indicating if key is set
-            'token': bool(account.token), # Pass boolean indicating if token is set
-            'needs_reauth': account.needs_reauth,
-            'task_is_primary': account.is_primary # This is for the TASK primary
-        })
-
-    # Pass the separate lists to the template
     return render_template(
         'settings.html',
         user=current_user,
-        calendar_accounts=calendar_accounts_data_for_template, # Pass calendar-specific data/objects
-        task_accounts=task_accounts_data_for_template # Pass transformed task data
+        external_accounts=external_accounts
     )
 
 @app.route('/save_general_settings', methods=['POST'])

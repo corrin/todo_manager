@@ -3,18 +3,18 @@ from flask import redirect, url_for
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from .task_provider import TaskProvider, Task
-from virtual_assistant.database.task import TaskAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.user import User
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.database.task import TaskAccount
 
 class TodoistProvider(TaskProvider):
 
     def get_task_accounts(self, user_id):
         """Get all Todoist task accounts for the specified user."""
-        return TaskAccount.query.filter_by(
+        return ExternalAccount.query.filter_by(
             user_id=user_id,
-            provider_name=self.provider_name
+            provider='todoist',
+            use_for_tasks=True
         ).all()
     
     def update_task(self, user_id, task_id, task_data=None):
@@ -41,10 +41,10 @@ class TodoistProvider(TaskProvider):
             
             # For simplicity, use the first account (can be enhanced to determine the correct account)
             account = task_accounts[0]
-            api_key = account.credentials.get('api_key')
-            
+            api_key = account.api_key
+
             if not api_key:
-                logger.error(f"No API key found for Todoist account {account.task_user_email}")
+                logger.error(f"No API key found for Todoist account {account.external_email}")
                 return False
             
             # Initialize Todoist API
@@ -123,7 +123,7 @@ class TodoistProvider(TaskProvider):
             logger.error(f"Cannot get Todoist API: User not found for user_id '{user_id}'")
             return None
             
-        account = TaskAccount.get_account(user_id=user_id, provider_name=self.provider_name, task_user_email=task_user_email)
+        account = ExternalAccount.get_task_account(user_id=user_id, provider_name=self.provider_name, task_user_email=task_user_email)
         if account and account.api_key:
             try:
                 return TodoistAPI(account.api_key)
@@ -131,7 +131,7 @@ class TodoistProvider(TaskProvider):
                 logger.error(f"Failed to initialize Todoist API for user_id='{user_id}': {e}")
                 return None
         else:
-            logger.warning(f"No Todoist account found for user_id='{user_id}', provider='{self.provider_name}', task_user_email='{task_user_email}'")
+            logger.warning(f"No Todoist account found for user_id='{user_id}', provider='{self.provider_name}', external_email='{task_user_email}'")
             return None
 
     # --- Provider Methods ---
@@ -147,7 +147,7 @@ class TodoistProvider(TaskProvider):
             # For now, treat as no credentials found.
             return self.provider_name, redirect(url_for('todoist_auth.setup_credentials'))
         # Get the account using the provided task_user_email
-        account = TaskAccount.get_account(user_id=user_id, provider_name=self.provider_name, task_user_email=task_user_email)
+        account = ExternalAccount.get_task_account(user_id=user_id, provider_name=self.provider_name, task_user_email=task_user_email)
 
         if not account or not account.api_key:
             logger.info(f"No valid Todoist credentials found in DB for user_id='{user_id}'. Redirecting to setup.")

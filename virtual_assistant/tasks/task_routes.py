@@ -9,9 +9,9 @@ from virtual_assistant.utils.logger import logger
 from virtual_assistant.tasks.task_manager import TaskManager
 from virtual_assistant.tasks.task_hierarchy import TaskHierarchy
 
-from virtual_assistant.database.external_account import ExternalAccount
+from virtual_assistant.database.external_account import ExternalAccount, PROVIDER_TO_TASK
 from virtual_assistant.database.database import db
-from virtual_assistant.database.task import Task, TaskAccount
+from virtual_assistant.database.task import Task
 from virtual_assistant.tasks.task_provider import Task as ProviderTask
 from virtual_assistant.utils.settings import Settings
 
@@ -69,49 +69,33 @@ def init_task_routes():
             logger.exception(f"Error updating task {task_id}: {e}")
             return jsonify({"error": str(e)}), 500
 
-    # Refactored get_task_accounts to query TaskAccount table directly
     def get_task_accounts(user_id):
-        """Get all active task accounts for a user directly from TaskAccount table.
+        """Get all active task accounts for a user from ExternalAccount.
 
         Args:
             user_id: The user's database ID.
 
         Returns:
-            List[TaskAccount]: List of active TaskAccount objects for the user.
+            List[ExternalAccount]: List of active ExternalAccount objects with use_for_tasks=True.
         """
-        # Query TaskAccount table for accounts associated with the user_id
-        # Optionally filter further, e.g., only include accounts that are not marked as needing reauth
-        # or have necessary credentials (api_key for todoist, token for others)
-        active_accounts = TaskAccount.query.filter(
-            TaskAccount.user_id == user_id,
-            TaskAccount.needs_reauth == False,
-            # Add condition to check for credentials presence based on provider type
-            db.or_(
-                db.and_(TaskAccount.provider_name == 'todoist', TaskAccount.api_key != None),
-                db.and_(TaskAccount.provider_name.in_(['google_tasks', 'outlook']), TaskAccount.token != None)
-            )
-        ).order_by(TaskAccount.provider_name, TaskAccount.task_user_email).all()
-        
+        active_accounts = ExternalAccount.get_task_accounts_for_user(user_id)
         logger.debug(f"Found {len(active_accounts)} active task accounts for user_id {user_id}")
         return active_accounts
 
     @bp.route('/')
     def list_tasks():
         """Display the user's tasks organized into prioritized and unprioritized lists."""
-        app_login = session.get('app_login')
-        
         try:
             # Get active task accounts for the user
-            accounts = get_task_accounts(current_user.id)
-            
-            if not accounts:
-                # No active accounts found, show empty task list
+            ext_accounts = get_task_accounts(current_user.id)
+
+            if not ext_accounts:
                 return render_template('tasks.html', error="No active task provider accounts found. Please add an account in Settings.")
-            
+
             # Use the first account for authentication
-            account = accounts[0]
-            provider_name = account.provider_name
-            task_user_email = account.task_user_email
+            ext_account = ext_accounts[0]
+            provider_name = PROVIDER_TO_TASK.get(ext_account.provider, ext_account.provider)
+            task_user_email = ext_account.external_email
             
             # Authenticate with the provider
             auth_results = task_manager.authenticate(
@@ -179,8 +163,7 @@ def init_task_routes():
     def sync_tasks():
         """Sync tasks from all connected and active task providers."""
         user_id = current_user.id
-        app_login = current_user.app_login # Keep app_login if needed by other functions called
-        
+
         results = {
             'success': [],
             'errors': [],
@@ -189,11 +172,10 @@ def init_task_routes():
             'message': ''
         }
         
-        # Get all active task accounts for the user using the refactored function
-        accounts = get_task_accounts(user_id) # Pass user_id
-        
-        if not accounts:
-            # Handle case where no *active* accounts are found
+        # Get all active task accounts for the user
+        ext_accounts = get_task_accounts(user_id)
+
+        if not ext_accounts:
             message = 'No active task provider accounts found or configured.'
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({'error': message}), 404
@@ -201,11 +183,9 @@ def init_task_routes():
             # Redirect to settings instead of generic error page
             return redirect(url_for('settings'))
         
-        # Now 'accounts' is a list of TaskAccount objects
-        for account in accounts:
-            # Access attributes directly from the TaskAccount object
-            provider_name = account.provider_name
-            task_user_email = account.task_user_email
+        for ext_account in ext_accounts:
+            provider_name = PROVIDER_TO_TASK.get(ext_account.provider, ext_account.provider)
+            task_user_email = ext_account.external_email
             
             logger.info(f"Attempting to sync tasks from {provider_name} for {task_user_email}")
             
@@ -387,7 +367,6 @@ def init_task_routes():
     @bp.route('/<task_id>/details', methods=['GET'])
     def get_task_details(task_id):
         """Get detailed information for a specific task."""
-        # app_login = session.get('app_login') # Use current_user instead
         user_id = current_user.id
         
         # Try to find the task in our database
@@ -517,9 +496,9 @@ def init_task_routes():
 
             db.session.begin_nested()
             # Ensure only one primary: Reset flag for all user's task accounts first
-            TaskAccount.query.filter_by(user_id=user_id).update({'is_primary': False})
+            ExternalAccount.query.filter_by(user_id=user_id, use_for_tasks=True).update({'is_primary_tasks': False})
             # Set the selected account as primary
-            updated_count = TaskAccount.query.filter_by(id=account_id, user_id=user_id).update({'is_primary': True})
+            updated_count = ExternalAccount.query.filter_by(id=account_id, user_id=user_id).update({'is_primary_tasks': True})
 
             if updated_count == 1:
                 db.session.commit()
@@ -528,7 +507,7 @@ def init_task_routes():
             else:
                 # Account not found for this user
                 db.session.rollback()
-                logger.error(f"User {user_id} - Set primary task provider: Failed to find TaskAccount ID {account_id}.")
+                logger.error(f"User {user_id} - Set primary task provider: Failed to find ExternalAccount ID {account_id}.")
                 return jsonify({'success': False, 'message': 'Selected task account not found.'}), 404
 
         except Exception as e:
@@ -554,34 +533,31 @@ def init_task_routes():
             # For UUID, we use the string directly
             account_id = account_id_str
             
-            # Find the task account to be deleted
-            account_to_delete = TaskAccount.query.filter_by(id=account_id, user_id=user_id).first()
-            
-            if not account_to_delete:
+            # Find the account to be deleted
+            ext_account_to_delete = ExternalAccount.query.filter_by(id=account_id, user_id=user_id).first()
+
+            if not ext_account_to_delete:
                 flash('Task account not found or you do not have permission to delete it.', 'warning')
                 return redirect(url_for('settings'))
-                
-            provider_name = account_to_delete.provider_name # For logging/flash message
-            email = account_to_delete.task_user_email
-            
-            # Check if deleting the primary task provider
-            was_primary = account_to_delete.is_primary
-            
-            # Delete the account
-            db.session.delete(account_to_delete)
+
+            provider_name = ext_account_to_delete.provider
+            email = ext_account_to_delete.external_email
+            was_primary = ext_account_to_delete.is_primary_tasks
+
+            if ext_account_to_delete.use_for_calendar:
+                # Keep the row but disable tasks
+                ext_account_to_delete.use_for_tasks = False
+                ext_account_to_delete.is_primary_tasks = False
+            else:
+                db.session.delete(ext_account_to_delete)
             db.session.commit()
-            
-            logger.info(f"User {user_id} deleted TaskAccount ID {account_id} ({provider_name} - {email})")
+
+            logger.info(f"User {user_id} deleted task account ID {account_id} ({provider_name} - {email})")
             flash(f"Successfully deleted {provider_name} task account for {email}.", 'success')
-            
-            # If the deleted account was primary, log it. We are not auto-assigning a new primary for tasks.
+
             if was_primary:
                  logger.info(f"Deleted task account {account_id} was the primary task provider for user {user_id}.")
                  
-        except Exception as e:
-            logger.error(f"Error deleting task account: {e}")
-            flash('Error deleting task account.', 'danger')
-            logger.error(f"User {user_id} - Delete task account: Invalid account ID format '{account_id_str}'")
         except Exception as e:
             db.session.rollback()
             logger.exception(f"User {user_id} - Delete task account: Error deleting account ID {account_id_str}: {e}")

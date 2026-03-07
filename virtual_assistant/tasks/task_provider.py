@@ -6,7 +6,7 @@ import os # Needed for path operations
 import json # Needed for credential file handling
 from virtual_assistant.database.user_manager import UserDataManager # Needed for user context (folder path)
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.database.task import TaskAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.user import User
 from virtual_assistant.database.database import db
 # Settings is used by UserDataManager internally, no need to import here
@@ -47,7 +47,7 @@ class TaskProvider(ABC):
     # Suitable for providers using simple keys (like Todoist API key)
     # OAuth providers (Google, O365) should override these methods.
     def get_credentials(self, user_id: int, task_user_email: str) -> Optional[Dict[str, Any]]:
-        """Get task provider credentials from the TaskAccount database model."""
+        """Get task provider credentials from the ExternalAccount database model."""
         logger.debug(f"Retrieving {self.provider_name} credentials from DB for user_id='{user_id}', task_user_email='{task_user_email}'")
 
         user = User.query.filter_by(id=user_id).first()
@@ -56,7 +56,7 @@ class TaskProvider(ABC):
             return None
 
         # Use the provided task_user_email to find the specific account
-        account = TaskAccount.get_account(user.id, self.provider_name, task_user_email)
+        account = ExternalAccount.get_task_account(user.id, self.provider_name, task_user_email)
 
         if account:
             # Construct credentials dictionary from model attributes
@@ -78,11 +78,11 @@ class TaskProvider(ABC):
             logger.debug(f"{self.provider_name} credentials retrieved from DB for user_id='{user_id}', task_user_email='{task_user_email}'")
             return credentials
         else:
-            logger.warning(f"{self.provider_name} TaskAccount not found in DB for user_id='{user_id}', task_user_email='{task_user_email}'")
+            logger.warning(f"{self.provider_name} ExternalAccount not found in DB for user_id='{user_id}', task_user_email='{task_user_email}'")
             return None
 
     def store_credentials(self, user_id: int, task_user_email: str, credentials: Dict[str, Any]):
-        """Store task provider credentials in the TaskAccount database model."""
+        """Store task provider credentials in the ExternalAccount database model."""
         logger.debug(f"Storing {self.provider_name} credentials to DB for user_id='{user_id}', task_user_email='{task_user_email}'")
 
         user = User.query.filter_by(id=user_id).first()
@@ -92,14 +92,13 @@ class TaskProvider(ABC):
             raise ValueError(f"User not found: {user_id}")
 
         try:
-            # set_account handles both creation and update
-            account = TaskAccount.set_account(
+            # set_task_account handles both creation and update
+            account = ExternalAccount.set_task_account(
                 user_id=user_id,
                 provider_name=self.provider_name,
                 task_user_email=task_user_email,
-                credentials=credentials # Pass the dictionary directly
+                credentials=credentials
             )
-            db.session.add(account) # Add to session (needed if new or updated)
             db.session.commit() # Commit the changes
             logger.debug(f"{self.provider_name} credentials stored in DB for user_id='{user_id}', task_user_email='{task_user_email}'")
         except Exception as e:
