@@ -11,21 +11,21 @@ import os
 import sys
 
 # Add your project directory to the sys.path
-PROJECT_HOME = "/home/lakeland/virtual_assistant/virtual_assistant"
+PROJECT_HOME = "/home/lakeland/virtual_assitant/app"
 if PROJECT_HOME not in sys.path:
     sys.path = [PROJECT_HOME] + sys.path
 
 # Activate the virtual environment
 # Path to the virtualenv you want to use
 ACTIVATE_ENV = os.path.expanduser(
-    "/home/lakeland/.virtualenvs/virtual_assistant/bin/activate_this.py"
+    "/home/lakeland/.virtualenvs/virtual_assitant/bin/activate_this.py"
 )
 # Execute the script to activate the virtual environment
 with open(ACTIVATE_ENV, encoding="utf-8") as file_:
     exec(file_.read(), {"__file__": ACTIVATE_ENV})
 
 # Path to your .env file
-ENV_PATH = "/home/lakeland/virtual_assistant/.env"
+ENV_PATH = "/home/lakeland/virtual_assitant/.env"
 # Check if the .env file exists
 if os.path.exists(ENV_PATH):
     with open(ENV_PATH, encoding="utf-8") as f:

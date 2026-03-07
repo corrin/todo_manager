@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
 from virtual_assistant.ai.ai_manager import AIManager
 from virtual_assistant.ai.schedule_generator import ScheduleGenerator
@@ -70,8 +70,9 @@ def init_schedule_routes():
                 return jsonify(schedule), 500
             
             # Get the user's primary calendar account
-            calendar_account = CalendarAccount.query.filter_by(
+            calendar_account = ExternalAccount.query.filter_by(
                 user_id=current_user.id,
+                use_for_calendar=True,
                 is_primary=True
             ).first()
             

@@ -14,14 +14,13 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import and create Flask app
-from virtual_assistant import create_app
+from virtual_assistant.flask_app import create_app
 
 app = create_app()
 app.app_context().push()
 
 # Import all models for autogenerate support
 from virtual_assistant.database.user import User
-from virtual_assistant.database.calendar_account import CalendarAccount
 from virtual_assistant.database.task import TaskAccount
 from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.database import db

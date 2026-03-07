@@ -18,7 +18,7 @@ from googleapiclient.errors import HttpError
 from virtual_assistant.meetings.calendar_provider import CalendarProvider
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 
 
 class GoogleCalendarProvider(CalendarProvider):
@@ -176,7 +176,7 @@ class GoogleCalendarProvider(CalendarProvider):
         Raises:
             Exception: If token refresh fails and should be handled by caller
         """
-        account = CalendarAccount.get_by_email_provider_and_user(
+        account = ExternalAccount.get_by_email_provider_and_user(
             calendar_email, self.provider_name, user_id # Use user_id
         )
 
@@ -333,7 +333,7 @@ class GoogleCalendarProvider(CalendarProvider):
                 if "invalid_grant" in str(error) or "Invalid Credentials" in str(error) or "token expired" in str(error).lower():
                     logger.error(f"❌ AUTH ISSUE: Google token expired for {calendar_email}: {error}")
                     # Mark account as needing reauth
-                    account = CalendarAccount.get_by_email_provider_and_user(
+                    account = ExternalAccount.get_by_email_provider_and_user(
                         calendar_email, self.provider_name, user_id # Use user_id
                     )
                     if account:
@@ -656,13 +656,13 @@ class GoogleCalendarProvider(CalendarProvider):
             user_id (int): The ID of the application user.
 
         Returns:
-            CalendarAccount: The created or updated CalendarAccount database object.
+            ExternalAccount: The created or updated ExternalAccount database object.
 
         Raises:
             Exception: If there's an error saving the data to the database.
         """
         # Retrieve existing account or prepare to create a new one.
-        account = CalendarAccount.get_by_email_provider_and_user(
+        account = ExternalAccount.get_by_email_provider_and_user(
             calendar_email, self.provider_name, user_id # Use user_id
         )
 
@@ -678,19 +678,20 @@ class GoogleCalendarProvider(CalendarProvider):
 
         # Determine if this should be the primary account.
         # It becomes primary only if the user doesn't already have a primary account set.
-        has_primary = CalendarAccount.query.filter_by(user_id=user_id, is_primary=True).first() is not None
+        has_primary = ExternalAccount.query.filter_by(user_id=user_id, is_primary=True).first() is not None
         is_first_account = not has_primary # Set as primary if no other primary exists for this user.
 
         if not account:
-            # Create a new CalendarAccount record if one doesn't exist.
+            # Create a new ExternalAccount record if one doesn't exist.
             logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}")
-            account = CalendarAccount(
-                user_id=user_id, # Associate with the correct app user ID.
-                calendar_email=calendar_email,
+            account = ExternalAccount(
+                account_email=calendar_email,
                 provider=self.provider_name,
-                is_primary=is_first_account, # Set primary status based on check above.
+                user_id=user_id,
+                is_primary=is_first_account,
                 created_at=datetime.now(timezone.utc),
-                **credentials_data # Populate with token data.
+                has_calendar=True,
+                **credentials_data
             )
         else:
             # Update the existing account record.
@@ -732,7 +733,7 @@ class GoogleCalendarProvider(CalendarProvider):
                        or if required credential fields (like token or refresh_token) are missing.
         """
         # Retrieve the specific account record from the database.
-        account = CalendarAccount.get_by_email_provider_and_user(
+        account = ExternalAccount.get_by_email_provider_and_user(
             calendar_email, self.provider_name, user_id # Use user_id
         )
 

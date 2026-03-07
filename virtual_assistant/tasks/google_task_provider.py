@@ -10,7 +10,7 @@ import uuid
 
 from .task_provider import TaskProvider, Task
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarProvider
 from virtual_assistant.database.task import Task
 
@@ -33,8 +33,8 @@ class GoogleTaskProvider(TaskProvider):
     def _initialize_client(self, user_id, task_user_email):
         """Initialize the Google Tasks client using existing calendar credentials."""
         if self.client is None:
-            account = CalendarAccount.get_by_email_provider_and_user(
-                calendar_email=task_user_email,
+            account = ExternalAccount.get_by_email_provider_and_user(
+                account_email=task_user_email,
                 provider='google',
                 user_id=user_id
             )
@@ -70,8 +70,8 @@ class GoogleTaskProvider(TaskProvider):
     def authenticate(self, user_id, task_user_email):
         """Check if we have valid Google credentials for the user/account and return auth URL if needed."""
         # Check if the user has a Google account linked
-        account = CalendarAccount.get_by_email_provider_and_user(
-            calendar_email=task_user_email, provider='google', user_id=user_id
+        account = ExternalAccount.get_by_email_provider_and_user(
+            account_email=task_user_email, provider='google', user_id=user_id
         )
         
         if not account:
@@ -237,8 +237,8 @@ class GoogleTaskProvider(TaskProvider):
 
         try:
             # Get task account for the specified user
-            account = CalendarAccount.get_by_email_provider_and_user(
-                calendar_email=task_data.get('task_user_email'),
+            account = ExternalAccount.get_by_email_provider_and_user(
+                account_email=task_data.get('task_user_email'),
                 provider='google',
                 user_id=user_id
             )
@@ -302,17 +302,17 @@ class GoogleTaskProvider(TaskProvider):
         # --- Credential Management (Not Applicable for OAuth Providers) ---
     
         def get_credentials(self, user_id, task_user_email):
-            """Credentials for Google Tasks are handled via CalendarAccount (OAuth)."""
-            logger.debug("GoogleTaskProvider.get_credentials called but not implemented (uses CalendarAccount)")
+            """Credentials for Google Tasks are handled via ExternalAccount (OAuth)."""
+            logger.debug("GoogleTaskProvider.get_credentials called but not implemented (uses ExternalAccount)")
             # This method might be called by generic logic but isn't used for OAuth flow.
             # Returning None is safer than raising NotImplementedError if called unexpectedly.
             return None
     
         def store_credentials(self, user_id, task_user_email, credentials):
-            """Credentials for Google Tasks are handled via CalendarAccount (OAuth)."""
+            """Credentials for Google Tasks are handled via ExternalAccount (OAuth)."""
             logger.error("GoogleTaskProvider.store_credentials should not be called directly.")
             # Raise error because storing credentials here bypasses the OAuth flow.
-            raise NotImplementedError("Google Tasks credentials should be stored via the OAuth flow in CalendarAccount.")
+            raise NotImplementedError("Google Tasks credentials should be stored via the OAuth flow in ExternalAccount.")
 
     def update_task_status(self, user_id: str, task_id: str, status: str) -> bool:
         """Update just the status of a task by calling update_task.

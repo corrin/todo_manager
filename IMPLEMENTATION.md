@@ -13,7 +13,7 @@ This document outlines the current implementation status of the Task Master appl
 ### Database System
 - ✅ Database singleton for centralized access
 - ✅ SQLAlchemy ORM integration with Flask-SQLAlchemy
-- ✅ Core data models (User, CalendarAccount, Task)
+- ✅ Core data models (User, ExternalAccount, Task)
 - ✅ Migration system with Alembic/Flask-Migrate
 - ✅ Data isolation with user-specific filtering
 

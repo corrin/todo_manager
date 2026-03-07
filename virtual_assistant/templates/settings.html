@@ -68,187 +68,115 @@
         </div>
     </div>
 
-    <!-- Task Settings -->
+<!-- External Accounts -->
     <div class="card mb-4">
-        <div class="card-header"> {# Removed d-flex and button #}
-            <h2 class="h5 mb-0">Task Settings</h2> {# Renamed section #}
+        <div class="card-header">
+            <h2 class="h5 mb-0">External Accounts</h2>
         </div>
         <div class="card-body">
-            {% if task_accounts %} {# Changed variable name #}
+            {% if external_accounts %}
             <table class="table">
                 <thead>
                     <tr>
-                        <th>New Tasks Go Here</th> {# New column #}
+                        <th>Primary</th>
+                        <th>Tasks</th>
+                        <th>Calendar</th>
                         <th>Provider</th>
                         <th>Email</th>
-                        <th>Status</th> {# Combined API Key / Token Status #}
+                        <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for account in task_accounts %} {# Changed variable name #}
+                    {% for account in external_accounts %}
                     <tr>
                         <td>
-                            {# Primary TASK Provider Selection Form #}
+                            {% if account.has_tasks %}
                             <form action="{{ url_for('tasks.set_primary_task_provider') }}" method="POST" style="display: inline;" class="primary-task-form">
-                                {# Use a unique ID combining provider and account ID #}
                                 <input type="radio" name="primary_task_account_id" value="{{ account.id }}"
                                        {% if account.task_is_primary %}checked{% endif %}
                                        onchange="setPrimaryTaskProvider(this)">
                             </form>
+                            {% endif %}
+                            {% if account.has_calendar %}
+                            <form action="{{ url_for('meetings.set_primary_account') }}" method="POST" style="display: inline;" class="primary-calendar-form">
+                                <input type="radio" name="primary_calendar_account_id" value="{{ account.id }}"
+                                       {% if account.calendar_is_primary %}checked{% endif %}
+                                       onchange="setPrimaryCalendarAccount(this)">
+                            </form>
+                            {% endif %}
                         </td>
                         <td>
-                            {# Display Provider Name Nicely #}
+                            {% if account.has_tasks %}
+                                <i class="fas fa-check text-success"></i>
+                            {% else %}
+                                <i class="fas fa-times text-muted"></i>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if account.has_calendar %}
+                                <i class="fas fa-check text-success"></i>
+                            {% else %}
+                                <i class="fas fa-times text-muted"></i>
+                            {% endif %}
+                        </td>
+                        <td>
                             {% if account.provider_name == 'todoist' %}Todoist
-                            {% elif account.provider_name == 'google_tasks' %}Google Tasks
-                            {% elif account.provider_name == 'outlook' %}O365 Tasks
-                            {% else %}{{ account.provider_name }}{% endif %}
+                            {% elif account.provider_name == 'google_tasks' or account.provider == 'google' %}
+                            <i class="fab fa-google"></i> Google
+                            {% elif account.provider_name == 'outlook' or account.provider == 'o365' %}
+                            <i class="fab fa-microsoft"></i> Office 365
+                            {% else %}{{ account.provider_name or account.provider }}{% endif %}
                         </td>
-                        <td>{{ account.task_user_email }}</td>
+                        <td>{{ account.task_user_email or account.email }}</td>
                         <td>
-                            {# Status Badge - More comprehensive #}
-                            {% if account.provider_name == 'todoist' %}
+                            {% if account.has_tasks and account.provider_name == 'todoist' %}
                                 {% if account.api_key %}
                                     <span class="badge bg-success">API Key Set</span>
                                 {% else %}
-                                    <span class="badge bg-danger">API Key Missing</span> {# Should not happen #}
+                                    <span class="badge bg-danger">API Key Missing</span>
                                 {% endif %}
-                            {% else %} {# Google / O365 #}
-                                {% if account.needs_reauth %}
-                                    <span class="badge bg-warning">Needs Reauth</span>
-                                {% elif account.token %}
-                                    <span class="badge bg-success">Active</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">Inactive</span> {# No token #}
-                                {% endif %}
+                            {% elif account.needs_reauth %}
+                                <span class="badge bg-warning">Needs Reauth</span>
+                            {% elif account.token %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
                             {% endif %}
                         </td>
                         <td>
-                            {# Actions - TODO: Refine actions based on provider #}
-                            {% if account.provider_name == 'todoist' %}
+                            {% if account.has_tasks and account.provider_name == 'todoist' %}
                                 <button type="button" class="btn btn-sm btn-primary"
                                         data-bs-toggle="modal" data-bs-target="#editTodoistModal"
                                         data-email="{{ account.task_user_email }}"
-                                        data-account-id="{{ account.id }}" {# Pass ID for editing #}
+                                        data-account-id="{{ account.id }}"
                                         data-key-set="{{ 'true' if account.api_key else 'false' }}">
                                     <i class="fas fa-edit"></i> Edit Key
                                 </button>
-                            {% else %}
-                                {# Reauth might be needed for Google/O365 tasks - link to calendar reauth? #}
-                                {# Consider adding a reauth button here if task scopes differ #}
-                                <span class="text-muted"></span> {# Placeholder #}
                             {% endif %}
-                            {# Delete Action - Needs careful consideration for OAuth accounts #}
-                             <button type="button" class="btn btn-sm btn-danger"
-                                     data-bs-toggle="modal" data-bs-target="#deleteTaskAccountModal"
-                                     data-provider="{{ account.provider_name }}"
-                                     data-email="{{ account.task_user_email }}"
-                                     data-account-id="{{ account.id }}">
-                                 <i class="fas fa-trash"></i> Delete
-                             </button>
+                            {% if account.has_calendar and account.needs_reauth %}
+                                <a href="{{ url_for('meetings.reauth_calendar_account', provider=account.provider, calendar_email=account.email) }}"
+                                   class="btn btn-sm btn-warning">
+                                    <i class="fas fa-sync"></i> Reauth
+                                </a>
+                            {% endif %}
+                            <button type="button" class="btn btn-sm btn-danger"
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#deleteAccountModal"
+                                    data-account-id="{{ account.id }}"
+                                    data-has-tasks="{{ 'true' if account.has_tasks else 'false' }}"
+                                    data-has-calendar="{{ 'true' if account.has_calendar else 'false' }}"
+                                    data-email="{{ account.task_user_email or account.email }}">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
             {% else %}
-            <p class="text-center">No Task Provider accounts connected yet.</p>
+            <p class="text-center">No external accounts connected yet.</p>
             {% endif %}
-        </div>
-    </div>
-
-    <!-- Calendar Settings -->
-    <div class="card mb-4">
-        <div class="card-header"> {# Removed d-flex #}
-             <h2 class="h5 mb-0">Calendar Settings</h2> {# Renamed section #}
-        </div>
-        <div class="card-body">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Generated Events Go Here</th> {# Renamed #}
-                        <th>Provider</th>
-                        <th>Email</th>
-                        <th>Last Sync</th>
-                        <th>Status</th>
-                        <th colspan="2">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for account in calendar_accounts %}
-                    <tr>
-                        <td>
-                            {# Primary Account Selection Form #}
-                            {# This form ONLY sets the primary CALENDAR #}
-                            <form action="{{ url_for('meetings.set_primary_account') }}" method="POST" style="display: inline;" class="primary-calendar-form">
-                                <input type="radio" name="primary_calendar_account_id" value="{{ account.id }}"
-                                       {% if account.calendar_is_primary %}checked{% endif %}
-                                       onchange="setPrimaryCalendarAccount(this)">
-                            </form>
-                        </td>
-                        <td>
-                            {# Provider Icon/Name #}
-                            {% if account.provider == 'google' %}
-                            <i class="fab fa-google"></i> Google
-                            {% elif account.provider == 'o365' %}
-                            <i class="fab fa-microsoft"></i> Office 365
-                            {% endif %}
-                        </td>
-                        <td>{{ account.email }}</td>
-                        <td>{{ account.last_sync|default('Never', true) }}</td>
-                        <td>
-                            {# Status Badge #}
-                            {% if not account.needs_reauth %}
-                            <span class="badge bg-success">Active</span>
-                            {% else %}
-                            <span class="badge bg-warning">Needs Reauth</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {# Reauth Button #}
-                            <a href="{{ url_for('meetings.reauth_calendar_account', provider=account.provider, calendar_email=account.email) }}"
-                               class="btn btn-sm {% if account.needs_reauth %}btn-warning{% else %}btn-outline-secondary{% endif %}">
-                                <i class="fas fa-sync"></i>
-                            </a>
-                        </td>
-                        <td>
-                            {# Delete Button & Modal Trigger #}
-                            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteCalendarModal_{{ account.provider }}_{{ account.email|replace('@','_')|replace('.','_') }}">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                            
-                            <!-- Calendar Delete Confirmation Modal -->
-                            <div class="modal fade" id="deleteCalendarModal_{{ account.provider }}_{{ account.email|replace('@','_')|replace('.','_') }}" tabindex="-1">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Confirm Account Deletion</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            <p>Are you sure you want to delete the {{ account.provider }} account for {{ account.email }}?</p>
-                                            <p class="text-danger"><strong>This action is permanent and cannot be undone.</strong></p>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                            <form action="{{ url_for('meetings.remove_calendar_account') }}" method="POST" style="display: inline;">
-                                                <input type="hidden" name="provider" value="{{ account.provider }}">
-                                                <input type="hidden" name="email" value="{{ account.email }}">
-                                                <button type="submit" class="btn btn-danger">Delete Account</button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center">No calendar accounts connected</td> {# Back to 7 columns #}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
         </div>
     </div>
 

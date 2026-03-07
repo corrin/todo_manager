@@ -25,7 +25,7 @@ from virtual_assistant.schedule.schedule_routes import init_schedule_routes
 from virtual_assistant.meetings.meetings_routes import init_app as init_meetings_app # Renamed to avoid conflict
 from virtual_assistant.database.database import Database, db
 from virtual_assistant.database.database_routes import database_bp
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.user import User
 from virtual_assistant.database.task import TaskAccount # Needed for settings GET route
 from virtual_assistant.auth.user_auth import setup_login_manager

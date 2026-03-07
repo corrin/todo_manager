@@ -20,7 +20,7 @@ from azure.core.credentials import AccessToken as AzureAccessToken
 
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.utils.settings import Settings
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from .calendar_provider import CalendarProvider
 
 # Custom credential class that uses an existing access token
@@ -207,7 +207,7 @@ class O365CalendarProvider(CalendarProvider):
         Raises:
             Exception: If token refresh fails and should be handled by caller
         """
-        account = CalendarAccount.get_by_email_provider_and_user(
+        account = ExternalAccount.get_by_email_provider_and_user(
             calendar_email, self.provider_name, user_id
         )
         
@@ -294,9 +294,9 @@ class O365CalendarProvider(CalendarProvider):
         
         # First, try to refresh the token
         try:
-            if CalendarAccount.get_by_email_provider_and_user(
+            if ExternalAccount.get_by_email_provider_and_user(
                 calendar_email, self.provider_name, user_id
-            ) and CalendarAccount.get_by_email_provider_and_user(
+            ) and ExternalAccount.get_by_email_provider_and_user(
                 calendar_email, self.provider_name, user_id
             ).refresh_token:
                 return await self.refresh_token(calendar_email, user_id)
@@ -435,7 +435,7 @@ class O365CalendarProvider(CalendarProvider):
             self.store_credentials(email, credentials, user_id)
             
             # Explicitly set needs_reauth to False since we have a valid token
-            account = CalendarAccount.get_by_email_provider_and_user(
+            account = ExternalAccount.get_by_email_provider_and_user(
                 email, self.provider_name, user_id
             )
             if account:
@@ -515,7 +515,7 @@ class O365CalendarProvider(CalendarProvider):
             if not events:
                 logger.info(f"No events found for {calendar_email}")
                 # Token is valid since API call succeeded
-                account = CalendarAccount.get_by_email_provider_and_user(
+                account = ExternalAccount.get_by_email_provider_and_user(
                     calendar_email, self.provider_name, user_id
                 )
                 if account:
@@ -560,7 +560,7 @@ class O365CalendarProvider(CalendarProvider):
                 logger.info(f"No meetings found in O365 calendar for {calendar_email} (empty calendar)")
             
             # Update last sync timestamp on successful API completion
-            account = CalendarAccount.get_by_email_provider_and_user(
+            account = ExternalAccount.get_by_email_provider_and_user(
                 calendar_email, self.provider_name, user_id
             )
             if account:
@@ -582,7 +582,7 @@ class O365CalendarProvider(CalendarProvider):
                 
                 logger.error(f"❌ AUTH ISSUE: O365 authentication error for {calendar_email}: {error_msg}")
                 # Mark account as needing reauth
-                account = CalendarAccount.get_by_email_provider_and_user(
+                account = ExternalAccount.get_by_email_provider_and_user(
                     calendar_email, self.provider_name, user_id
                 )
                 if account:
@@ -889,17 +889,17 @@ class O365CalendarProvider(CalendarProvider):
             raise Exception("Missing required token in credentials")
         
         # Get existing account or create new one
-        account = CalendarAccount.get_by_email_provider_and_user(
+        account = ExternalAccount.get_by_email_provider_and_user(
             calendar_email, self.provider_name, user_id
         )
         
         # Check if this is the first calendar account for this user
-        existing_accounts = CalendarAccount.query.filter_by(user_id=user_id).all()
+        existing_accounts = ExternalAccount.query.filter_by(user_id=user_id).all()
         is_first_account = len(existing_accounts) == 0
         
         if not account:
             logger.info(f"Creating new calendar account for {calendar_email} ({self.provider_name}) for user ID {user_id}")
-            account = CalendarAccount(
+            account = ExternalAccount(
                 calendar_email=calendar_email,
                 user_id=user_id,
                 provider=self.provider_name,
@@ -940,7 +940,7 @@ class O365CalendarProvider(CalendarProvider):
             logger.error(f"❌ AUTH ISSUE: {error_msg}")
             raise Exception(error_msg)
             
-        account = CalendarAccount.get_by_email_provider_and_user(
+        account = ExternalAccount.get_by_email_provider_and_user(
             calendar_email, self.provider_name, user_id
         )
         if not account:

@@ -20,7 +20,7 @@ from virtual_assistant.meetings.google_calendar_provider import GoogleCalendarPr
 from virtual_assistant.meetings.o365_calendar_provider import O365CalendarProvider
 from virtual_assistant.utils.logger import logger
 from virtual_assistant.database.user_manager import UserDataManager
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.task import TaskAccount # Import TaskAccount
 from flask_login import current_user # Import current_user
 from flask_login import login_required # Import login_required
@@ -136,7 +136,7 @@ def reauth_calendar_account():
         if auth_url is None and credentials is not None:
             logger.info(f"Token refreshed for {calendar_email} without needing reauthorization")
             # Mark account as no longer needing reauth
-            account = CalendarAccount.get_by_email_provider_and_user(
+            account = ExternalAccount.get_by_email_provider_and_user(
                 calendar_email, provider_name, current_user.id # Use user_id
             )
             if account:
@@ -233,15 +233,15 @@ def google_authenticate():
         
         logger.info(f"Google Calendar credentials received for account: {calendar_account_email}")
         
-        # Check if a CalendarAccount for this Google account already exists for this app user
-        existing_calendar_account = CalendarAccount.query.filter_by(
+        # Check if a ExternalAccount for this Google account already exists for this app user
+        existing_calendar_account = ExternalAccount.query.filter_by(
             user_id=current_user.id, # Use user_id from current_user
-            calendar_email=calendar_account_email,
+            account_email=calendar_account_email,
             provider=provider
         ).first()
         
         # Store/update CALENDAR credentials using the provider's method
-        # store_credentials now returns the CalendarAccount object directly or raises exception
+        # store_credentials now returns the ExternalAccount object directly or raises exception
         calendar_account = google_provider.store_credentials(calendar_account_email, credentials, current_user.id)
 
         # Verify credentials work by attempting to get meetings (optional but recommended)
@@ -285,7 +285,7 @@ def google_authenticate():
 
         # --- Commit all changes and Flash message ---
         try:
-            db.session.commit() # Commit both CalendarAccount and TaskAccount changes
+            db.session.commit() # Commit both ExternalAccount and TaskAccount changes
             # Flash message should only mention Calendar context, as per user requirement
             if existing_calendar_account: # Check if the *calendar* account existed before
                 flash(f"Successfully reauthorized Google Calendar for {calendar_account_email}.", "success")
@@ -327,24 +327,24 @@ def o365_authenticate():
         calendar_email = result['email']
         credentials = result['credentials'] # Expecting dict like {'token': ..., 'refresh_token': ..., 'expires_at': ...}
 
-        # Check if a CalendarAccount for this O365 account already exists
-        existing_calendar_account = CalendarAccount.query.filter_by(
+        # Check if a ExternalAccount for this O365 account already exists
+        existing_calendar_account = ExternalAccount.query.filter_by(
             user_id=current_user.id,
-            calendar_email=calendar_email,
+            account_email=calendar_email,
             provider='o365'
         ).first()
 
-        # --- Create/Update CalendarAccount ---
+        # --- Create/Update ExternalAccount ---
         calendar_account = existing_calendar_account
         if not calendar_account:
-             calendar_account = CalendarAccount(
-                 user_id=current_user.id,
-                 calendar_email=calendar_email,
-                 provider='o365'
+             calendar_account = ExternalAccount(
+                 account_email=calendar_email,
+                 provider='o365',
+                 user_id=current_user.id
              )
              db.session.add(calendar_account)
         
-        # Update CalendarAccount fields from credentials dict
+        # Update ExternalAccount fields from credentials dict
         calendar_account.token = credentials.get('token')
         calendar_account.refresh_token = credentials.get('refresh_token')
         # Assuming O365 provider handles client_id/secret internally if needed
@@ -420,7 +420,7 @@ def sync_meetings():
         'status': 'success',
         'message': ''
     }
-    accounts = CalendarAccount.get_accounts_for_user(user_id)
+    accounts = ExternalAccount.get_accounts_for_user(user_id)
     if not accounts:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'error': 'No calendar accounts found'}), 404
@@ -582,7 +582,7 @@ def refresh_google_calendar(calendar_email):
         user_id = current_user.id
         
         # Get the account
-        account = CalendarAccount.get_by_email_provider_and_user(
+        account = ExternalAccount.get_by_email_provider_and_user(
             calendar_email, "google", app_login
         )
         if not account:
@@ -648,7 +648,7 @@ def refresh_o365_calendar(calendar_email):
         user_id = current_user.id
         
         # Get the account
-        account = CalendarAccount.get_by_email_provider_and_user(
+        account = ExternalAccount.get_by_email_provider_and_user(
             calendar_email, "o365", app_login
         )
         if not account:
@@ -735,7 +735,7 @@ def sync_single_calendar(provider, calendar_email):
     came_from_settings = original_referrer and 'settings' in original_referrer
     
     # Get the specific account
-    account = CalendarAccount.get_by_email_provider_and_user(
+    account = ExternalAccount.get_by_email_provider_and_user(
         calendar_email, provider, app_login
     )
     

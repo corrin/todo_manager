@@ -36,7 +36,7 @@ Task Master is built on Flask and follows a provider-based architecture with fiv
 
 ### 5. Database
 - **ORM Integration**: SQLAlchemy with Flask-SQLAlchemy
-- **Core Models**: User, CalendarAccount, Task with relationships
+- **Core Models**: User, ExternalAccount, Task with relationships
 - **Migration Support**: Alembic/Flask-Migrate for schema evolution
 - **Data Isolation**: User-specific data filtering in all queries
 
@@ -116,7 +116,7 @@ class TaskManager:
 
 ### Data Models
 - **User**: Authentication information with relationships to accounts
-- **CalendarAccount**: Provider-specific calendar accounts with credentials
+- **ExternalAccount**: Provider-specific calendar accounts with credentials
 - **Task**: Task details with comprehensive fields and relationships
 
 ### Migration System

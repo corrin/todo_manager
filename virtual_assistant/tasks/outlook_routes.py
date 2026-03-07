@@ -27,7 +27,7 @@ def init_outlook_routes():
             try:
                 app_login = UserDataManager.get_current_user()
                 # Remove incorrect call to store_credentials for Outlook
-                # Credentials should be handled via OAuth flow and CalendarAccount
+                # Credentials should be handled via OAuth flow and ExternalAccount
                 logger.warning("Attempted to call store_credentials from outlook_routes setup - this route seems obsolete or incorrect for OAuth.")
                 # We cannot store credentials here as we don't know the task_user_email yet.
                 # The user should authenticate via the meetings blueprint for O365.

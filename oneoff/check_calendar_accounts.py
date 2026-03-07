@@ -9,7 +9,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from virtual_assistant.database.database import db
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.utils.settings import Settings
 from flask import Flask
 
@@ -22,7 +22,7 @@ def main():
     
     with app.app_context():
         print('Current calendar accounts:')
-        accounts = CalendarAccount.query.all()
+        accounts = ExternalAccount.query.all() # FIXME: Need to filter on calendar accounts
         for account in accounts:
             print(f'- {account.calendar_email} ({account.provider}) for user {account.app_login}')
 

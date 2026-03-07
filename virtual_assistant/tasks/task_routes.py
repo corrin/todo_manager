@@ -9,7 +9,7 @@ from virtual_assistant.utils.logger import logger
 from virtual_assistant.tasks.task_manager import TaskManager
 from virtual_assistant.tasks.task_hierarchy import TaskHierarchy
 
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.database import db
 from virtual_assistant.database.task import Task, TaskAccount
 from virtual_assistant.tasks.task_provider import Task as ProviderTask

@@ -4,7 +4,7 @@ import os
 from flask_login import current_user, login_user, logout_user
 from google.oauth2.credentials import Credentials
 
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.database import Database, db
 from virtual_assistant.database.user import User
 from virtual_assistant.utils.logger import logger
@@ -17,7 +17,7 @@ class UserDataManager(Database):
     """
 
     current_user = None
-    user_calendar_accounts = {}
+    user_external_accounts = {}
 
     @classmethod
     def get_current_user(cls):
@@ -45,7 +45,7 @@ class UserDataManager(Database):
         if not cls.current_user:
             raise ValueError("Current user not set. Please log in first.")
         calendar_accounts = (
-            db.session.query(CalendarAccount)
+            db.session.query(ExternalAccount)
             .filter_by(app_login=cls.current_user)
             .all()
         )
@@ -75,7 +75,7 @@ class UserDataManager(Database):
         """Save a calendar account to the database."""
         if not cls.current_user:
             raise ValueError("Current user not set. Please log in first.")
-        calendar_account = CalendarAccount(
+        calendar_account = ExternalAccount(
             app_login=cls.current_user,
             calendar_email=calendar_email,
             provider=provider,
@@ -107,7 +107,7 @@ class UserDataManager(Database):
         
         # Find the calendar account for this user and calendar email
         calendar_account = (
-            db.session.query(CalendarAccount)
+            db.session.query(ExternalAccount)
             .filter_by(app_login=cls.current_user, calendar_email=calendar_email)
             .first()
         )

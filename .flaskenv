@@ -1,1 +1,1 @@
-FLASK_APP=virtual_assistant.flask_app 
+FLASK_APP=virtual_assistant.flask_app

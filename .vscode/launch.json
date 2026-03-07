@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/virtual_assistant/flask_app.py",
             "env": {
-                "FLASK_APP": "virtual_assistant/flask_app.py",
+                "FLASK_APP": "app/flask_app.py",
                 "FLASK_ENV": "development",
                 "PYTHONPATH": "${workspaceFolder}"
             },

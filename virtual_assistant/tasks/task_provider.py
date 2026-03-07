@@ -40,7 +40,7 @@ class TaskProvider(ABC):
         pass
 
     # TODO: Refactor credential storage. File-based storage is used as a temporary measure
-    # because CalendarAccount is unsuitable for non-OAuth keys (like Todoist API key).
+    # because ExternalAccount is unsuitable for non-OAuth keys (like Todoist API key).
     # Ideally, create a new DB model (e.g., ProviderCredential) to handle different credential types.
 
     # Implement file-based credential storage in the base class

@@ -13,8 +13,11 @@
 - [x] Implemented unified account removal endpoint (/database/remove_external_account)
 - [x] Removed old calendar-specific removal endpoint (/meetings/remove_calendar_account)
 - [ ] Delete CalendarAccount and TaskAccount
-- [x] Refactor settings to use ExternalAccount
-- [ ] Add UI checkboxes for use_for and is_primary fields
+- [x] Refactored settings template to unified ExternalAccount view
+  - Combined Task and Calendar accounts into single table
+  - Shows both capabilities per account (Tasks/Calendar)
+  - Maintained all existing functionality
+- [ ] Add UI checkboxes for use_for fields (future enhancement)
 
 ## Proposed Solution
 Create new `ExternalAccount` model to centralize external account management.

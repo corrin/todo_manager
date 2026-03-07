@@ -9,7 +9,7 @@ import os
 
 from .task_provider import TaskProvider, Task
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.database.task import Task
 from virtual_assistant.meetings.o365_calendar_provider import AccessTokenCredential
 from msgraph import GraphServiceClient
@@ -31,8 +31,8 @@ class OutlookTaskProvider(TaskProvider):
     def _initialize_client(self, user_id, task_user_email):
         """Initialize the Microsoft Graph client using existing calendar credentials."""
         if self.client is None:
-            account = CalendarAccount.get_by_email_provider_and_user(
-                calendar_email=task_user_email,
+            account = ExternalAccount.get_by_email_provider_and_user(
+                account_email=task_user_email,
                 provider='o365',
                 user_id=user_id
             )
@@ -55,8 +55,8 @@ class OutlookTaskProvider(TaskProvider):
     def authenticate(self, user_id, task_user_email):
         """Check if we have valid O365 credentials for the user/account and return auth URL if needed."""
         # Check if the user has an O365 account linked
-        account = CalendarAccount.get_by_email_provider_and_user(
-            calendar_email=task_user_email, provider='o365', user_id=user_id
+        account = ExternalAccount.get_by_email_provider_and_user(
+            account_email=task_user_email, provider='o365', user_id=user_id
         )
         
         if not account:
@@ -328,14 +328,14 @@ class OutlookTaskProvider(TaskProvider):
     # --- Credential Management (Not Applicable for OAuth Providers) ---
 
     def get_credentials(self, user_id, task_user_email):
-        """Credentials for Outlook are handled via CalendarAccount (OAuth)."""
-        logger.debug("OutlookTaskProvider.get_credentials called but not implemented (uses CalendarAccount)")
+        """Credentials for Outlook are handled via ExternalAccount (OAuth)."""
+        logger.debug("OutlookTaskProvider.get_credentials called but not implemented (uses ExternalAccount)")
         # This method might be called by generic logic but isn't used for OAuth flow.
         # Returning None is safer than raising NotImplementedError if called unexpectedly.
         return None
 
     def store_credentials(self, user_id, task_user_email, credentials):
-        """Credentials for Outlook are handled via CalendarAccount (OAuth)."""
+        """Credentials for Outlook are handled via ExternalAccount (OAuth)."""
         logger.error("OutlookTaskProvider.store_credentials should not be called directly.")
         # Raise error because storing credentials here bypasses the OAuth flow.
-        raise NotImplementedError("Outlook credentials should be stored via the OAuth flow in CalendarAccount.")
+        raise NotImplementedError("Outlook credentials should be stored via the OAuth flow in ExternalAccount.")

@@ -35,9 +35,6 @@ class User(UserMixin, db.Model):
 
     # Define relationships using back_populates for bidirectional linking
     external_accounts = relationship("ExternalAccount", back_populates="user", lazy=True, cascade="all, delete-orphan")
-    calendar_accounts = relationship("CalendarAccount", back_populates="user", lazy=True, cascade="all, delete-orphan")
-    # Relationship to TaskAccount model for storing API keys etc. for task providers
-    task_accounts = relationship("TaskAccount", back_populates="user", lazy=True, cascade="all, delete-orphan")
     def __init__(self, app_login):
         self.app_login = app_login
         # id is auto-generated

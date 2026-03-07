@@ -7,11 +7,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 
 from virtual_assistant.utils.logger import logger
-from virtual_assistant.database.calendar_account import CalendarAccount
+from virtual_assistant.database.external_account import ExternalAccount
 from virtual_assistant.meetings.calendar_provider_factory import CalendarProviderFactory
 
 
-async def refresh_tokens_for_account(account: CalendarAccount) -> bool:
+async def refresh_tokens_for_account(account: ExternalAccount) -> bool:
     """
     Refresh tokens for a specific calendar account.
     
@@ -57,7 +57,7 @@ async def refresh_soon_expiring_tokens() -> Dict[str, int]:
     refresh_cutoff = datetime.now(timezone.utc) - timedelta(minutes=45)
     
     # Find accounts needing refresh
-    accounts = CalendarAccount.get_accounts_by_last_sync(older_than=refresh_cutoff)
+    accounts = ExternalAccount.get_accounts_by_last_sync(older_than=refresh_cutoff)
     
     if not accounts:
         logger.info("No accounts need token refresh at this time")
