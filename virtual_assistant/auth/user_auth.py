@@ -1,5 +1,4 @@
 from flask_login import LoginManager
-import uuid
 
 from virtual_assistant.database.user import User
 from virtual_assistant.database.database import db

@@ -50,12 +50,30 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architectural information.
 
 See [IMPLEMENTATION.md](IMPLEMENTATION.md) for details on implementation status.
 
-## Getting Started
+## Quick Start
 
-For local development setup instructions, see [local_setup.md](local_setup.md).
+1. **Prerequisites:** Python 3.12+, [Poetry](https://python-poetry.org/), MySQL/MariaDB
+2. `git clone` and `cd` into the repo
+3. `poetry install`
+4. `cp .env.example .env` — fill in credentials (see comments in file)
+5. Create database: `mysql -e "CREATE DATABASE aligned CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"`
+6. `poetry run flask db upgrade`
+7. `poetry run flask run`
+8. Visit the URL shown in terminal
+
+For provider-specific setup (Google OAuth, ngrok, Todoist), see [local_setup.md](local_setup.md).
+
+## Development
+
+```bash
+poetry run flask run          # Start dev server
+poetry run flask db upgrade   # Run migrations
+poetry run pytest             # Run tests
+poetry run flask db revision --autogenerate -m "description"  # Create migration
+```
 
 ## License
 
-This project is licensed under the GPL License - see the LICENSE file for details.
+This project is proprietary. All rights reserved.
 
 
