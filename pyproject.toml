@@ -44,6 +44,13 @@ pre-commit = "*"
 pytest = "*"
 pytest-playwright = "*"
 playwright = "*"
+mypy = "^1.19.1"
+sqlalchemy = {extras = ["mypy"], version = "^2.0.48"}
+types-requests = "^2.32.4.20260107"
+
+[tool.mypy]
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
