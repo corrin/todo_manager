@@ -56,13 +56,18 @@
                 <ul class="navbar-nav ms-auto">
                     {# Use Flask-Login's current_user object to check authentication status #}
                     {% if current_user.is_authenticated %}
-                        {# Display the logged-in user's email (app_login) #}
-                        <li class="nav-item">
-                            <span class="nav-link">{{ current_user.app_login }}</span>
-                        </li>
-                        {# Link to the logout route #}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                {% if session.get('profile_picture') %}
+                                <img src="{{ session['profile_picture'] }}" alt="" class="rounded-circle me-1" width="24" height="24" referrerpolicy="no-referrer">
+                                {% endif %}
+                                {{ current_user.app_login }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('settings') }}">Settings</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                            </ul>
                         </li>
                     {% else %}
                         {# If not authenticated, show a link to the login_view route ('new_user') #}

@@ -322,7 +322,7 @@ class GoogleCalendarProvider(CalendarProvider):
 
             service = build("calendar", "v3", credentials=credentials)
 
-            now = datetime.utcnow().isoformat() + "Z"  # "Z" indicates UTC time
+            now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             try:
                 events_result = (
                     service.events()

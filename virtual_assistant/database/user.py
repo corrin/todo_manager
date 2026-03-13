@@ -5,7 +5,7 @@ from flask_login import UserMixin
 from sqlalchemy import BINARY, String, TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from virtual_assistant.database.database import Base
+from virtual_assistant.database.database import db
 
 
 # Custom UUID type for MySQL
@@ -26,7 +26,7 @@ class MySQLUUID(TypeDecorator):
         return uuid.UUID(bytes=value)
 
 
-class User(UserMixin, Base):
+class User(UserMixin, db.Model):
     __tablename__ = "app_user"
     id: Mapped[uuid.UUID] = mapped_column(MySQLUUID, primary_key=True, default=uuid.uuid4)
     app_login: Mapped[str] = mapped_column(String(120), unique=True, index=True)  # User's login identifier for this app
