@@ -17,6 +17,7 @@ from flask import (  # noqa: E402
     render_template,
     request,
     send_from_directory,
+    session,
     url_for,
 )
 from flask_login import (  # noqa: E402
@@ -299,6 +300,7 @@ def login():
             logger.info(f"Found existing user: {app_login}")
 
         login_user(user)  # Handles session creation via Flask-Login
+        session["profile_picture"] = data.get("picture")
         return jsonify({"success": True})
 
     except Exception as e:

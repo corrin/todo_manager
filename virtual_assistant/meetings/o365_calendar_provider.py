@@ -481,7 +481,7 @@ class O365CalendarProvider(CalendarProvider):
                 raise Exception("Failed to create authenticated Graph client")
 
             # Get current time range
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             start_date = now.strftime("%Y-%m-%dT00:00:00Z")
             end_date = (now + timedelta(days=7)).strftime("%Y-%m-%dT00:00:00Z")
 

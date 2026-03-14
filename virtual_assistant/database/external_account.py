@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import ForeignKey, String, and_, or_, update
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from virtual_assistant.database.database import Base, db
+from virtual_assistant.database.database import db
 from virtual_assistant.database.user import MySQLUUID
 from virtual_assistant.utils.logger import logger
 
@@ -15,7 +15,7 @@ TASK_PROVIDER_MAP = {"todoist": "todoist", "google_tasks": "google", "outlook": 
 PROVIDER_TO_TASK = {"todoist": "todoist", "google": "google_tasks", "o365": "outlook"}
 
 
-class ExternalAccount(Base):
+class ExternalAccount(db.Model):
     """Model for managing all external service accounts (Google, O365, Todoist)."""
 
     __tablename__ = "external_account"

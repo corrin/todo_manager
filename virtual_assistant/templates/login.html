@@ -31,13 +31,14 @@ function handleCredentialResponse(response) {
     // Decode the credential response to get user info
     const responsePayload = jwt_decode(response.credential);
     const email = responsePayload.email;
+    const picture = responsePayload.picture;
 
     fetch('/login', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: email })
+        body: JSON.stringify({ email: email, picture: picture })
     })
     .then(response => {
         if (response.ok) {

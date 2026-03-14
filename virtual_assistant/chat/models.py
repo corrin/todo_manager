@@ -5,11 +5,11 @@ from typing import Any, Optional
 from sqlalchemy import JSON, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from virtual_assistant.database.database import Base
+from virtual_assistant.database.database import db
 from virtual_assistant.database.user import MySQLUUID
 
 
-class Conversation(Base):
+class Conversation(db.Model):
     __tablename__ = "conversation"
 
     id: Mapped[uuid.UUID] = mapped_column(MySQLUUID(), primary_key=True, default=uuid.uuid4)
@@ -42,7 +42,7 @@ class Conversation(Base):
         return f"<Conversation {self.id} user={self.user_id}>"
 
 
-class ChatMessage(Base):
+class ChatMessage(db.Model):
     __tablename__ = "chat_message"
 
     id: Mapped[uuid.UUID] = mapped_column(MySQLUUID(), primary_key=True, default=uuid.uuid4)

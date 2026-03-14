@@ -1,18 +1,18 @@
 import hashlib
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from virtual_assistant.database.database import Base, db
+from virtual_assistant.database.database import db
 from virtual_assistant.database.user import MySQLUUID
 from virtual_assistant.utils.logger import logger
 
 
-class Task(Base):
+class Task(db.Model):
     """Comprehensive task model that tracks tasks across all providers."""
 
     __tablename__ = "tasks"
@@ -51,9 +51,9 @@ class Task(Base):
 
     # Change tracking
     content_hash: Mapped[str] = mapped_column(String(64))  # Hash of task content to detect changes
-    last_synced: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    created_at: Mapped[Optional[datetime]] = mapped_column(default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_synced: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[Optional[datetime]] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Composite unique constraint
     __table_args__ = (
@@ -146,7 +146,7 @@ class Task(Base):
                 )
 
                 existing_task.status = provider_task.status
-                existing_task.last_synced = datetime.utcnow()
+                existing_task.last_synced = datetime.now(timezone.utc)
 
                 # Commit status changes
                 db.session.commit()
@@ -171,7 +171,7 @@ class Task(Base):
                 existing_task.parent_id = getattr(provider_task, "parent_id", None)
                 existing_task.section_id = getattr(provider_task, "section_id", None)
                 existing_task.content_hash = content_hash
-                existing_task.last_synced = datetime.utcnow()
+                existing_task.last_synced = datetime.now(timezone.utc)
                 # Update task_user_email if it has changed or wasn't set before
                 if existing_task.task_user_email != task_user_email:
                     existing_task.task_user_email = task_user_email

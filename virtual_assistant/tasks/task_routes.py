@@ -476,7 +476,7 @@ def init_task_routes():
             # If we get here, the provider update was successful, so update our database
             old_status = task.status
             task.status = new_status
-            task.last_synced = datetime.datetime.utcnow()
+            task.last_synced = datetime.datetime.now(datetime.timezone.utc)
             db.session.commit()
 
             logger.info(
