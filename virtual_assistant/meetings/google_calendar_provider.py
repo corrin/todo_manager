@@ -77,13 +77,14 @@ class GoogleCalendarProvider(CalendarProvider):
             access_type="offline",  # Get refresh token
         )
 
-        # Store only serializable parts of the flow
+        # Store flow config in session so the callback can recreate it.
         session["flow_state"] = {
             "client_id": self.client_id,
             "client_secret": self.client_secret,
             "redirect_uri": self.redirect_uri,
             "scopes": self.scopes,
             "state": state,
+            "code_verifier": flow.code_verifier,
         }
 
         # Store the user_id in session
@@ -149,13 +150,14 @@ class GoogleCalendarProvider(CalendarProvider):
             login_hint=calendar_email,  # Specify which account to authenticate
         )
 
-        # Store flow state and user info in session
+        # Store flow config in session so the callback can recreate it.
         session["flow_state"] = {
             "client_id": self.client_id,
             "client_secret": self.client_secret,
             "redirect_uri": self.redirect_uri,
             "scopes": self.scopes,
             "state": state,
+            "code_verifier": flow.code_verifier,
         }
 
         # Store email details in session for the callback
@@ -268,6 +270,9 @@ class GoogleCalendarProvider(CalendarProvider):
                 redirect_uri=flow_state["redirect_uri"],
                 state=flow_state["state"],
             )
+
+            # Restore PKCE code verifier from session
+            flow.code_verifier = flow_state.get("code_verifier")
 
             # Fetch the token
             flow.fetch_token(authorization_response=callback_url)

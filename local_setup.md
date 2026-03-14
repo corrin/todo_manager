@@ -11,7 +11,7 @@
 
 1. Start ngrok:
 ```bash
-ngrok http --subdomain=virtual-assistant 3000
+ngrok http --url=virtual-assistant.ngrok.app 3000
 ```
 
 2. Set up environment variables:
@@ -31,7 +31,7 @@ poetry install
 poetry run flask run
 ```
 
-2. Visit https://virtual-assistant.au.ngrok.io/initial_setup
+2. Visit https://virtual-assistant.ngrok.app/initial_setup
 
 3. The system will:
    - Check provider authentication

@@ -84,12 +84,6 @@ class TodoistProvider(TaskProvider):
                     logger.error(f"Failed to update Todoist task {task_id} status: {e}")
                     return False
 
-            # Prepare update arguments for other fields
-            update_args = {}
-            for field in ["title", "due_date", "priority", "description", "comments"]:
-                if field in task_data:
-                    update_args[field] = task_data[field]
-
             # Only update if we have changes
             if update_args:
                 try:
@@ -97,7 +91,7 @@ class TodoistProvider(TaskProvider):
                     logger.info(f"Updated Todoist task {task_id} fields: {list(update_args.keys())}")
                 except Exception as e:
                     logger.error(f"Failed to update Todoist task {task_id}: {e}")
-                    return False
+                    raise
 
             return True  # No changes to make or all changes succeeded
 
@@ -180,8 +174,8 @@ class TodoistProvider(TaskProvider):
     # Signature matches abstract method in TaskProvider
     def get_tasks(self, user_id, task_user_email) -> List[Task]:
         """Get all tasks from Todoist."""
-        self._initialize_api(user_id, task_user_email)
-        if not self.api:
+        api = self._get_api(user_id, task_user_email)
+        if not api:
             raise Exception(
                 f"Todoist API not initialized for user_id='{user_id}', "
                 f"task_user_email='{task_user_email}'. Check credentials."
@@ -194,7 +188,7 @@ class TodoistProvider(TaskProvider):
             # Get projects first to map project IDs to names
             projects = {}
             try:
-                todoist_projects = self.api.get_projects()
+                todoist_projects = api.get_projects()
                 for p in todoist_projects:
                     projects[p.id] = p.name
                 logger.debug(f"[TODOIST] Retrieved {len(projects)} projects for user_id='{user_id}'")
@@ -203,8 +197,8 @@ class TodoistProvider(TaskProvider):
                 # Instead of silently continuing without project data, raise an exception
                 raise Exception(f"Could not retrieve your Todoist projects: {e}")
 
-            # Get tasks
-            todoist_tasks = self.api.get_tasks()
+            # Get tasks (API returns paginated iterator of lists)
+            todoist_tasks = [task for page in api.get_tasks() for task in page]
             logger.info(f"[TODOIST] Retrieved {len(todoist_tasks)} raw tasks from Todoist API")
 
             # Count completed and active tasks
@@ -279,9 +273,15 @@ class TodoistProvider(TaskProvider):
             )
 
         try:
-            # Search for the instruction task
-            tasks = api.get_tasks(filter=f"search:{self.INSTRUCTION_TASK_TITLE}")
-            instruction_task = next((t for t in tasks if t.content == self.INSTRUCTION_TASK_TITLE), None)
+            # Search for the instruction task by iterating all tasks
+            instruction_task = None
+            for page in api.get_tasks():
+                for t in page:
+                    if t.content == self.INSTRUCTION_TASK_TITLE:
+                        instruction_task = t
+                        break
+                if instruction_task:
+                    break
 
             if instruction_task:
                 logger.debug(f"Found AI instruction task for user_id='{user_id}', task_user_email='{task_user_email}'")
@@ -396,9 +396,15 @@ class TodoistProvider(TaskProvider):
             )
 
         try:
-            # Check if instruction task exists
-            tasks = api.get_tasks(filter=f"search:{self.INSTRUCTION_TASK_TITLE}")
-            instruction_task = next((t for t in tasks if t.content == self.INSTRUCTION_TASK_TITLE), None)
+            # Check if instruction task exists by iterating all tasks
+            instruction_task = None
+            for page in api.get_tasks():
+                for t in page:
+                    if t.content == self.INSTRUCTION_TASK_TITLE:
+                        instruction_task = t
+                        break
+                if instruction_task:
+                    break
 
             if instruction_task:
                 # Update existing task
